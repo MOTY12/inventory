@@ -17,3 +17,12 @@
 - Updated AGENTS testing policy for explicit verification requests and refreshed current state, blockers, pending tasks and next-session checkpoint.
 - Documentation checks: verify all 35 required planning files exist, 47 unique task headings/statuses and all required per-task fields; whitespace and `git diff --check` review. Application tests: none available; not run.
 - Next: real interviews → synthesis/segment decision → PROD-002 policy approvals → ARCH-001/002 → FOUNDATION-001.
+
+## 2026-10-31 — Implementation start and foundation scaffold
+- Re-read the required startup docs, then checked architecture, progress evidence, source tree and Git. Actual HEAD was `3fb6777` (`update the reasearch plan`), not the earlier stale `7739ce4` checkpoint.
+- Owner explicitly authorized implementation and stated the research/planning phase is complete. Logged DEC-006: interviews are deferred to pilot validation; no interviews/findings are claimed. PROD-001 is closed as planning deliverables only.
+- Added npm workspace foundation, Next.js/NestJS/shared shells, tooling, local Compose configuration for PostgreSQL/Redis/S3Mock, `.env.example`, README and local development instructions.
+- FOUNDATION-001 checks: `npm run lint`, `npm run format:check`, `npm run typecheck` passed. `npm run build` passed once earlier, but final rerun failed in Next/Turbopack with `Operation not permitted` while binding a local port, including an escalated retry; build repeatability remains unresolved. `npm install` completed with 0 reported vulnerabilities; npm warned that one dependency install script was not approved/run.
+- FOUNDATION-002 config verified with `docker compose config --quiet`. Runtime attempt `docker compose up -d` and subsequent `docker compose ps` failed because the Docker daemon socket is unavailable. Task is BLOCKED on daemon startup; no container health is claimed.
+- Updated task/status docs and next-session handoff. Domain behavior remains gated on PROD-002 and ARCH-001/002. No unit/integration suite exists; no tests are claimed.
+- Next: start Docker engine and verify service health to close FOUNDATION-002; if unavailable, continue with FOUNDATION-003, whose dependency FOUNDATION-001 is satisfied.

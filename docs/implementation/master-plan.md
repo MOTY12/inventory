@@ -1,7 +1,7 @@
 # Master implementation plan
 
 ## Current phase
-**Phase 0 Research + Phase 1 Product/Phase 2 Architecture planning — COMPLETED as a first planning draft on 2026-10-31.** REA public-page inspection is blocked by missing configured CDP endpoint; public official page research was used as fallback and bounded in the source ledger. No application code has been written. Owner review and approval of listed product decisions is the gate before implementation.
+**Phase 0 Research + Phase 1 Product/Phase 2 Architecture planning — CLOSED FOR IMPLEMENTATION START by owner direction on 2026-10-31.** REA public-page inspection remains unavailable as documented. Target-user interviews are deferred to pilot validation; no interview findings are claimed. Open product/security/accounting decisions remain explicit gates for domain-specific implementation, but do not block isolated workspace and infrastructure foundation tasks.
 
 ## Phases
 0. Research: inspect REA docs/capabilities; review public official inFlow sources; distinguish verified/documented/inferred/unknown. (Draft complete; some direct UI research remains unknown.)

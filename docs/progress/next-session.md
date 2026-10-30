@@ -1,33 +1,35 @@
 # Next session handoff
 
-## Last completed task
-DOC-001 — planning and research documentation draft (2026-10-31). This session advanced PROD-001 by preparing an interview protocol; PROD-001 remains IN_PROGRESS.
+## Current checkpoint (2026-10-31, Africa/Lagos)
+Implementation is underway under explicit owner authorization. The first foundation task is partially implemented but blocked on Docker daemon availability; do not call the Compose services healthy yet.
 
-## Current task/status
-FOUNDATION-001 IN_PROGRESS under owner authorization. Work on workspace/tooling and empty package shells only; product decisions still gate domain implementation. PROD-001 interview guide is ready, but no interviews have been conducted.
+## Completed
+- DOC-001 planning baseline.
+- PROD-001 planning deliverables by owner-directed phase closure. Interview protocol is ready; 5–8 interviews are deferred to pilot validation and no interview evidence is claimed.
+- FOUNDATION-001 workspace and application shells. `npm run lint`, `npm run format:check`, and `npm run typecheck` passed. `npm run build` passed once, but the final rerun and escalated retry failed with Next/Turbopack `Operation not permitted` during local port binding; reproduce and investigate before treating build as reliable.
+- FOUNDATION-002 Compose definition, loopback-only ports, local-only credentials, health checks, persistent volumes, and documentation. `docker compose config --quiet` passed.
 
-## Files changed
-Previous planning files plus this session's `docs/product/user-research-plan.md` and updates to AGENTS/task/progress docs. Exact paths are in Git status.
+## Blocker
+`docker compose up -d` and `docker compose ps` failed because `unix:///Users/newuser/.docker/run/docker.sock` is unavailable (Docker daemon is not running). Start Docker Desktop (or the configured Docker engine), then run:
 
-## Commands executed
-- `pwd`, `rg --files` for project/instruction manifests, `git status --short --branch`, `git log -5 --oneline` (git log has no commits; status reports upstream gone).
-- REA `list_browser_targets` call for `http://127.0.0.1:9222` (failed endpoint unreachable).
-- Official web searches/opens and browser read-only visibility on public inFlow homepage.
+```sh
+docker info --format '{{.ServerVersion}}'
+docker compose up -d
+docker compose ps
+```
 
-## Tests and verification
-- No application tests exist; none were run because there is no application code.
-- Documentation integrity check passed: 35/35 planning files present, 47/47 unique task IDs with required fields, no trailing whitespace; `git diff --check` passed. These are documentation checks, not application tests.
+Verify all three services report healthy before marking FOUNDATION-002 COMPLETED. If Docker remains unavailable, retain BLOCKED and continue with FOUNDATION-003 because its dependency FOUNDATION-001 is satisfied and it does not require the local services.
 
-## Known bugs
-None in application code. Planning uncertainties are listed in `docs/progress/blockers.md`.
+## Exact next steps
+1. Read startup files in order: `AGENTS.md`, `docs/progress/current-state.md`, this file, `docs/implementation/master-plan.md`, `docs/implementation/task-breakdown.md`, then API design docs.
+2. Check `git status --short --branch`, `git log -5 --oneline`, and confirm the documented state against files.
+3. Retry Docker startup and health verification; record actual outcomes.
+4. If verified, complete FOUNDATION-002. If not, leave it BLOCKED and implement FOUNDATION-003: `/api/v1` prefix, DTO validation, consistent error envelope/request IDs, Swagger/OpenAPI, and contract checks; do not introduce identity or inventory rules.
+5. Run relevant checks, including `npm run lint`, `npm run format:check`, `npm run typecheck`, `npm run build`, and any authorized API contract checks; record each result precisely.
+6. Update task ledger, blockers, current state, completed/pending tasks, session log, and this handoff before ending.
 
-## Blockers
-REA CDP endpoint unavailable. Owner needs to approve: target segment/name, stock/reservation/valuation policies, tax/auth, hosting/data residency, pricing/payments.
+## Scope gates
+PROD-002, ARCH-001 and ARCH-002 remain unresolved. Do not implement business-domain behavior, database schema, authentication, tenancy behavior, or inventory policies until their required approvals are recorded. No tests beyond the shell/build/config checks above are represented as passing.
 
-## Next 3 actions
-1. Finish and verify FOUNDATION-001 (workspace install, build, typecheck, formatting/lint checks) and record exact versions/commands.
-2. Complete FOUNDATION-002/003 only if they remain limited to infrastructure/API scaffolding and do not lock outstanding auth/security/product decisions.
-3. Resolve PROD-001 evidence or owner-approved deferral, then PROD-002 and ARCH-001/ARCH-002 before implementing tenant, identity or inventory domain behavior.
-
-## Manual verification required
-Participant access and owner validation of first target segment/workflows; policy decisions and accountant/legal/security/data-residency review needs; actual browser CDP setup if REA page evidence is required.
+## Working tree
+Implementation and progress-doc changes are uncommitted in `/Users/newuser/Documents/GitHub/inventory`; inspect `git status` and diffs before modifying them. Latest verified HEAD was `3fb6777` (`update the reasearch plan`).

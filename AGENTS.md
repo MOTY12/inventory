@@ -1,10 +1,10 @@
 # Inventory SaaS — Agent Operating Guide
 
 ## Purpose
-Create an original, multi-tenant inventory operations SaaS for Nigerian businesses first, with a credible path to international use. Research and planning are complete as a first pass; application code is intentionally not started pending owner review/approval of product and architecture decisions. Never reproduce inFlow branding, assets, copy, or proprietary implementation.
+Create an original, multi-tenant inventory operations SaaS for Nigerian businesses first, with a credible path to international use. The owner authorized implementation on 2026-10-31. Keep unresolved product/security/accounting decisions out of implementation until approved. Never reproduce inFlow branding, assets, copy, or proprietary implementation.
 
 ## Current stack recommendation
-TypeScript modular monolith; Next.js web UI; NestJS REST API; PostgreSQL + Prisma; Redis/BullMQ for asynchronous jobs; JWT access/refresh authentication; Docker Compose locally; S3-compatible object storage; GitHub Actions. See `docs/architecture/` for boundaries and unresolved choices. Do not scaffold or code until the owner approves the plan.
+TypeScript modular monolith; Next.js web UI; NestJS REST API; PostgreSQL + Prisma; Redis/BullMQ for asynchronous jobs; JWT access/refresh authentication; Docker Compose locally; S3-compatible object storage; GitHub Actions. See `docs/architecture/` for boundaries and unresolved choices.
 
 ## Repository map
 - `docs/research/`: REA setup/capability notes, sourced inFlow analysis, uncertainty labels.
@@ -26,7 +26,7 @@ TypeScript modular monolith; Next.js web UI; NestJS REST API; PostgreSQL + Prism
 - New decisions that materially affect scope, accounting, legal compliance, or deployment must be documented and approved before implementation.
 
 ## Commands
-No package manifests or application code exist yet. Do not represent these commands as currently runnable. After the approved foundation task establishes the workspace, record exact commands here. Planned command families: Docker Compose services; workspace package manager scripts for lint, typecheck, unit/integration/e2e tests, Prisma migration and seed; OpenAPI generation/check. Use only commands confirmed by the implemented manifests.
+Workspace uses npm workspaces (Node.js >=24.22.1). Confirmed commands: `npm install`, `npm run build`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run dev:web`, `npm run dev:api`. Database/container commands will be recorded after Compose is implemented. Do not claim tests pass unless actually run; no application test script exists yet.
 
 ## Testing policy
 Follow `docs/implementation/testing-strategy.md`. Run task-relevant checks when the user requests verification or when an approved implementation task requires them. Do not claim tests pass unless they were run and results recorded. Distinguish documentation consistency checks from application tests. Do not create application tests before application code and the relevant task are authorized.
@@ -45,4 +45,4 @@ Then inspect `git status`, repository files, and Git history. Verify status from
 After each meaningful task: save changes, perform only authorized verification, update that task status and deliverables, append decisions/blockers, update current state and the next actionable task. Before ending, update `current-state.md`, `next-session.md`, and `session-log.md`. Keep paths and commands exact, and never invent test results.
 
 ## Resume interrupted work
-Use the startup procedure. Compare the progress ledger with files and Git. Reopen the first incomplete task in `task-breakdown.md`; check prerequisites and approvals. Continue from the recorded next action, amend stale notes based on repository evidence, and record any discrepancy as a decision/blocker. Do not begin application coding before approval of the planning deliverables.
+Use the startup procedure. Compare the progress ledger with files and Git. Reopen the first incomplete task in `task-breakdown.md`; check prerequisites and approvals. Continue from the recorded next action, amend stale notes based on repository evidence, and record any discrepancy as a decision/blocker. Owner authorized implementation on 2026-10-31; unresolved product/security decisions still gate dependent domain behavior.
