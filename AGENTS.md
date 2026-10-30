@@ -29,7 +29,7 @@ TypeScript modular monolith; Next.js web UI; NestJS REST API; PostgreSQL + Prism
 No package manifests or application code exist yet. Do not represent these commands as currently runnable. After the approved foundation task establishes the workspace, record exact commands here. Planned command families: Docker Compose services; workspace package manager scripts for lint, typecheck, unit/integration/e2e tests, Prisma migration and seed; OpenAPI generation/check. Use only commands confirmed by the implemented manifests.
 
 ## Testing policy
-Follow `docs/implementation/testing-strategy.md`. Do not claim tests pass unless run and results recorded. The task authoring prompt asks for tests at each implementation task; repository-agent instruction says do not add/run tests unless the user asks. Resolve this conflict at implementation kickoff: the user explicitly requested test requirements in the plan, but has not separately instructed us to execute tests now. Treat test creation/execution as planned work, not as permission to execute in this documentation-only session.
+Follow `docs/implementation/testing-strategy.md`. Run task-relevant checks when the user requests verification or when an approved implementation task requires them. Do not claim tests pass unless they were run and results recorded. Distinguish documentation consistency checks from application tests. Do not create application tests before application code and the relevant task are authorized.
 
 ## Mandatory startup procedure
 At each new work session, read in this exact order:

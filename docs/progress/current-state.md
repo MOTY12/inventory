@@ -15,7 +15,7 @@
 - Research confidence and source limits are captured in `docs/research/`.
 
 ## Current phase/task
-Planning draft is ready for owner review. Next project task is PROD-001 (validate target users and first segment), then PROD-002 and architecture policy approvals. First application implementation task, after approval, is FOUNDATION-001. Do not write application code before owner approval.
+PROD-001 is IN_PROGRESS. Its interview protocol is prepared in `docs/product/user-research-plan.md`, but acceptance is not met: no customer interviews have been conducted. PROD-002 and architecture policy approvals remain pending. First application implementation task is FOUNDATION-001, gated on those approvals. No application code is authorized by the task dependency sequence yet.
 
 ## Files created
-All files enumerated in this documentation tree: 7 research docs; 5 product docs; 8 architecture docs; 6 implementation docs; 7 progress docs; root `AGENTS.md`. The task ledger contains 47 unique tasks, with DOC-001 complete and remaining work not started. No application code or tests.
+Planning tree now contains 34 docs (including the new user interview protocol) and root `AGENTS.md`. The task ledger contains 47 unique tasks: DOC-001 COMPLETED, PROD-001 IN_PROGRESS, remaining tasks NOT_STARTED. No application code or application tests.
