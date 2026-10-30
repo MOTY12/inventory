@@ -28,7 +28,7 @@ Description: Decide RLS, auth provider, MFA and support access. Priority: P0. De
 
 ### FOUNDATION-001: Repository and workspace foundation
 **Files/modules affected:** workspace configuration, apps/web/, apps/api/, packages/shared/.
-Description: Establish workspace package manager, web/API packages, shared schemas, lint/format/typecheck. Priority: P0. Dependencies: PROD-002. Affected root configs/apps/packages. Deliverables: reproducible workspace scripts. Acceptance: clean install/build/typecheck on supported Node; no app behavior yet. Tests: CI smoke/build checks. Status: NOT_STARTED.
+Description: Establish workspace package manager, web/API packages, shared schemas, lint/format/typecheck. Priority: P0. Dependencies: DOC-001 and explicit owner authorization to begin implementation. Product policy approval (PROD-002) remains required before domain behavior, schemas, authentication, or inventory rules are implemented. Affected root configs/apps/packages. Deliverables: reproducible workspace scripts. Acceptance: clean install/build/typecheck on supported Node; no business behavior yet. Tests: CI smoke/build checks. Status: IN_PROGRESS.
 
 ### FOUNDATION-002: Local infrastructure and configuration
 **Files/modules affected:** docker-compose.yml, .env.example, infrastructure/local/.

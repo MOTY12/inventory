@@ -4,7 +4,7 @@
 DOC-001 — planning and research documentation draft (2026-10-31). This session advanced PROD-001 by preparing an interview protocol; PROD-001 remains IN_PROGRESS.
 
 ## Current task/status
-PROD-001 IN_PROGRESS. Interview guide at `docs/product/user-research-plan.md`; no interviews conducted. No application code exists. Continue the interviews and synthesis before PROD-002/architecture approval and implementation.
+FOUNDATION-001 IN_PROGRESS under owner authorization. Work on workspace/tooling and empty package shells only; product decisions still gate domain implementation. PROD-001 interview guide is ready, but no interviews have been conducted.
 
 ## Files changed
 Previous planning files plus this session's `docs/product/user-research-plan.md` and updates to AGENTS/task/progress docs. Exact paths are in Git status.
@@ -25,9 +25,9 @@ None in application code. Planning uncertainties are listed in `docs/progress/bl
 REA CDP endpoint unavailable. Owner needs to approve: target segment/name, stock/reservation/valuation policies, tax/auth, hosting/data residency, pricing/payments.
 
 ## Next 3 actions
-1. Conduct 5–8 target-user interviews across two segments using `docs/product/user-research-plan.md`; capture anonymized notes.
-2. Synthesize findings, choose a first segment, and update product requirements/personas/stories and the decision log to complete PROD-001.
-3. Resolve PROD-002 and ARCH-001/ARCH-002 owner decisions; then begin FOUNDATION-001 when its dependencies are satisfied.
+1. Finish and verify FOUNDATION-001 (workspace install, build, typecheck, formatting/lint checks) and record exact versions/commands.
+2. Complete FOUNDATION-002/003 only if they remain limited to infrastructure/API scaffolding and do not lock outstanding auth/security/product decisions.
+3. Resolve PROD-001 evidence or owner-approved deferral, then PROD-002 and ARCH-001/ARCH-002 before implementing tenant, identity or inventory domain behavior.
 
 ## Manual verification required
 Participant access and owner validation of first target segment/workflows; policy decisions and accountant/legal/security/data-residency review needs; actual browser CDP setup if REA page evidence is required.

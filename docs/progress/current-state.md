@@ -15,7 +15,7 @@
 - Research confidence and source limits are captured in `docs/research/`.
 
 ## Current phase/task
-PROD-001 is IN_PROGRESS. Its interview protocol is prepared in `docs/product/user-research-plan.md`, but acceptance is not met: no customer interviews have been conducted. PROD-002 and architecture policy approvals remain pending. First application implementation task is FOUNDATION-001, gated on those approvals. No application code is authorized by the task dependency sequence yet.
+FOUNDATION-001 is IN_PROGRESS after explicit owner authorization to begin implementation. Scope is limited to workspace tooling and empty web/API/shared package shells; no business rules or schema are being locked. PROD-001 interviews and PROD-002/ARCH policy decisions remain open and gate domain behavior, database design, and authentication.
 
 ## Files created
 Planning tree now contains 34 docs (including the new user interview protocol) and root `AGENTS.md`. The task ledger contains 47 unique tasks: DOC-001 COMPLETED, PROD-001 IN_PROGRESS, remaining tasks NOT_STARTED. No application code or application tests.
