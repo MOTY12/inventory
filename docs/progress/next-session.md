@@ -4,6 +4,8 @@
 
 Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; implementation resumed at `d8579fc`. Check `git status --short --branch` and `git log -5 --oneline` before editing. Preserve the existing untracked `.vscode/settings.json`. Do not assume a task was completed based only on code presence.
 
+Current implementation commit: `6c338a4 feat(orgs): implement organization membership foundation` (branch ahead of `origin/develop` by one commit at checkpoint).
+
 ## Completed and current tasks
 
 - Completed roadmap tasks remain: DOC-001, PROD-001, FOUNDATION-001, FOUNDATION-003, FOUNDATION-004, FOUNDATION-005.

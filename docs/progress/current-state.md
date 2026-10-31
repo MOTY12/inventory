@@ -6,6 +6,7 @@
 
 - Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`.
 - This implementation continuation started at `d8579fc`. `.vscode/settings.json` was already untracked and is preserved.
+- Verified FOUNDATION-007 implementation milestone: `6c338a4 feat(orgs): implement organization membership foundation`.
 - Owner authorized implementation on 2026-10-31; PROD-001 interviews are deferred to pilot, without claiming participant evidence.
 
 ## Current phase and task
