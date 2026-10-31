@@ -28,6 +28,16 @@ export const localEnvironmentSchema = z.object({
     .regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/)
     .default("inventory-local"),
   S3_PORT: z.coerce.number().int().min(1).max(65535).default(9090),
+  DATABASE_URL: z
+    .string()
+    .url()
+    .default(
+      "postgresql://inventory:local-dev-only-change-me@localhost:5432/inventory_dev?schema=public",
+    ),
+  JWT_ACCESS_SECRET: localSecretSchema.default(
+    "local-development-only-secret-change-before-deploy-123456",
+  ),
+  WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
 });
 
 export type LocalEnvironment = z.infer<typeof localEnvironmentSchema>;

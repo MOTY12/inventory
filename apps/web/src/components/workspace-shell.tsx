@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "../features/auth/session-provider";
 
 const navigation = [
   { href: "#overview", label: "Overview", icon: "⌂" },
@@ -12,6 +13,7 @@ const navigation = [
 
 export function WorkspaceShell() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { user, logout } = useSession();
 
   return (
     <div className="workspace-shell">
@@ -93,12 +95,16 @@ export function WorkspaceShell() {
               Y
             </span>
             <span className="profile-copy">
-              <strong>Your account</strong>
-              <small>Owner</small>
+              <strong>{user?.email ?? "Your account"}</strong>
+              <small>Signed in</small>
             </span>
-            <span aria-hidden="true" className="profile-menu">
-              ···
-            </span>
+            <button
+              className="profile-menu profile-logout"
+              onClick={() => void logout()}
+              type="button"
+            >
+              Log out
+            </button>
           </div>
         </div>
       </aside>

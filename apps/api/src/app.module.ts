@@ -2,6 +2,8 @@ import { Controller, Get, Module } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import { serviceStatusSchema } from "@inventory/shared";
 import { HealthController } from "./health/health.controller";
+import { PrismaModule } from "./database/prisma.module";
+import { AuthModule } from "./identity/auth.module";
 
 @ApiTags("system")
 @Controller()
@@ -16,5 +18,8 @@ class AppController {
   }
 }
 
-@Module({ controllers: [AppController, HealthController] })
+@Module({
+  imports: [PrismaModule, AuthModule],
+  controllers: [AppController, HealthController],
+})
 export class AppModule {}

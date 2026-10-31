@@ -12,8 +12,15 @@ import { RequestIdMiddleware } from "./common/request-id.middleware";
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
+  app.enableShutdownHooks();
 
   app.setGlobalPrefix("api/v1");
+  app.enableCors({
+    origin: process.env.WEB_ORIGIN ?? "http://localhost:3000",
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
+    methods: ["GET", "POST", "OPTIONS"],
+  });
   app.use(new RequestIdMiddleware().use);
   app.useGlobalPipes(
     new ValidationPipe({
