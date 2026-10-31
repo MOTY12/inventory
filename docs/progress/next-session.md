@@ -1,7 +1,7 @@
 # Next session handoff
 
 ## Current checkpoint (2026-10-31, Africa/Lagos)
-Branch `develop`, HEAD `f377d8f` at session start (two commits ahead of `origin/develop`). This continuation has uncommitted Prisma/database foundation and progress documentation changes; inspect `git status` and diff before editing or committing. No user changes were present in the worktree at continuation start. The Next build modified generated `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo`; both were restored to their starting contents.
+Branch `develop`, HEAD `447ee2d` (`feat(db): add Prisma identity schema foundation`), three commits ahead of `origin/develop`. Worktree was clean at checkpoint. This session began at `f377d8f` with a clean worktree and committed the verified Prisma/schema milestone. The Next build modified generated `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo`; both were restored to their starting contents.
 
 ## Task state
 - Completed: DOC-001, PROD-001 (interviews deferred to pilot), FOUNDATION-001, FOUNDATION-003, FOUNDATION-004, FOUNDATION-005.
@@ -13,7 +13,7 @@ Branch `develop`, HEAD `f377d8f` at session start (two commits ahead of `origin/
 - Installed stable `prisma@7.10.1`, `@prisma/client@7.10.1`, `@prisma/adapter-pg@7.10.1`, `pg@8.16.3`, `@types/pg@8.15.5`, and `dotenv@16.6.1`. Do not switch to Prisma 8 RC.
 - Added `prisma.config.ts`, identity models (`User`, `RefreshSession`, `EmailVerificationToken`), generated SQL migration and PostgreSQL migration lock. Prisma generated client is ignored and produced as part of API build.
 - Added `.env.example` `DATABASE_URL`, CI database URL for schema generation (no database connection is required for build), and API Prisma scripts.
-- No DB migration was applied; no auth endpoint, repository/service, mailer, browser auth flow, organization model or live PostgreSQL test exists yet.
+- Commit: `447ee2d feat(db): add Prisma identity schema foundation`. No DB migration was applied; no auth endpoint, repository/service, mailer, browser auth flow, organization model or live PostgreSQL test exists yet.
 
 ## Verification this continuation
 - Passed: `prisma validate`, `prisma generate`, offline `prisma migrate diff`, `npm run build`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run validate:env`, `git diff --check`.
