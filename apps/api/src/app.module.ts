@@ -4,6 +4,7 @@ import { serviceStatusSchema } from "@inventory/shared";
 import { HealthController } from "./health/health.controller";
 import { PrismaModule } from "./database/prisma.module";
 import { AuthModule } from "./identity/auth.module";
+import { OrganizationModule } from "./organizations/organization.module";
 
 @ApiTags("system")
 @Controller()
@@ -19,7 +20,7 @@ class AppController {
 }
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, OrganizationModule],
   controllers: [AppController, HealthController],
 })
 export class AppModule {}

@@ -16,11 +16,14 @@ const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
 
 type User = { id: string; email: string; emailVerifiedAt: string | null };
+type Organization = { id: string; name: string; slug: string; role?: string };
 type SessionState = "loading" | "authenticated" | "anonymous";
 
 type SessionContextValue = {
   state: SessionState;
   user: User | null;
+  organizations: Organization[];
+  organization: Organization | null;
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<string>;
@@ -28,6 +31,12 @@ type SessionContextValue = {
   forgotPassword: (email: string) => Promise<string>;
   resetPassword: (token: string, password: string) => Promise<string>;
   logout: () => Promise<void>;
+  authenticatedRequest: <T>(
+    path: string,
+    body?: unknown,
+    method?: "GET" | "POST" | "PATCH",
+  ) => Promise<T>;
+  adoptAccessToken: (token: string) => Promise<void>;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -47,9 +56,10 @@ async function request<T>(
   body?: unknown,
   accessToken?: string,
   csrfOverride?: string | null,
+  method?: "GET" | "POST" | "PATCH",
 ): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
-    method: body === undefined ? "GET" : "POST",
+    method: method ?? (body === undefined ? "GET" : "POST"),
     credentials: "include",
     headers: {
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
@@ -77,12 +87,34 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const csrfHeader = useRef<string | null>(null);
   const [state, setState] = useState<SessionState>("loading");
   const [user, setUser] = useState<User | null>(null);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [organization, setOrganization] = useState<Organization | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadUser = useCallback(async (token: string) => {
     const currentUser = await request<User>("/auth/me", undefined, token);
+    const memberships = await request<
+      { role: string; organization: Organization }[]
+    >("/organizations", undefined, token);
+    let activeOrganization: Organization | null = null;
+    try {
+      activeOrganization = await request<Organization>(
+        "/organizations/current",
+        undefined,
+        token,
+      );
+    } catch {
+      activeOrganization = null;
+    }
     accessToken.current = token;
     setUser(currentUser);
+    setOrganizations(
+      memberships.map((membership) => ({
+        ...membership.organization,
+        role: membership.role,
+      })),
+    );
+    setOrganization(activeOrganization);
     setState("authenticated");
   }, []);
 
@@ -100,9 +132,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       accessToken.current = null;
       csrfHeader.current = null;
       setUser(null);
+      setOrganizations([]);
+      setOrganization(null);
       setState("anonymous");
     }
   }, [loadUser]);
+
+  const authenticatedRequest = useCallback(
+    <T,>(path: string, body?: unknown, method?: "GET" | "POST" | "PATCH") => {
+      if (!accessToken.current) throw new Error("Sign in to continue.");
+      return request<T>(path, body, accessToken.current, undefined, method);
+    },
+    [],
+  );
+
+  const adoptAccessToken = useCallback(
+    async (token: string) => {
+      await loadUser(token);
+    },
+    [loadUser],
+  );
 
   useEffect(() => {
     const task = Promise.resolve().then(restore);
@@ -177,6 +226,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       accessToken.current = null;
       csrfHeader.current = null;
       setUser(null);
+      setOrganizations([]);
+      setOrganization(null);
       setState("anonymous");
       router.replace("/login");
     }
@@ -186,6 +237,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     () => ({
       state,
       user,
+      organizations,
+      organization,
       error,
       login,
       register,
@@ -193,10 +246,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       forgotPassword,
       resetPassword,
       logout,
+      authenticatedRequest,
+      adoptAccessToken,
     }),
     [
       state,
       user,
+      organizations,
+      organization,
       error,
       login,
       register,
@@ -204,6 +261,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       forgotPassword,
       resetPassword,
       logout,
+      authenticatedRequest,
+      adoptAccessToken,
     ],
   );
   return (

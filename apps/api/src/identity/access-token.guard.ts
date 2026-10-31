@@ -34,6 +34,7 @@ export class AccessTokenGuard implements CanActivate {
       where: {
         id: claims.sid,
         userId: claims.sub,
+        organizationId: claims.organizationId ?? null,
         revokedAt: null,
         expiresAt: { gt: new Date() },
         user: { status: "ACTIVE", emailVerifiedAt: { not: null } },

@@ -1,35 +1,43 @@
 # Next session handoff
 
-## Current checkpoint (2026-10-31, Africa/Lagos)
-Branch `develop`; latest implementation commit is `0b0ee43 feat(auth): add persisted identity lifecycle foundation`, followed by a progress-only checkpoint commit. The branch is ahead of `origin/develop`. This session began at `12bf2d0` with a clean worktree. A local untracked `.vscode/settings.json` appeared during tooling and was preserved; do not remove it without checking with the owner. Verify current status and exact docs checkpoint commit with `git status --short --branch` and `git log -5 --oneline`.
+## Checkpoint (2026-10-31, Africa/Lagos)
 
-## Task state
-- Completed: DOC-001, PROD-001 (interviews deferred to pilot), FOUNDATION-001, FOUNDATION-003, FOUNDATION-004, FOUNDATION-005.
-- Blocked: FOUNDATION-002 runtime health; Docker daemon socket `/Users/newuser/.docker/run/docker.sock` is unavailable.
-- In progress: FOUNDATION-006, PROD-002, ARCH-001 and ARCH-002. Owner provisional assumptions remain in DEC-007/008.
-- Remaining: 36 not started. Roadmap: 6/47 complete, 1 blocked, 4 in progress.
+Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; implementation resumed at `d8579fc`. Check `git status --short --branch` and `git log -5 --oneline` before editing. Preserve the existing untracked `.vscode/settings.json`. Do not assume a task was completed based only on code presence.
 
-## Current FOUNDATION-006 implementation
-- Prisma 7.10.1 and matching PostgreSQL adapter/schema/migration are committed in `447ee2d`. Prisma service/module constructs one client, probes `SELECT 1` at startup, exposes readiness and disconnects on shutdown. API starts without DB only when `DATABASE_CONNECT_ON_STARTUP=false` (test setting).
-- Auth routes: register, login, refresh, logout, me, verify-email, resend-verification, forgot-password, reset-password. Refresh tokens and recovery tokens are stored as SHA-256 digests; rotation atomically revokes an old row and creates the next token inside a Prisma transaction; replay revokes the token family. Password reset revokes all active user sessions.
-- Browser auth: access token held in memory; refresh token in HttpOnly/SameSite Strict cookie; double-submit CSRF with a credentialed CSRF bootstrap endpoint for refresh/logout; login/register/email verify/forgot/reset pages and dashboard guard.
-- Development/testing mail adapter stores outgoing messages in process memory. Production module fails closed without a configured provider. Throttling is process-local, not suitable as shared rate enforcement across replicas.
-- No migration has been applied to PostgreSQL. Auth unit tests use an in-memory fake Prisma adapter and do not verify real transaction isolation/concurrent refresh behavior. Organization-scoped auth claims are not yet implemented because organization membership is a subsequent roadmap task.
+## Completed and current tasks
 
-## Verification this continuation
-- Passed: `prisma validate`, `prisma generate`, offline SQL migration generation, full `npm run build`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run validate:env`.
-- Passed: full test suite 19/19 on approved rerun; includes auth service fakes, invalid/expired JWT, guard logout revocation, DB startup failure mapping, DTO rejection, CSRF endpoint, OpenAPI endpoints and live HTTP smoke.
-- Last dependency audit (before this continuation's source-only changes): 17 moderate development advisories, 0 high/critical, 0 production vulnerabilities.
-- Docker health and PostgreSQL migration/application remain unverified because Docker is unavailable. Prisma engine lifecycle scripts were not explicitly approved by npm, although CLI/schema validation/generation work in this environment.
+- Completed roadmap tasks remain: DOC-001, PROD-001, FOUNDATION-001, FOUNDATION-003, FOUNDATION-004, FOUNDATION-005.
+- FOUNDATION-002 is BLOCKED: Docker daemon unavailable, so service health is unverified.
+- FOUNDATION-006 remains IN_PROGRESS: lifecycle code and UI exist; pending PostgreSQL migration/concurrency integration, production email, distributed throttling, and browser E2E.
+- FOUNDATION-007 is the current IN_PROGRESS task: organization/membership/invitation schema, migration, API services/controllers/guards, UI and isolated tests have been implemented. Keep it IN_PROGRESS until its migration and tenant isolation/transaction tests pass against PostgreSQL.
+- PROD-002, ARCH-001 and ARCH-002 remain IN_PROGRESS with unresolved product/security decisions documented as provisional or review gates.
+- Roadmap count is still 6/47 complete; no task was marked complete by this continuation.
 
-## Exact next implementation steps
-1. Start Docker, then `docker compose up -d` and `docker compose ps`; verify health for PostgreSQL, Redis and S3Mock. At last check Docker socket was unavailable; keep FOUNDATION-002 blocked if unchanged.
-2. Run `npm run db:migrate:deploy --workspace=@inventory/api` against the disposable local PostgreSQL and verify tables/indexes; add CI/service integration test setup or a documented local DB test target.
-3. Add real PostgreSQL tests for registration uniqueness, verification one-time use, reset/session revocation, two concurrent refresh requests and reuse-family revocation. Resolve any transaction-isolation races based on observed tests.
-4. Implement/configure a production mail provider (AWS SES or another approved provider) and a delivery-safe dev/test transport that does not persist raw tokens. Add delivery failure/retry behavior.
-5. Move auth throttling to shared Redis-backed storage before multi-instance deployment; add browser E2E for login/refresh/logout and verification/recovery flows.
-6. Re-run full checks and update progress files. FOUNDATION-006 can be marked complete only after database-backed lifecycle, integration/concurrency/security tests, usable email delivery and browser workflow checks pass.
-7. Then start FOUNDATION-007 organizations/memberships, FOUNDATION-008 scoped RBAC, and FOUNDATION-009 branches/warehouses in dependency order.
+## Files changed in this continuation
 
-## Provisional decisions / open items
-Owner-authorized provisional defaults are in DEC-007/008: email/password; short-lived JWT access and rotating refresh; MFA enforcement deferred; strict organization isolation/RBAC; weighted-average costing; no negative stock by default; reserve on sales-order confirmation; immutable movement ledger; configurable cloud region/storage. These are assumptions, not validated requirements. Tax/invoice compliance, pricing/segment, production residency commitments, RLS/support access remain review gates. Email delivery provider/credentials and production cookie origins are not configured.
+- API: `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/20261031120000_organizations/migration.sql`, `apps/api/src/organizations/**`, `apps/api/src/app.module.ts`, `apps/api/src/identity/{auth.module.ts,auth.service.ts,access-token.guard.ts,email-delivery.ts}`, `apps/api/test/{auth-service.test.mjs,organization.test.mjs}`.
+- Web: `apps/web/src/features/auth/session-provider.tsx`, `apps/web/src/components/workspace-shell.tsx`, `apps/web/src/app/organizations/**`.
+- Progress: `docs/implementation/task-breakdown.md`, `docs/progress/current-state.md`, this handoff, plus session log/pending/blockers/completed task ledger as applicable.
+- Existing untracked `.vscode/settings.json` was not modified or staged.
+
+## Verification
+
+- Passed: `npm test` 21/21 on the approved run (auth fakes, isolated organization guard/role tests, API HTTP contract smoke).
+- Passed: lint, typecheck, full build (Nest and Next Webpack), format check, env validation, Prisma validation, and comparison of generated additive SQL with `migration.sql`.
+- Docker probe failed: cannot connect to `/Users/newuser/.docker/run/docker.sock`. No database migration application or PostgreSQL isolation/concurrency checks have run.
+- The organization tests are unit-level fakes; they do not prove real database transaction behavior or full HTTP tenant isolation.
+- Production email is not configured. Development email stores messages in memory. Auth throttling is process-local. No browser E2E has run.
+
+## Exact next steps
+
+1. Check Docker availability with `docker compose ps`. If the engine is running, start the local stack and verify PostgreSQL/Redis/S3Mock health; otherwise leave FOUNDATION-002 blocked and proceed.
+2. Apply both pending Prisma migrations to a disposable local PostgreSQL database with `npm run db:migrate:deploy --workspace=@inventory/api` and verify the resulting schema.
+3. Add/run PostgreSQL integration tests for organization create + owner membership, invitation token hash/expiry/email binding/one-time acceptance, competing accepts, deactivation, and cross-tenant organization access. Include concurrent requests where state is consumed.
+4. Fix any observed migration, transaction, authorization or tenant-isolation failures. Add controller/API tests for every organization route.
+5. Keep FOUNDATION-006 and FOUNDATION-007 IN_PROGRESS until their DB/security acceptance criteria pass. Do not count infrastructure or fake-only tests as verified database behavior.
+6. Then implement the next dependency-ready roadmap task, FOUNDATION-008 RBAC and warehouse scope, followed by FOUNDATION-009 branches/warehouses. Read its full acceptance criteria and existing architecture before editing.
+7. Run tests, lint, typecheck, build, formatting and Prisma validation. Update progress/task ledgers; commit only verified changes and do not stage `.vscode/settings.json`.
+
+## Provisional assumptions and review gates
+
+The owner-supplied assumptions are recorded in `docs/progress/decisions.md`: weighted-average costing, negative stock disabled, reserve on sales-order confirmation, immutable movement ledger, email/password plus JWT/rotating refresh, MFA enforcement deferred, strict organization isolation, configurable hosting region/storage. These are provisional assumptions, not validated business requirements. Tax/invoice compliance, pricing/limits, production residency and support access remain review gates. Do not weaken tenant isolation or security controls to bypass them.

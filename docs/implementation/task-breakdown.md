@@ -1,6 +1,6 @@
 # Numbered task breakdown
 
-Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001, FOUNDATION-003, FOUNDATION-004 and FOUNDATION-005 are COMPLETED; PROD-002, ARCH-001, ARCH-002 and FOUNDATION-006 are IN_PROGRESS; FOUNDATION-002 is BLOCKED; remaining tasks are NOT_STARTED. Tests: implementation tests cover local config, API conventions and auth cryptographic primitives. Authentication schema/configuration is underway; it is not the complete FOUNDATION-006 task.
+Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001, FOUNDATION-003, FOUNDATION-004 and FOUNDATION-005 are COMPLETED; PROD-002, ARCH-001, ARCH-002, FOUNDATION-006 and FOUNDATION-007 are IN_PROGRESS; FOUNDATION-002 is BLOCKED; remaining tasks are NOT_STARTED. Tests include local config, API conventions, auth lifecycle fakes and isolated tenant-guard checks. FOUNDATION-006 and FOUNDATION-007 both retain database-backed verification work.
 
 ## Phase 0–2: research, product, architecture
 
@@ -53,8 +53,8 @@ Description: GitHub Actions CI, structured logs, health endpoints, dependency sc
 Description: Register/login/refresh/logout, verified email/session revocation per approved auth choice. Priority: P0. Dependencies: FOUNDATION-003, ARCH-002 (provisional baseline DEC-007 authorized). Deliverables: auth tables/API/UI. Acceptance: session lifecycle and rate limits work. Tests: auth integration/security tests. Status: IN_PROGRESS (Prisma 7 provider/module with startup connection probe and shutdown; registration/login/refresh/logout/verify/resend/forgot/reset/me routes; hashed one-time tokens, session-family rotation/reuse revocation, bearer guard, HTTP-only refresh cookie/CSRF, process-local rate limits, development mail interface and login/register/verify/recovery UI implemented. Unit/API contract suite passes. No PostgreSQL migration or DB concurrency integration test, production email adapter, distributed limiter, or browser E2E is available; don't mark complete until these are resolved and verified).
 
 ### FOUNDATION-007: Organization and membership
-**Files/modules affected:** apps/api/src/organizations/, apps/web/src/features/organizations/, Prisma membership schema.
-Description: Create organizations, memberships, invite/accept/deactivate. Priority: P0. Dependencies: FOUNDATION-006. Deliverables: tenant context resolver. Acceptance: membership required for every organization route. Tests: tenant isolation tests. Status: NOT_STARTED.
+**Files/modules affected:** `apps/api/src/organizations/`, `apps/web/src/app/organizations/`, Prisma organization/membership schema.
+Description: Create organizations, memberships, invite/accept/deactivate. Priority: P0. Dependencies: FOUNDATION-006. Deliverables: tenant context resolver. Acceptance: membership required for every organization-scoped route. Tests: tenant isolation tests. Status: IN_PROGRESS (organization and invitation schema/migration, organization creation/list/select, selected-tenant membership guard, admin authorization, invitation issue/accept/revoke, member listing/deactivation APIs, and web management/acceptance screens implemented. Unit tests verify tenant guard and role checks. Migration application and PostgreSQL concurrency/isolation tests remain pending; do not mark complete until database-backed verification passes).
 
 ### FOUNDATION-008: RBAC and warehouse scope
 **Files/modules affected:** apps/api/src/access/, apps/web/src/features/access/, Prisma RBAC schema.

@@ -38,6 +38,6 @@ import { PasswordHasher } from "./password-hasher";
     AuthService,
     AccessTokenGuard,
   ],
-  exports: [AuthService, AccessTokenGuard],
+  exports: [AuthService, AccessTokenGuard, AccessTokenService, EMAIL_DELIVERY],
 })
 export class AuthModule {}

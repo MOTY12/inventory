@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useSession } from "../features/auth/session-provider";
 
 const navigation = [
@@ -13,7 +14,7 @@ const navigation = [
 
 export function WorkspaceShell() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const { user, logout } = useSession();
+  const { user, logout, organization } = useSession();
 
   return (
     <div className="workspace-shell">
@@ -49,8 +50,10 @@ export function WorkspaceShell() {
             W
           </span>
           <span className="workspace-switcher-copy">
-            <strong>Workspace</strong>
-            <small>Setup required</small>
+            <strong>{organization?.name ?? "Workspace"}</strong>
+            <small>
+              {organization ? "Active organization" : "Set up required"}
+            </small>
           </span>
           <span aria-hidden="true" className="switcher-chevron">
             ⌄
@@ -179,14 +182,10 @@ export function WorkspaceShell() {
                 workspace is connected.
               </p>
             </div>
-            <button
-              className="primary-button"
-              disabled
-              title="Organization setup is planned after authentication and membership are implemented"
-              type="button"
-            >
-              Set up workspace <span aria-hidden="true">→</span>
-            </button>
+            <Link className="primary-button" href="/organizations">
+              {organization ? "Manage organization" : "Set up workspace"}{" "}
+              <span aria-hidden="true">→</span>
+            </Link>
           </section>
 
           <section aria-label="Workspace summary" className="summary-grid">

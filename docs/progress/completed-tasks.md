@@ -1,6 +1,6 @@
 # Completed tasks
 
-No roadmap task was newly completed in the 2026-10-31 continuation. FOUNDATION-006 progressed but remains IN_PROGRESS because PostgreSQL-backed migration/concurrency verification and production email delivery are outstanding.
+No roadmap task was newly completed in the 2026-10-31 organization continuation. FOUNDATION-006 and FOUNDATION-007 progressed but remain IN_PROGRESS because PostgreSQL-backed migration and security/concurrency verification remain outstanding. Completed count remains 6/47.
 
 - **DOC-001 — Research and planning baseline — COMPLETED 2026-10-31.** Inspected the empty repository; reviewed official REA README and installation/CLI references; reviewed visible public inFlow homepage and official product/help/pricing pages; documented REA CDP limitation; authored research, product, architecture, implementation and progress documentation. No application code or test execution. Evidence/limitations: `docs/research/research-sources.md`; full acceptance intent in `docs/implementation/task-breakdown.md`.
 

@@ -10,6 +10,13 @@ export type EmailMessage =
       to: string;
       token: string;
       expiresAt: Date;
+    }
+  | {
+      type: "organization-invitation";
+      to: string;
+      token: string;
+      organizationName: string;
+      expiresAt: Date;
     };
 
 export interface EmailDelivery {

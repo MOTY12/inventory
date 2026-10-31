@@ -102,6 +102,20 @@ export class AuthService {
         return { kind: "invalid" as const };
       }
 
+      let organizationId = current.organizationId ?? undefined;
+      if (organizationId) {
+        const membership = await transaction.membership.findUnique({
+          where: {
+            organizationId_userId: {
+              organizationId,
+              userId: current.userId,
+            },
+          },
+          select: { status: true },
+        });
+        if (membership?.status !== "ACTIVE") organizationId = undefined;
+      }
+
       const revoked = await transaction.refreshSession.updateMany({
         where: { id: current.id, revokedAt: null, expiresAt: { gt: now } },
         data: { revokedAt: now, lastUsedAt: now },
@@ -118,6 +132,7 @@ export class AuthService {
           id: nextSessionId,
           familyId: current.familyId,
           userId: current.userId,
+          ...(organizationId ? { organizationId } : {}),
           tokenHash: next.tokenHash,
           expiresAt: new Date(now.getTime() + REFRESH_TTL_MS),
         },
@@ -125,6 +140,7 @@ export class AuthService {
       const access = await this.accessTokens.issue({
         sub: current.userId,
         sid: nextSessionId,
+        ...(organizationId ? { organizationId } : {}),
       });
       return {
         kind: "success" as const,
@@ -293,11 +309,19 @@ export class AuthService {
     const refresh = issueRefreshToken();
     const sessionId = randomUUID();
     const csrfToken = issueRefreshToken().token;
+    const memberships = await this.prisma.membership.findMany({
+      where: { userId, status: "ACTIVE" },
+      select: { organizationId: true },
+      take: 2,
+    });
+    const organizationId =
+      memberships.length === 1 ? memberships[0].organizationId : undefined;
     await this.prisma.refreshSession.create({
       data: {
         id: sessionId,
         userId,
         familyId: randomUUID(),
+        ...(organizationId ? { organizationId } : {}),
         tokenHash: refresh.tokenHash,
         expiresAt: new Date(Date.now() + REFRESH_TTL_MS),
       },
@@ -305,6 +329,7 @@ export class AuthService {
     const access = await this.accessTokens.issue({
       sub: userId,
       sid: sessionId,
+      ...(organizationId ? { organizationId } : {}),
     });
     return {
       accessToken: access.token,

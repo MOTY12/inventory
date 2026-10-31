@@ -16,6 +16,9 @@ class FakePrisma {
   resetTokens = [];
 
   constructor() {
+    this.membership = {
+      findMany: async () => [],
+    };
     this.user = {
       create: async ({ data }) => {
         if (
