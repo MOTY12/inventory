@@ -1,35 +1,34 @@
 # Next session handoff
 
 ## Current checkpoint (2026-10-31, Africa/Lagos)
-Branch `develop`, HEAD `e8fe304` (`feat(auth): add password and token primitives`), one commit ahead of `origin/develop`. Preserve uncommitted checkpoint corrections in `current-state.md`, `next-session.md` and `session-log.md`, plus pre-existing changes in `apps/web/next-env.d.ts` and `completed-tasks.md`. No resets or branch changes.
+Branch `develop`, HEAD `f377d8f` at session start (two commits ahead of `origin/develop`). This continuation has uncommitted Prisma/database foundation and progress documentation changes; inspect `git status` and diff before editing or committing. No user changes were present in the worktree at continuation start. The Next build modified generated `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo`; both were restored to their starting contents.
 
 ## Task state
-- Completed: DOC-001, PROD-001 (interviews explicitly deferred to pilot), FOUNDATION-001, FOUNDATION-003, FOUNDATION-004, FOUNDATION-005.
-- Blocked: FOUNDATION-002 runtime health; Docker socket `/Users/newuser/.docker/run/docker.sock` remains unavailable. Compose definition/config and environment validation were already verified earlier. FOUNDATION-006 persistence is blocked on stable Prisma CLI installation and PostgreSQL verification.
-- In progress: PROD-002, ARCH-001 and ARCH-002. Owner supplied provisional behavior in DEC-007. FOUNDATION-006 has tested security primitives only; there are no auth endpoints or persistence yet.
-- 47 roadmap tasks total: 6 complete, 2 blocked, 3 in progress, 36 not started.
+- Completed: DOC-001, PROD-001 (interviews deferred to pilot), FOUNDATION-001, FOUNDATION-003, FOUNDATION-004, FOUNDATION-005.
+- Blocked: FOUNDATION-002 runtime health; Docker daemon socket `/Users/newuser/.docker/run/docker.sock` is unavailable.
+- In progress: FOUNDATION-006, PROD-002, ARCH-001 and ARCH-002. Owner provisional assumptions remain in DEC-007/008.
+- Remaining: 36 not started. Roadmap: 6/47 complete, 1 blocked, 4 in progress.
 
-## Owner-directed provisional defaults
-See DEC-007/008 in `docs/progress/decisions.md`: weighted-average costing, no negative stock by default, reservation on sales-order confirmation, immutable ledger, email/password, JWT access/rotating refresh, MFA planned but deferred, strict organization scoping/RBAC, configurable cloud region/storage, no production region assumption. These are assumptions, not validated customer requirements. Tax/invoice compliance, pricing, target segment/brand, data residency commitments, RLS and support access remain release/security review items.
+## Work completed in this continuation
+- Installed stable `prisma@7.10.1`, `@prisma/client@7.10.1`, `@prisma/adapter-pg@7.10.1`, `pg@8.16.3`, `@types/pg@8.15.5`, and `dotenv@16.6.1`. Do not switch to Prisma 8 RC.
+- Added `prisma.config.ts`, identity models (`User`, `RefreshSession`, `EmailVerificationToken`), generated SQL migration and PostgreSQL migration lock. Prisma generated client is ignored and produced as part of API build.
+- Added `.env.example` `DATABASE_URL`, CI database URL for schema generation (no database connection is required for build), and API Prisma scripts.
+- No DB migration was applied; no auth endpoint, repository/service, mailer, browser auth flow, organization model or live PostgreSQL test exists yet.
 
-## Exact next steps
-1. Read startup docs and inspect `git status --short --branch`, `git diff --check`, `git log -5 --oneline`. Preserve current changes.
-2. Retry `docker info --format '{{.ServerVersion}}'` and `docker compose ps`; if Docker starts, run `docker compose up -d`, verify all three services healthy, and complete FOUNDATION-002. If unavailable, keep it blocked.
-3. Resume FOUNDATION-006. Stable Prisma CLI 7.9.1 was selected from official release status, but its install escalation was rejected by the approval gate. No Prisma dependency is currently present. Prisma 8 RC and the unused mismatched Client were removed. Do not use an RC or invent a storage fallback. Obtain an allowed stable ORM install path, then add schema/migrations, Prisma service, and PostgreSQL-backed user/session repositories.
-4. Wire Argon2id/JWT/refresh-token utilities into registration, login, verify-email, refresh rotation and logout endpoints; configure secret loading/rate limits/cookies and add integration tests. Access JWT TTL is 15 minutes; refresh persistence/expiry/rotation still need implementation.
-5. Complete FOUNDATION-006 tests and update task docs. Then implement FOUNDATION-007 organizations/membership, FOUNDATION-008 RBAC, FOUNDATION-009 locations, followed by catalog and inventory in dependency order.
-6. For Git commits, commit only verified milestones and only the files changed for that milestone; preserve unrelated existing work. Current `.git` writes may require an approval-gated command.
+## Verification this continuation
+- Passed: `prisma validate`, `prisma generate`, offline `prisma migrate diff`, `npm run build`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run validate:env`, `git diff --check`.
+- Passed: full `npm test` 11/11 after live HTTP test could not bind a port in sandbox (`EPERM`); the approved escalated rerun passed.
+- Final audit: `npm audit --audit-level=high` exited 0 with 17 moderate development-tree advisories and no high/critical advisories; production-only audit found 0 vulnerabilities. Review the moderate toolchain advisories before release.
+- Docker health and PostgreSQL migration/application remain unverified because Docker is unavailable. Prisma engine lifecycle scripts were not explicitly approved by npm, although CLI/schema validation/generation work in this environment.
 
-## Files changed in the auth milestone commit
-- `apps/api/package.json`, `package-lock.json`: added `argon2` and `@nestjs/jwt`; attempted ORM install, then removed Prisma preview/client after stable CLI install was rejected. Inspect exact diff before continuing.
-- `apps/api/src/identity/password-hasher.ts`: Argon2id hashing/verification using OWASP minimum config.
-- `apps/api/src/identity/access-token.service.ts`: 15-minute HS256 tokens with issuer/audience, required 32-byte secret, subject/session/optional org claims.
-- `apps/api/src/identity/refresh-token.ts`: 256-bit opaque refresh token generation and SHA-256 digest for storage.
-- `apps/api/test/api-contract.test.mjs`: auth primitive tests in addition to existing API contract tests.
-- `docs/progress/decisions.md`, `task-breakdown.md`, `blockers.md`, `pending-tasks.md`: provisional defaults and task blocker state are included in commit `e8fe304`. New checkpoint hash corrections in `current-state.md`, `next-session.md` and `session-log.md` are uncommitted.
-- Existing uncommitted `apps/web/next-env.d.ts` came from prior Next tooling; preserve unless confirmed generated and safe to restore.
+## Exact next implementation steps
+1. Verify worktree and commit scope: `git status --short --branch`, `git diff --check`, inspect `git diff` and confirm no generated Next changes.
+2. Retry Docker health (`docker info`, `docker compose ps`); if unavailable, keep FOUNDATION-002 blocked and proceed.
+3. Add Prisma provider/module/service using `PrismaPg`, add readiness integration, and unit-test client wiring without connecting at module construction. Generate client via API build.
+4. Implement registration, login, email verification, refresh rotation and logout against Prisma in a transaction-safe auth service/controller. Add DTO validation, rate limiting, secure refresh-cookie/CSRF handling and test repository/service behavior. Email transport is not configured; define a mailer boundary and document the integration requirement without logging verification tokens.
+5. Add auth UI and test the complete lifecycle. Use a disposable PostgreSQL runtime for migration and integration tests when Docker is available; do not mark FOUNDATION-006 complete until the task acceptance criteria pass.
+6. Re-run full relevant checks and final dependency audits. Update `current-state.md`, `task-breakdown.md`, `session-log.md`, `blockers.md` and this handoff. Commit only verified milestone files, preserving unrelated work.
+7. After FOUNDATION-006 is complete, continue FOUNDATION-007 organization/membership, then FOUNDATION-008 RBAC and FOUNDATION-009 locations before catalog/inventory work.
 
-## Verification
-- This continuation: `npm run build`, typecheck, lint, format, env validation passed; 10 non-listener tests passed, including Argon2id, JWT claims/secret scoping and refresh-token digest. Full `npm test` approval was rejected; sandbox listener test returned EPERM.
-- Earlier foundation results are recorded in current state: 8-test complete suite and live API smoke passed before the auth-only changes.
-- Docker health not verified. Stable Prisma CLI install request was rejected; no migration/schema has been created. Dependency audit must be rerun after final auth/ORM dependency selection.
+## Provisional decisions / open items
+Owner-authorized provisional defaults are in DEC-007/008: email/password; short-lived JWT access and rotating refresh; MFA enforcement deferred; strict organization isolation/RBAC; weighted-average costing; no negative stock by default; reserve on sales-order confirmation; immutable movement ledger; configurable cloud region/storage. These are assumptions, not validated requirements. Tax/invoice compliance, pricing/segment, production residency commitments, RLS/support access remain review gates. Email delivery provider/credentials and production cookie origins are not configured.

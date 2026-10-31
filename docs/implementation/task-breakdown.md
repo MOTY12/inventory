@@ -1,6 +1,6 @@
 # Numbered task breakdown
 
-Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001, FOUNDATION-003, FOUNDATION-004 and FOUNDATION-005 are COMPLETED; PROD-002, ARCH-001 and ARCH-002 are IN_PROGRESS; FOUNDATION-002 and FOUNDATION-006 are BLOCKED; remaining tasks are NOT_STARTED. Tests: implementation tests cover local config, API conventions and auth cryptographic primitives. Authentication primitives are not the complete FOUNDATION-006 task.
+Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001, FOUNDATION-003, FOUNDATION-004 and FOUNDATION-005 are COMPLETED; PROD-002, ARCH-001, ARCH-002 and FOUNDATION-006 are IN_PROGRESS; FOUNDATION-002 is BLOCKED; remaining tasks are NOT_STARTED. Tests: implementation tests cover local config, API conventions and auth cryptographic primitives. Authentication schema/configuration is underway; it is not the complete FOUNDATION-006 task.
 
 ## Phase 0–2: research, product, architecture
 
@@ -50,7 +50,7 @@ Description: GitHub Actions CI, structured logs, health endpoints, dependency sc
 
 ### FOUNDATION-006: User authentication and sessions
 **Files/modules affected:** apps/api/src/identity/, apps/web/src/features/auth/, Prisma identity schema.
-Description: Register/login/refresh/logout, verified email/session revocation per approved auth choice. Priority: P0. Dependencies: FOUNDATION-003, ARCH-002 (provisional baseline DEC-007 authorized). Deliverables: auth tables/API/UI. Acceptance: session lifecycle and rate limits work. Tests: auth integration/security tests. Status: BLOCKED (Argon2id, short-lived JWT access and opaque refresh-token hashing utilities implemented/tested; persisted user/session lifecycle awaits a stable Prisma CLI install and PostgreSQL verification. Install approval was rejected; no release-candidate ORM retained).
+Description: Register/login/refresh/logout, verified email/session revocation per approved auth choice. Priority: P0. Dependencies: FOUNDATION-003, ARCH-002 (provisional baseline DEC-007 authorized). Deliverables: auth tables/API/UI. Acceptance: session lifecycle and rate limits work. Tests: auth integration/security tests. Status: IN_PROGRESS (stable Prisma 7.10.1, PostgreSQL adapter, identity schema and generated SQL migration added; schema validation/client generation pass. Auth endpoints, repositories, email delivery, browser UI, PostgreSQL migration/runtime and full auth integration tests remain incomplete).
 
 ### FOUNDATION-007: Organization and membership
 **Files/modules affected:** apps/api/src/organizations/, apps/web/src/features/organizations/, Prisma membership schema.

@@ -2,9 +2,9 @@
 
 ## Active implementation blocker
 - **FOUNDATION-002 runtime verification:** `docker compose config --quiet` passes, but Docker commands cannot connect to `unix:///Users/newuser/.docker/run/docker.sock`; the Docker daemon is not running. The Compose files cannot be marked complete until all service health checks are confirmed. Start the configured Docker engine and run the exact commands in `docs/progress/next-session.md`.
-- **FOUNDATION-006 persistence tooling:** stable Prisma CLI 7.9.1 was selected from official release documentation. The approval-gated install request was rejected, so no stable Prisma CLI is installed. Prisma 8 RC and the mismatched Client were removed; no persistence fallback was substituted. The stable package install needs an allowed path before schema/migrations/repositories can be built and verified.
-- **FOUNDATION-006 verification:** an approval-gated rerun of `npm test` was also rejected. Ten non-listener tests passed; live API integration had passed on the previous implementation before auth-only changes. Re-run the complete suite when the port-binding command is allowed.
-- **Dependency audit:** the prior full audit applied to an earlier lockfile. Authentication packages and attempted ORM installs changed the tree; rerun full and production audits after selecting the final stable ORM dependencies. Do not use Prisma 8 RC for transaction-critical inventory work.
+- **FOUNDATION-006 database runtime:** Prisma 7.10.1, matching Prisma Client/PG adapter, identity schema and offline SQL migration are present; schema validation and client generation pass. Docker is unavailable, so migrations have not been applied and PostgreSQL-backed lifecycle behavior is unverified. Auth endpoints/repositories are not implemented yet.
+- **FOUNDATION-006 email delivery:** no mail transport is configured. Verification token persistence can be implemented, but production account verification needs a provider/configuration boundary; never expose tokens in logs.
+- **Dependency audit:** npm install reported moderate advisories; rerun full and production audits against the current lockfile. Do not use Prisma 8 RC for transaction-critical work.
 
 ## Active planning constraints
 - **REA CDP unavailable:** `list_browser_targets` to `127.0.0.1:9222` returned endpoint unreachable. This blocks REA live DOM/screenshot/network evidence. Public official pages and visible browser homepage provided fallback; no Chrome reconfiguration was done.
