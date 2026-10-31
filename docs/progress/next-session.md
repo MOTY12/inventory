@@ -1,7 +1,7 @@
 # Next session handoff
 
 ## Current checkpoint (2026-10-31, Africa/Lagos)
-Branch `develop`, HEAD `42245b9` (`Dashboard build`). Preserve pre-existing uncommitted changes, including generated `apps/web/next-env.d.ts`, existing progress updates and the API test assertion. This continuation has additional uncommitted changes listed below. No resets or branch changes.
+Branch `develop`, HEAD `e8fe304` (`feat(auth): add password and token primitives`), one commit ahead of `origin/develop`. Preserve uncommitted checkpoint corrections in `current-state.md`, `next-session.md` and `session-log.md`, plus pre-existing changes in `apps/web/next-env.d.ts` and `completed-tasks.md`. No resets or branch changes.
 
 ## Task state
 - Completed: DOC-001, PROD-001 (interviews explicitly deferred to pilot), FOUNDATION-001, FOUNDATION-003, FOUNDATION-004, FOUNDATION-005.
@@ -20,13 +20,13 @@ See DEC-007/008 in `docs/progress/decisions.md`: weighted-average costing, no ne
 5. Complete FOUNDATION-006 tests and update task docs. Then implement FOUNDATION-007 organizations/membership, FOUNDATION-008 RBAC, FOUNDATION-009 locations, followed by catalog and inventory in dependency order.
 6. For Git commits, commit only verified milestones and only the files changed for that milestone; preserve unrelated existing work. Current `.git` writes may require an approval-gated command.
 
-## Files changed during this continuation
+## Files changed in the auth milestone commit
 - `apps/api/package.json`, `package-lock.json`: added `argon2` and `@nestjs/jwt`; attempted ORM install, then removed Prisma preview/client after stable CLI install was rejected. Inspect exact diff before continuing.
 - `apps/api/src/identity/password-hasher.ts`: Argon2id hashing/verification using OWASP minimum config.
 - `apps/api/src/identity/access-token.service.ts`: 15-minute HS256 tokens with issuer/audience, required 32-byte secret, subject/session/optional org claims.
 - `apps/api/src/identity/refresh-token.ts`: 256-bit opaque refresh token generation and SHA-256 digest for storage.
 - `apps/api/test/api-contract.test.mjs`: auth primitive tests in addition to existing API contract tests.
-- `docs/progress/decisions.md`, `task-breakdown.md`, `blockers.md`, `current-state.md`, `pending-tasks.md`, `session-log.md`, `completed-tasks.md`, this handoff: provisional defaults and current blocker/task state.
+- `docs/progress/decisions.md`, `task-breakdown.md`, `blockers.md`, `pending-tasks.md`: provisional defaults and task blocker state are included in commit `e8fe304`. New checkpoint hash corrections in `current-state.md`, `next-session.md` and `session-log.md` are uncommitted.
 - Existing uncommitted `apps/web/next-env.d.ts` came from prior Next tooling; preserve unless confirmed generated and safe to restore.
 
 ## Verification

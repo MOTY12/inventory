@@ -28,7 +28,7 @@ Description: Decide RLS, auth provider, MFA and support access. Priority: P0. De
 
 ### FOUNDATION-001: Repository and workspace foundation
 **Files/modules affected:** workspace configuration, apps/web/, apps/api/, packages/shared/.
-Description: Establish workspace package manager, web/API packages, shared schemas, lint/format/typecheck. Priority: P0. Dependencies: DOC-001 and explicit owner authorization to begin implementation. Product policy approval (PROD-002) remains required before domain behavior, schemas, authentication, or inventory rules are implemented. Affected root configs/apps/packages. Deliverables: reproducible workspace scripts. Acceptance: clean install/build/typecheck on supported Node; no business behavior yet. Tests: CI smoke/build checks. Status: COMPLETED.
+Description: Establish workspace package manager, web/API packages, shared schemas, lint/format/typecheck. Priority: P0. Dependencies: DOC-001 and explicit owner authorization to begin implementation. Owner-directed provisional policies in DEC-007 now authorize corresponding core auth, tenancy and inventory implementation; unapproved decisions remain release/customer-commitment gates. Affected root configs/apps/packages. Deliverables: reproducible workspace scripts. Acceptance: clean install/build/typecheck on supported Node; no business behavior yet. Tests: CI smoke/build checks. Status: COMPLETED.
 
 ### FOUNDATION-002: Local infrastructure and configuration
 **Files/modules affected:** `compose.yaml`, `.env.example`, infrastructure/local/.

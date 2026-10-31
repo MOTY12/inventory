@@ -4,7 +4,7 @@
 
 ## Repository verified
 - Workspace: `/Users/newuser/Documents/GitHub/inventory`.
-- Git history at session start: `main` at `594131d` (`next js app seetup`), preceded by `3fb6777`, `7739ce4`, and `918de84`. Repository is now on `develop` at `42245b9` (`Dashboard build`), which contains the implementation files. Remaining progress edits and the final test assertion are uncommitted; preserve them.
+- Git history at session start: `main` at `594131d` (`next js app seetup`), preceded by `3fb6777`, `7739ce4`, and `918de84`. Current branch is `develop` at `e8fe304` (`feat(auth): add password and token primitives`), one commit ahead of `origin/develop`. Uncommitted files: checkpoint corrections in this file, `docs/progress/next-session.md` and `docs/progress/session-log.md`, plus pre-existing `apps/web/next-env.d.ts` and `docs/progress/completed-tasks.md`; preserve all.
 - Owner authorized implementation on 2026-10-31; PROD-001 interviews deferred to pilot, without inventing evidence.
 
 ## Research status
