@@ -6,10 +6,13 @@ The local Compose stack provides PostgreSQL, Redis and an S3 API test server. It
 
 ```sh
 cp .env.example .env
+npm run validate:env
 docker compose up -d
 docker compose ps
 docker compose down
 ```
+
+`npm run validate:env` checks `.env` (or `.env.example` when `.env` is absent) using the shared Zod schema. Compose health checks cover database readiness, authenticated Redis ping, and the S3Mock health endpoint.
 
 Named volumes preserve local database, Redis and S3Mock files across container recreation. To permanently reset local state, remove the named volumes with `docker compose down -v`; this deletes local development data.
 

@@ -14,9 +14,11 @@
     "dev:web": "npm run dev --workspace=@inventory/web",
     "dev:api": "npm run start:dev --workspace=@inventory/api",
     "build": "npm run build --workspace=@inventory/shared && npm run build --workspace=@inventory/api && npm run build --workspace=@inventory/web",
-    "lint": "eslint apps packages",
-    "format": "prettier --write \"apps/**/*.{ts,tsx,css,json}\" \"packages/**/*.{ts,tsx,json}\" \"*.{json,mjs}\"",
-    "format:check": "prettier --check \"apps/**/*.{ts,tsx,css,json}\" \"packages/**/*.{ts,tsx,json}\" \"*.{json,mjs}\"",
+    "lint": "eslint apps packages scripts",
+    "format": "prettier --write \"apps/**/*.{ts,tsx,css,json}\" \"packages/**/*.{ts,tsx,json,mjs}\" \"scripts/**/*.mjs\" \"*.{json,mjs}\"",
+    "format:check": "prettier --check \"apps/**/*.{ts,tsx,css,json}\" \"packages/**/*.{ts,tsx,json,mjs}\" \"scripts/**/*.mjs\" \"*.{json,mjs}\"",
+    "validate:env": "npm run build --workspace=@inventory/shared && node scripts/validate-local-env.mjs",
+    "test": "npm run build --workspace=@inventory/shared && npm run build --workspace=@inventory/api && node --test packages/shared/test/*.test.mjs apps/api/test/*.test.mjs",
     "typecheck": "npm run build --workspace=@inventory/shared && npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {

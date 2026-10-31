@@ -1,6 +1,6 @@
 # Numbered task breakdown
 
-Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001 are COMPLETED; FOUNDATION-002 is BLOCKED on Docker daemon availability; remaining tasks are NOT_STARTED. Tests: below are requirements for implementation; no application tests are available before implementation.
+Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001, FOUNDATION-003, FOUNDATION-004 and FOUNDATION-005 are COMPLETED; FOUNDATION-002 is BLOCKED on Docker daemon availability; remaining tasks are NOT_STARTED. Tests: each task lists verification requirements; implementation tests cover local config and API conventions.
 
 ## Phase 0–2: research, product, architecture
 
@@ -32,19 +32,19 @@ Description: Establish workspace package manager, web/API packages, shared schem
 
 ### FOUNDATION-002: Local infrastructure and configuration
 **Files/modules affected:** `compose.yaml`, `.env.example`, infrastructure/local/.
-Description: Compose PostgreSQL, Redis and object storage; validated env schema and safe local defaults. Priority: P0. Dependencies: FOUNDATION-001. Deliverables: Docker Compose and `.env.example`. Acceptance: services start, health checks work, no secret committed. Tests: compose startup/integration smoke. Status: BLOCKED (definition and safe defaults present; Docker daemon unavailable for service health verification).
+Description: Compose PostgreSQL, Redis and object storage; validated env schema and safe local defaults. Priority: P0. Dependencies: FOUNDATION-001. Deliverables: Docker Compose and `.env.example`. Acceptance: services start, health checks work, no secret committed. Tests: Compose config, env validation and startup/health smoke. Status: BLOCKED (Compose/env schema and config checks pass; Docker daemon unavailable for startup/health verification).
 
 ### FOUNDATION-003: API conventions and OpenAPI
 **Files/modules affected:** apps/api/src/common/, apps/api/src/main.ts, OpenAPI configuration.
-Description: Nest bootstrap, `/api/v1`, validation, error envelope, request IDs, Swagger. Priority: P0. Dependencies: FOUNDATION-001. Deliverables: API shell and spec endpoint. Acceptance: invalid DTO and unknown route return consistent errors. Tests: API contract tests. Status: NOT_STARTED.
+Description: Nest bootstrap, `/api/v1`, validation, error envelope, request IDs, Swagger. Priority: P0. Dependencies: FOUNDATION-001. Deliverables: API shell and spec endpoint. Acceptance: invalid DTO and unknown route return consistent errors. Tests: API contract tests. Status: COMPLETED (2026-10-31; 5 API checks including live HTTP smoke passed).
 
 ### FOUNDATION-004: Frontend shell/design tokens
 **Files/modules affected:** apps/web/src/app/, apps/web/src/components/, apps/web/src/styles/.
-Description: Next shell, routing, original design tokens, sidebar/topbar and state patterns. Priority: P1. Dependencies: FOUNDATION-001. Deliverables: responsive authenticated-layout shell. Acceptance: keyboard accessible nav and mobile reflow. Tests: component accessibility/smoke. Status: NOT_STARTED.
+Description: Next shell, routing, original design tokens, sidebar/topbar and state patterns. Priority: P1. Dependencies: FOUNDATION-001. Deliverables: responsive authenticated-layout shell. Acceptance: keyboard accessible nav and mobile reflow. Tests: component accessibility/smoke. Status: COMPLETED (2026-10-31; semantic navigation, skip link, visible keyboard focus, mobile menu/reflow; production build passed).
 
 ### FOUNDATION-005: CI, logs and health checks
 **Files/modules affected:** .github/workflows/, apps/api/src/health/, apps/api/src/observability/.
-Description: GitHub Actions CI, structured logs, health endpoints, dependency scanning. Priority: P0. Dependencies: FOUNDATION-001–003. Deliverables: workflow and operational baseline. Acceptance: CI blocks failed checks; logs carry request ID and omit secrets. Tests: CI workflow and log redaction checks. Status: NOT_STARTED.
+Description: GitHub Actions CI, structured logs, health endpoints, dependency scanning. Priority: P0. Dependencies: FOUNDATION-001–003. Deliverables: workflow and operational baseline. Acceptance: CI blocks failed checks; logs carry request ID and omit secrets. Tests: CI workflow and log redaction checks. Status: COMPLETED (2026-10-31; CI YAML parses; request logs contain request IDs and omit URL/body; liveness passes and readiness accurately reports unconfigured service adapters).
 
 ## Phase 4: identity and locations
 
