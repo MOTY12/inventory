@@ -1,6 +1,6 @@
 # Numbered task breakdown
 
-Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001, FOUNDATION-003, FOUNDATION-004 and FOUNDATION-005 are COMPLETED; FOUNDATION-002 is BLOCKED on Docker daemon availability; remaining tasks are NOT_STARTED. Tests: each task lists verification requirements; implementation tests cover local config and API conventions.
+Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001, FOUNDATION-003, FOUNDATION-004 and FOUNDATION-005 are COMPLETED; PROD-002, ARCH-001 and ARCH-002 are IN_PROGRESS; FOUNDATION-002 and FOUNDATION-006 are BLOCKED; remaining tasks are NOT_STARTED. Tests: implementation tests cover local config, API conventions and auth cryptographic primitives. Authentication primitives are not the complete FOUNDATION-006 task.
 
 ## Phase 0–2: research, product, architecture
 
@@ -14,15 +14,15 @@ Description: Complete the initial product research and prepare user validation. 
 
 ### PROD-002: Approve MVP and business policies
 **Files/modules affected:** docs/product/, docs/progress/decisions.md.
-Description: Resolve open decisions: reservation point, negative stock, valuation, tax, scope, pricing assumptions. Priority: P0. Dependencies: PROD-001. Affected product and architecture docs. Deliverables: signed decision log. Acceptance: all architecture-blocking decisions have owner and value. Tests: scenario review. Status: NOT_STARTED.
+Description: Resolve open decisions: reservation point, negative stock, valuation, tax, scope, pricing assumptions. Priority: P0. Dependencies: PROD-001. Affected product and architecture docs. Deliverables: signed decision log. Acceptance: all architecture-blocking decisions have owner and value. Tests: scenario review. Status: IN_PROGRESS (core inventory/auth/tenancy assumptions supplied by owner as provisional in DEC-007; tax, pricing, segment and release commitments remain open).
 
 ### ARCH-001: Approve transaction and inventory semantics
 **Files/modules affected:** docs/architecture/, docs/research/inflow-business-rules.md.
-Description: Finalize on-hand/reserved/available/in-transit, transfer and reversal semantics. Priority: P0. Dependencies: PROD-002. Affected database, API, business rules. Deliverables: state diagrams and invariants. Acceptance: every stock transition has balanced ledger postings and rollback behavior. Tests: scenario matrix. Status: NOT_STARTED.
+Description: Finalize on-hand/reserved/available/in-transit, transfer and reversal semantics. Priority: P0. Dependencies: PROD-002. Affected database, API, business rules. Deliverables: state diagrams and invariants. Acceptance: every stock transition has balanced ledger postings and rollback behavior. Tests: scenario matrix. Status: IN_PROGRESS (owner supplied provisional no-negative, weighted-average, confirmation reservation, immutable-ledger defaults; transition matrix remains to implement).
 
 ### ARCH-002: Approve tenant isolation/security model
 **Files/modules affected:** docs/architecture/, docs/research/inflow-business-rules.md.
-Description: Decide RLS, auth provider, MFA and support access. Priority: P0. Dependencies: PROD-002. Affected security/multi-tenancy docs. Deliverables: threat model and test plan. Acceptance: tenant boundary and support workflow accepted. Tests: threat-model review. Status: NOT_STARTED.
+Description: Decide RLS, auth provider, MFA and support access. Priority: P0. Dependencies: PROD-002. Affected security/multi-tenancy docs. Deliverables: threat model and test plan. Acceptance: tenant boundary and support workflow accepted. Tests: threat-model review. Status: IN_PROGRESS (owner supplied provisional email/password, JWT access/rotating refresh, deferred MFA and strict organization-scope defaults; RLS/support access review remains open).
 
 ## Phase 3: foundation
 
@@ -50,7 +50,7 @@ Description: GitHub Actions CI, structured logs, health endpoints, dependency sc
 
 ### FOUNDATION-006: User authentication and sessions
 **Files/modules affected:** apps/api/src/identity/, apps/web/src/features/auth/, Prisma identity schema.
-Description: Register/login/refresh/logout, verified email/session revocation per approved auth choice. Priority: P0. Dependencies: FOUNDATION-003, ARCH-002. Deliverables: auth tables/API/UI. Acceptance: session lifecycle and rate limits work. Tests: auth integration/security tests. Status: NOT_STARTED.
+Description: Register/login/refresh/logout, verified email/session revocation per approved auth choice. Priority: P0. Dependencies: FOUNDATION-003, ARCH-002 (provisional baseline DEC-007 authorized). Deliverables: auth tables/API/UI. Acceptance: session lifecycle and rate limits work. Tests: auth integration/security tests. Status: BLOCKED (Argon2id, short-lived JWT access and opaque refresh-token hashing utilities implemented/tested; persisted user/session lifecycle awaits a stable Prisma CLI install and PostgreSQL verification. Install approval was rejected; no release-candidate ORM retained).
 
 ### FOUNDATION-007: Organization and membership
 **Files/modules affected:** apps/api/src/organizations/, apps/web/src/features/organizations/, Prisma membership schema.

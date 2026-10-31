@@ -1,7 +1,7 @@
 # Security design
 
 ## Identity/session
-Use a vetted password hashing algorithm (Argon2id or provider-managed identity); never store plaintext passwords. Short-lived signed access tokens and rotating/revocable refresh sessions; secure, HTTP-only, SameSite cookies for browser refresh token. Rate-limit login, recovery, invitation and export endpoints. Email verification and MFA policy are release decisions. Do not log tokens or reset links.
+Use Argon2id password hashing; never store plaintext passwords. Owner-directed provisional implementation uses short-lived signed JWT access tokens and rotating/revocable refresh sessions; browser refresh tokens must use secure, HTTP-only, SameSite cookies. Rate-limit login, recovery, invitation and export endpoints. Email verification is required by the planned account lifecycle; MFA is designed for but enforcement is deferred by owner direction. These defaults are not validated customer requirements. Do not log tokens or reset links.
 
 ## Authorization
 RBAC capabilities plus location scope; least privilege defaults. Deny by default. Admin/support access to tenant data is not implicit; break-glass requires customer authorization, time bound, reason, audit and alert. Enforce on API service/repository, not merely UI.

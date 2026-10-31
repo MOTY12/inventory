@@ -5,6 +5,48 @@ import test from "node:test";
 import { NotFoundException, ValidationPipe } from "@nestjs/common";
 import { toApiError, validationExceptionFactory } from "../dist/common/api-exception.filter.js";
 import { PaginationQueryDto } from "../dist/common/pagination-query.dto.js";
+import { PasswordHasher } from "../dist/identity/password-hasher.js";
+import { JwtService } from "@nestjs/jwt";
+import { AccessTokenService } from "../dist/identity/access-token.service.js";
+import { hashRefreshToken, issueRefreshToken } from "../dist/identity/refresh-token.js";
+
+test("password hasher stores an Argon2id verifier and checks candidates safely", async () => {
+  const hasher = new PasswordHasher();
+  const password = "correct horse battery staple 42";
+  const encodedHash = await hasher.hash(password);
+
+  assert.match(encodedHash, /^\$argon2id\$/);
+  assert.notEqual(encodedHash, password);
+  assert.equal(await hasher.verify(encodedHash, password), true);
+  assert.equal(await hasher.verify(encodedHash, "wrong password"), false);
+  assert.equal(await hasher.verify("not-a-password-hash", password), false);
+});
+
+test("access JWTs are short lived, issuer/audience scoped and organization aware", async () => {
+  const tokens = new AccessTokenService(new JwtService(), "a-local-test-secret-with-more-than-32-bytes");
+  const issued = await tokens.issue({ sub: "user-1", sid: "session-1", organizationId: "org-1" });
+
+  assert.equal(issued.expiresIn, 900);
+  assert.deepEqual(await tokens.verify(issued.token), {
+    sub: "user-1",
+    sid: "session-1",
+    organizationId: "org-1",
+  });
+  await assert.rejects(
+    new AccessTokenService(new JwtService(), "another-test-secret-with-more-than-32-bytes").verify(issued.token),
+  );
+});
+
+test("refresh tokens are random and only their digest is suitable for persistence", () => {
+  const first = issueRefreshToken();
+  const second = issueRefreshToken();
+
+  assert.equal(first.token.length, 43);
+  assert.notEqual(first.token, second.token);
+  assert.notEqual(first.tokenHash, first.token);
+  assert.equal(hashRefreshToken(first.token), first.tokenHash);
+  assert.notEqual(hashRefreshToken(second.token), first.tokenHash);
+});
 
 test("validation errors use the documented field error shape", () => {
   const exception = validationExceptionFactory([
@@ -140,7 +182,9 @@ test("running API responds with request IDs and Swagger document", async () => {
       .find((line) => line?.event === "http_request");
     assert.ok(requestLog, `Expected a structured request log; output was: ${output}`);
     assert.equal(typeof requestLog.request_id, "string");
-    assert.equal("url" in requestLog, false);
+    for (const sensitiveField of ["url", "body", "query", "authorization", "cookie", "password"]) {
+      assert.equal(sensitiveField in requestLog, false);
+    }
   } finally {
     child.kill("SIGTERM");
     if (child.exitCode === null) await once(child, "exit");

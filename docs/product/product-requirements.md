@@ -1,6 +1,6 @@
 # Product requirements — Nigeria-first inventory SaaS
 
-**Status:** proposed for owner review; no application code. **Product name:** undecided.
+**Status:** planning draft; owner authorized implementation. Core inventory/auth defaults are provisional in `docs/progress/decisions.md` (DEC-007), not validated customer requirements. **Product name:** undecided.
 
 ## Problem and users
 Small and mid-sized Nigerian operators often manage stock in disconnected spreadsheets, paper forms, chat messages and accounting tools. This produces stock uncertainty, delayed purchasing, untraceable adjustments, missed orders and poor branch visibility. The product should provide a dependable record of what is stocked, where it is, why it moved, what is expected, and which orders need action.
@@ -59,12 +59,12 @@ See `mvp-scope.md`. MVP excludes advanced accounting, manufacturing, native offl
 - **Risk:** imports can create duplicate/incorrect stock; require preview, validation and reversible opening-balance import.
 - **Risk:** legacy stock quality leads to user distrust; onboarding and cycle-count process are part of MVP.
 
-## Decisions requiring owner approval before implementation
+## Decisions requiring owner input before customer commitments
 1. Product name and initial customer segment/vertical.
-2. Strict no-negative-available default and override roles.
-3. Moving weighted-average valuation for MVP and landed-cost policy.
-4. Reservation timing: order confirmation vs fulfillment start.
+2. Strict no-negative-available default and override roles (provisional implementation default: no negative stock; override policy remains open).
+3. Moving weighted-average valuation for MVP and landed-cost policy (weighted average is provisional; landed cost remains open).
+4. Reservation timing: order confirmation vs fulfillment start (provisional implementation default: confirm order).
 5. Local tax invoice scope and acceptable release gate.
 6. Hosted cloud region, data residency expectations, and target operating budget.
 7. Initial plan limits, pricing and payment provider.
-8. Authentication method (email/password + MFA vs managed identity provider).
+8. Authentication method (provisional implementation default: email/password, JWT access, rotating refresh; MFA enforcement deferred).

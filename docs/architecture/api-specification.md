@@ -3,7 +3,7 @@
 Base `/api/v1`; JSON; bearer access token; request ID; critical POST/PATCH commands accept `Idempotency-Key`. OpenAPI generated from NestJS DTOs. All list routes support `page`, `page_size` (bounded), allowlisted filters/sorts and search. Responses use `{data,meta}`; errors `{error:{code,message,request_id,field_errors?}}`.
 
 ## Identity and organization
-- `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`; revoke sessions; MFA decision pending.
+- `POST /auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`; revoke sessions; email verification required. Owner-directed default is email/password with JWT access and rotating refresh tokens; design for MFA, defer enforcement.
 - `GET/POST /organizations`; `GET/PATCH /organizations/:id`; active org selection is membership-validated.
 - `GET/POST /organizations/:id/members`; invite/accept/change role/deactivate.
 - CRUD `/branches`, `/warehouses`; enforce branch scope.

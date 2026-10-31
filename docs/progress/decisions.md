@@ -7,13 +7,14 @@
 - **DEC-004 (2026-10-31):** PROD-001 is the first eligible incomplete task; prepare an interview protocol but do not fabricate participant evidence or proceed to dependent policy approval without interviews.
 - **DEC-005 (2026-10-31):** Owner explicitly authorized implementation based on the existing plan. FOUNDATION-001 may proceed as isolated toolchain scaffolding after DOC-001; unresolved product/security policies remain gates for business-domain implementation. Use npm workspaces for the initial monorepo unless a concrete project constraint appears; this does not change the approved modular-monolith architecture.
 - **DEC-006 (2026-10-31):** Owner stated the research/planning phase is complete and authorized implementation. Pre-pilot interviews are deferred to pilot validation; no interview findings are claimed. This closes PROD-001 planning deliverables without claiming interviews occurred.
+- **DEC-007 (2026-10-31):** Owner authorized provisional implementation defaults for core behavior: moving weighted-average costing; negative available stock disabled by default; reserve stock when an order is confirmed; immutable stock movement records; email/password with JWT access tokens and rotating refresh sessions; design for MFA but defer enforcement; strict organization isolation and organization-scoped RBAC; cloud-ready configurable region/storage; no fixed production region. These are implementation assumptions, not validated customer requirements. Keep currency/tax, pricing, segment fit, data-residency commitments, MFA enforcement and production security claims subject to validation/review.
+- **DEC-008 (2026-10-31):** Begin persistence on the approved PostgreSQL/Prisma architecture. Keep tenant scope explicit in command/query context and enforce composite organization keys/foreign keys; do not introduce a new database or identity provider. Database-level RLS and privileged support access remain deferred for security review; application queries must fail closed and never infer tenant scope from request bodies.
 
-## Proposed, not approved
-- MVP NGN base currency and Africa/Lagos timezone defaults.
-- Strict prevention of negative available stock by default.
-- Moving weighted average costing in MVP.
-- Confirmed sales order reserves stock; dispatch/fulfillment posts outflow.
-- Shared Postgres with organization ID, composite constraints and optional RLS.
+## Provisional implementation assumptions (not validated business requirements)
+- Moving weighted-average costing, strict no-negative-available default, and reservation on order confirmation per DEC-007.
+- Email/password, JWT access and rotating/revocable refresh sessions; MFA designed for but enforcement deferred.
+- Organization-scoped data with composite constraints and mandatory tenant context. RLS/support access are deferred review items.
+- Configurable deployment region; no production data-residency claim.
 
 ## Open decisions
-See numbered owner approvals in `docs/product/product-requirements.md` and task dependencies. Record owner, date, alternatives, rationale and consequences when resolved.
+Remaining material decisions: initial customer segment, product name/branding, tax/invoice compliance, pricing/subscription limits, production hosting/data-residency commitments, MFA enforcement, RLS and support access. Use the defaults above only for reversible implementation; flag changes before customer commitments or changes to the security boundary.
