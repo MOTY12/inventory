@@ -1,7 +1,7 @@
 # Next session handoff
 
 ## Current checkpoint (2026-10-31, Africa/Lagos)
-Branch `develop`, HEAD `447ee2d` (`feat(db): add Prisma identity schema foundation`), three commits ahead of `origin/develop`. Worktree was clean at checkpoint. This session began at `f377d8f` with a clean worktree and committed the verified Prisma/schema milestone. The Next build modified generated `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo`; both were restored to their starting contents.
+Branch `develop`, clean worktree at checkpoint and ahead of `origin/develop`. Latest implementation milestone is `447ee2d` (`feat(db): add Prisma identity schema foundation`), followed by progress-only checkpoint commits. This session began at `f377d8f` with a clean worktree. The Next build modified generated `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo`; both were restored to their starting contents. Run `git log -5 --oneline` for the exact current HEAD.
 
 ## Task state
 - Completed: DOC-001, PROD-001 (interviews deferred to pilot), FOUNDATION-001, FOUNDATION-003, FOUNDATION-004, FOUNDATION-005.
