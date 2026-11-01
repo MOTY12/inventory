@@ -5,6 +5,7 @@ import { HealthController } from "./health/health.controller";
 import { PrismaModule } from "./database/prisma.module";
 import { AuthModule } from "./identity/auth.module";
 import { OrganizationModule } from "./organizations/organization.module";
+import { LocationsModule } from "./locations/locations.module";
 
 @ApiTags("system")
 @Controller()
@@ -20,7 +21,7 @@ class AppController {
 }
 
 @Module({
-  imports: [PrismaModule, AuthModule, OrganizationModule],
+  imports: [PrismaModule, AuthModule, OrganizationModule, LocationsModule],
   controllers: [AppController, HealthController],
 })
 export class AppModule {}

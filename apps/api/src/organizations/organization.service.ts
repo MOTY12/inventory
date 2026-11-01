@@ -206,17 +206,6 @@ export class OrganizationService {
     });
   }
 
-  getWarehouse(context: OrganizationContext, warehouseId: string) {
-    return this.prisma.warehouse.findFirst({
-      where: {
-        id: warehouseId,
-        organizationId: context.organizationId,
-        status: "ACTIVE",
-      },
-      select: { id: true, name: true, code: true },
-    });
-  }
-
   async listWarehouseGrants(
     context: OrganizationContext,
     membershipId: string,

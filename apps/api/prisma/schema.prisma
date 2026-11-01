@@ -35,6 +35,11 @@ enum WarehouseStatus {
   ARCHIVED
 }
 
+enum BranchStatus {
+  ACTIVE
+  ARCHIVED
+}
+
 model User {
   id                  String                   @id @default(uuid()) @db.Uuid
   email               String                   @unique @db.VarChar(320)
@@ -49,6 +54,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   memberships         Membership[]
   sentInvitations     OrganizationInvitation[] @relation("InvitationSender")
+  auditEvents         AuditEvent[]
 
   @@map("users")
 }
@@ -63,6 +69,8 @@ model Organization {
   invitations OrganizationInvitation[]
   sessions    RefreshSession[]
   warehouses  Warehouse[]
+  branches    Branch[]
+  auditEvents AuditEvent[]
 
   @@map("organizations")
 }
@@ -88,18 +96,55 @@ model Membership {
 model Warehouse {
   id             String                     @id @default(uuid()) @db.Uuid
   organizationId String                     @map("organization_id") @db.Uuid
+  branchId       String?                    @map("branch_id") @db.Uuid
   name           String                     @db.VarChar(160)
   code           String                     @db.VarChar(40)
   status         WarehouseStatus            @default(ACTIVE)
   createdAt      DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
   organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch         Branch?                    @relation(fields: [organizationId, branchId], references: [organizationId, id], onDelete: Restrict)
   grants         MembershipWarehouseGrant[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
   @@index([organizationId, status, name])
+  @@index([organizationId, branchId, status])
   @@map("warehouses")
+}
+
+model Branch {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  name           String       @db.VarChar(160)
+  address        String?      @db.VarChar(500)
+  status         BranchStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  warehouses     Warehouse[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, name])
+  @@index([organizationId, status, name])
+  @@map("branches")
+}
+
+model AuditEvent {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  actorUserId    String       @map("actor_user_id") @db.Uuid
+  entityType     String       @map("entity_type") @db.VarChar(80)
+  entityId       String       @map("entity_id") @db.Uuid
+  action         String       @db.VarChar(80)
+  metadata       Json         @default("{}")
+  occurredAt     DateTime     @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actor          User         @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, occurredAt])
+  @@index([organizationId, entityType, entityId, occurredAt])
+  @@map("audit_events")
 }
 
 model MembershipWarehouseGrant {

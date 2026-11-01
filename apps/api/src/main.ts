@@ -22,7 +22,7 @@ async function bootstrap(): Promise<void> {
     origin: process.env.WEB_ORIGIN ?? "http://localhost:3000",
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "POST", "PATCH", "OPTIONS"],
   });
   app.use(new RequestIdMiddleware().use);
   app.useGlobalPipes(

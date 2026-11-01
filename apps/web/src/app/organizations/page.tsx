@@ -79,12 +79,12 @@ function OrganizationManager() {
         authenticatedRequest<Invitation[]>(
           "/organizations/current/invitations",
         ).catch(() => []),
-        authenticatedRequest<Warehouse[]>(
+        authenticatedRequest<{ data: Warehouse[] }>(
           "/organizations/current/warehouses",
-        ).catch(() => []),
+        ).catch(() => ({ data: [] })),
       ]);
       setInvitations(nextInvitations);
-      setWarehouses(nextWarehouses);
+      setWarehouses(nextWarehouses.data);
       const grantEntries = await Promise.all(
         nextMembers
           .filter(
@@ -327,6 +327,9 @@ function OrganizationManager() {
             {busy ? "Please wait…" : "Create organization"}
           </button>
         </form>
+        <p>
+          <Link href="/locations">Manage branches and warehouses</Link>
+        </p>
         <p>
           <Link href="/organizations/accept-invitation">
             Accept an invitation

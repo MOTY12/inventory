@@ -29,11 +29,7 @@ import {
   UpdateOrganizationDto,
   UpdateMembershipRoleDto,
 } from "./organization.dto";
-import {
-  RequireCapabilities,
-  RoleCapabilityGuard,
-  WarehouseScopeGuard,
-} from "./access-policy";
+import { RequireCapabilities, RoleCapabilityGuard } from "./access-policy";
 import { OrganizationService } from "./organization.service";
 
 @ApiTags("organizations")
@@ -135,23 +131,6 @@ export class OrganizationController {
       membershipId,
       input.role,
     );
-  }
-
-  @Get("current/warehouses")
-  @UseGuards(OrganizationContextGuard, RoleCapabilityGuard)
-  @RequireCapabilities("warehouses:read")
-  warehouses(@Req() request: OrganizationRequest) {
-    return this.organizations.listActiveWarehouses(request.organization!);
-  }
-
-  @Get("current/warehouses/:warehouseId")
-  @UseGuards(OrganizationContextGuard, RoleCapabilityGuard, WarehouseScopeGuard)
-  @RequireCapabilities("warehouses:read")
-  warehouse(
-    @Param("warehouseId", ParseUUIDPipe) warehouseId: string,
-    @Req() request: OrganizationRequest,
-  ) {
-    return this.organizations.getWarehouse(request.organization!, warehouseId);
   }
 
   @Get("current/members/:membershipId/warehouse-grants")

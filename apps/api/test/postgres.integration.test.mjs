@@ -13,6 +13,7 @@ import { OrganizationContextGuard } from "../dist/organizations/organization-con
 import { requireOrganizationAdmin } from "../dist/organizations/organization-context.guard.js";
 import { OrganizationService } from "../dist/organizations/organization.service.js";
 import { WarehouseScopeGuard } from "../dist/organizations/access-policy.js";
+import { LocationsService } from "../dist/locations/locations.service.js";
 
 const enabled = process.env.RUN_POSTGRES_INTEGRATION === "1";
 
@@ -503,6 +504,109 @@ test(
           guard.canActivate(execution),
           (error) => error.getStatus() === 404,
         );
+      },
+    );
+
+    await t.test(
+      "branch and warehouse lifecycle is tenant-safe and audited",
+      async () => {
+        const owner = await createVerifiedUser("locations-owner");
+        const otherOwner = await createVerifiedUser("locations-other-owner");
+        const ownerSession = await createSession(owner);
+        const otherSession = await createSession(otherOwner);
+        const org = await organizations.create(owner.userId, ownerSession.sessionId, {
+          name: "Integration Locations Org",
+          slug: `integration-locations-${randomUUID()}`,
+        });
+        const otherOrg = await organizations.create(otherOwner.userId, otherSession.sessionId, {
+          name: "Integration Foreign Locations Org",
+          slug: `integration-foreign-locations-${randomUUID()}`,
+        });
+        organizationIds.push(org.organization.id, otherOrg.organization.id);
+        const context = {
+          organizationId: org.organization.id,
+          membershipId: randomUUID(),
+          userId: owner.userId,
+          role: "OWNER",
+        };
+        const service = new LocationsService(prisma);
+        const branch = await service.createBranch(context, owner.userId, {
+          name: "Central Branch",
+          address: "Lagos",
+        });
+        await assert.rejects(
+          service.createBranch(context, owner.userId, { name: "Central Branch" }),
+          (error) => error.getStatus() === 409,
+        );
+        const foreignBranch = await service.createBranch(
+          { ...context, organizationId: otherOrg.organization.id },
+          otherOwner.userId,
+          { name: "Foreign Branch" },
+        );
+        await assert.rejects(
+          service.createWarehouse(context, owner.userId, {
+            branchId: foreignBranch.id,
+            name: "Invalid Cross Tenant Warehouse",
+            code: `CROSS-${randomUUID().slice(0, 8)}`,
+          }),
+          (error) => error.getStatus() === 404,
+        );
+        await assert.rejects(
+          prisma.warehouse.create({
+            data: {
+              organizationId: org.organization.id,
+              branchId: foreignBranch.id,
+              name: "Constraint Probe",
+              code: `FK-${randomUUID().slice(0, 8)}`,
+            },
+          }),
+          (error) => error.code === "P2003",
+        );
+        const warehouse = await service.createWarehouse(context, owner.userId, {
+          branchId: branch.id,
+          name: "Central Store",
+          code: `CS-${randomUUID().slice(0, 8)}`,
+        });
+        assert.equal(warehouse.code, warehouse.code.toUpperCase());
+        const searched = await service.listWarehouses(context, {
+          page: 1,
+          page_size: 10,
+          q: warehouse.code.slice(0, 4).toLowerCase(),
+        });
+        assert.equal(searched.total, 1);
+        assert.equal(searched.data[0].branchId, branch.id);
+        await assert.rejects(
+          service.updateBranch(context, owner.userId, branch.id, { status: "ARCHIVED" }),
+          (error) => error.getStatus() === 409,
+        );
+        await service.updateWarehouse(context, owner.userId, warehouse.id, {
+          status: "ARCHIVED",
+        });
+        await service.updateBranch(context, owner.userId, branch.id, {
+          status: "ARCHIVED",
+        });
+        await assert.rejects(
+          service.updateWarehouse(context, owner.userId, warehouse.id, {
+            status: "ACTIVE",
+          }),
+          (error) => error.getStatus() === 404,
+        );
+        await service.updateBranch(context, owner.userId, branch.id, {
+          status: "ACTIVE",
+        });
+        await service.updateWarehouse(context, owner.userId, warehouse.id, {
+          status: "ACTIVE",
+        });
+        const auditCount = await prisma.auditEvent.count({
+          where: { organizationId: org.organization.id, actorUserId: owner.userId },
+        });
+        assert.equal(auditCount, 6);
+        const visibleBranches = await service.listBranches(context, {
+          page: 1,
+          page_size: 10,
+          status: "ACTIVE",
+        });
+        assert.equal(visibleBranches.total, 1);
       },
     );
   },
