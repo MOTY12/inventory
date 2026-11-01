@@ -6,7 +6,7 @@
 
 - Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; milestone commit `080a4fc feat(authz): add organization roles and warehouse scope`.
 - Roadmap completed: 10/47 — DOC-001, PROD-001, FOUNDATION-001 through FOUNDATION-008.
-- Current implementation task: FOUNDATION-009, branch and warehouse management. FOUNDATION-008 is complete; FOUNDATION-009 dependencies FOUNDATION-007 and FOUNDATION-008 are satisfied.
+- Next eligible task: FOUNDATION-009, branch and warehouse management. It has not started yet; dependencies FOUNDATION-007 and FOUNDATION-008 are satisfied.
 - Preserve existing untracked `.vscode/` and `apps/web/AGENTS.md`. `.env` is ignored; never display or stage it. Build-generated `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo` remain modified in the worktree; inspect before cleanup because they were already modified at session start.
 
 ## Completed this session
