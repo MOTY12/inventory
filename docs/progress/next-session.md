@@ -2,7 +2,7 @@
 
 ## Checkpoint (2026-11-01, Africa/Lagos)
 
-Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; verify `git status --short --branch` and `git log -5 --oneline` before work. Preserve untracked `.vscode/` and `apps/web/AGENTS.md`. No commit was created for this environment continuation.
+Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; latest milestone commit `e4028a9 chore(dev): verify local stack and auth flow`; verify `git status --short --branch` and `git log -5 --oneline` before work. Preserve untracked `.vscode/` and `apps/web/AGENTS.md`.
 
 ## Completed and current tasks
 

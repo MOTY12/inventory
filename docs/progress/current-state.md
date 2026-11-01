@@ -7,7 +7,7 @@
 - Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD at session start `075726e docs(progress): checkpoint organization implementation`.
 - Existing untracked `.vscode/` and `apps/web/AGENTS.md` are preserved. The latter is a Next.js generated instruction file; do not remove it.
 - Local `.env` is ignored and was updated to use PostgreSQL host port 5433 (matching `DATABASE_URL`) because the user's existing host PostgreSQL owns 5432. Its credentials and data were preserved.
-- Worktree changes from this environment task are limited to Prisma env/config loading, API Prisma scripts, same-origin frontend API routing, session-provider base URL and progress/local-development documentation. No commit has been created yet.
+- Environment milestone committed as `e4028a9 chore(dev): verify local stack and auth flow`. Only the listed configuration and documentation files were committed; existing untracked `.vscode/` and `apps/web/AGENTS.md` remain untouched.
 
 ## Current phase and task
 
