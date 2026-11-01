@@ -13,7 +13,7 @@ import { EMAIL_DELIVERY, EmailDelivery } from "../identity/email-delivery";
 import { hashRefreshToken, issueRefreshToken } from "../identity/refresh-token";
 import { Inject } from "@nestjs/common";
 import { OrganizationContext } from "./organization-context.guard";
-import { InviteMemberDto } from "./organization.dto";
+import { AssignableRole, InviteMemberDto } from "./organization.dto";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -138,13 +138,172 @@ export class OrganizationService {
     });
   }
 
+  async updateMemberRole(
+    context: OrganizationContext,
+    membershipId: string,
+    role: AssignableRole,
+  ) {
+    const target = await this.prisma.membership.findUnique({
+      where: { id: membershipId },
+      select: { id: true, organizationId: true, role: true, status: true },
+    });
+    if (
+      !target ||
+      target.organizationId !== context.organizationId ||
+      target.status !== "ACTIVE"
+    ) {
+      throw new NotFoundException();
+    }
+    if (target.role === MembershipRole.OWNER) {
+      throw new ForbiddenException("The organization owner role is fixed");
+    }
+    if (target.id === context.membershipId) {
+      throw new ForbiddenException("You cannot change your own role");
+    }
+    if (
+      context.role !== MembershipRole.OWNER &&
+      (role === MembershipRole.ADMIN ||
+        role === MembershipRole.MANAGER ||
+        target.role === MembershipRole.ADMIN ||
+        target.role === MembershipRole.MANAGER)
+    ) {
+      throw new ForbiddenException("Only an owner can change elevated roles");
+    }
+    const updated = await this.prisma.membership.updateMany({
+      where: {
+        id: membershipId,
+        organizationId: context.organizationId,
+        status: "ACTIVE",
+        role: target.role,
+      },
+      data: { role },
+    });
+    if (updated.count !== 1) throw new NotFoundException();
+    return { membershipId, role };
+  }
+
+  listActiveWarehouses(context: OrganizationContext) {
+    const isAdministrator =
+      context.role === MembershipRole.OWNER ||
+      context.role === MembershipRole.ADMIN;
+    return this.prisma.warehouse.findMany({
+      where: {
+        organizationId: context.organizationId,
+        status: "ACTIVE",
+        ...(!isAdministrator
+          ? {
+              grants: {
+                some: {
+                  organizationId: context.organizationId,
+                  userId: context.userId,
+                },
+              },
+            }
+          : {}),
+      },
+      orderBy: [{ name: "asc" }, { code: "asc" }],
+      select: { id: true, name: true, code: true },
+    });
+  }
+
+  getWarehouse(context: OrganizationContext, warehouseId: string) {
+    return this.prisma.warehouse.findFirst({
+      where: {
+        id: warehouseId,
+        organizationId: context.organizationId,
+        status: "ACTIVE",
+      },
+      select: { id: true, name: true, code: true },
+    });
+  }
+
+  async listWarehouseGrants(
+    context: OrganizationContext,
+    membershipId: string,
+  ) {
+    const member = await this.findActiveMember(context, membershipId);
+    if (
+      member.role === MembershipRole.OWNER ||
+      member.role === MembershipRole.ADMIN
+    ) {
+      return this.listActiveWarehouses(context);
+    }
+    const grants = await this.prisma.membershipWarehouseGrant.findMany({
+      where: {
+        organizationId: context.organizationId,
+        userId: member.userId,
+        warehouse: { status: "ACTIVE" },
+      },
+      orderBy: { warehouse: { name: "asc" } },
+      select: { warehouse: { select: { id: true, name: true, code: true } } },
+    });
+    return grants.map(({ warehouse }) => warehouse);
+  }
+
+  async setWarehouseGrants(
+    context: OrganizationContext,
+    membershipId: string,
+    warehouseIds: string[],
+  ) {
+    return this.prisma.$transaction(async (transaction) => {
+      const member = await transaction.membership.findFirst({
+        where: {
+          id: membershipId,
+          organizationId: context.organizationId,
+          status: "ACTIVE",
+        },
+        select: { userId: true, role: true },
+      });
+      if (!member) throw new NotFoundException();
+      if (
+        member.role === MembershipRole.OWNER ||
+        member.role === MembershipRole.ADMIN
+      ) {
+        throw new ForbiddenException(
+          "Elevated administrators have organization-wide warehouse access",
+        );
+      }
+      const warehouses = await transaction.warehouse.findMany({
+        where: {
+          id: { in: warehouseIds },
+          organizationId: context.organizationId,
+          status: "ACTIVE",
+        },
+        select: { id: true },
+      });
+      if (warehouses.length !== warehouseIds.length) {
+        throw new NotFoundException("One or more warehouses are unavailable");
+      }
+      await transaction.membershipWarehouseGrant.deleteMany({
+        where: {
+          organizationId: context.organizationId,
+          userId: member.userId,
+        },
+      });
+      if (warehouseIds.length) {
+        await transaction.membershipWarehouseGrant.createMany({
+          data: warehouseIds.map((warehouseId) => ({
+            organizationId: context.organizationId,
+            userId: member.userId,
+            warehouseId,
+          })),
+        });
+      }
+      return { membershipId, warehouseIds };
+    });
+  }
+
   async invite(
     userId: string,
     context: OrganizationContext,
     input: InviteMemberDto,
   ) {
-    if (input.role === "ADMIN" && context.role !== "OWNER") {
-      throw new ForbiddenException("Only an owner can invite an administrator");
+    if (
+      (input.role === MembershipRole.ADMIN ||
+        input.role === MembershipRole.MANAGER) &&
+      context.role !== MembershipRole.OWNER
+    ) {
+      throw new ForbiddenException("Only an owner can invite elevated roles");
     }
     const emailNormalized = input.email.trim().toLowerCase();
     const existingUser = await this.prisma.user.findUnique({
@@ -345,9 +504,13 @@ export class OrganizationService {
     }
     if (member.role === "OWNER")
       throw new ForbiddenException("Organization owners cannot be deactivated");
-    if (member.role === "ADMIN" && context.role !== "OWNER") {
+    if (
+      (member.role === MembershipRole.ADMIN ||
+        member.role === MembershipRole.MANAGER) &&
+      context.role !== MembershipRole.OWNER
+    ) {
       throw new ForbiddenException(
-        "Only an owner can deactivate an administrator",
+        "Only an owner can deactivate elevated roles",
       );
     }
     await this.prisma.membership.updateMany({
@@ -358,6 +521,30 @@ export class OrganizationService {
       },
       data: { status: "DEACTIVATED" },
     });
+  }
+
+  private async findActiveMember(
+    context: OrganizationContext,
+    membershipId: string,
+  ) {
+    const member = await this.prisma.membership.findUnique({
+      where: { id: membershipId },
+      select: {
+        id: true,
+        organizationId: true,
+        userId: true,
+        role: true,
+        status: true,
+      },
+    });
+    if (
+      !member ||
+      member.organizationId !== context.organizationId ||
+      member.status !== "ACTIVE"
+    ) {
+      throw new NotFoundException();
+    }
+    return member;
   }
 }
 

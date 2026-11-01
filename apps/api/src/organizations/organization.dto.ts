@@ -1,13 +1,31 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
   IsEmail,
   IsIn,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   MaxLength,
   MinLength,
 } from "class-validator";
+import { MembershipRole } from "../generated/prisma/enums";
+
+export const ASSIGNABLE_ROLES = [
+  MembershipRole.ADMIN,
+  MembershipRole.MANAGER,
+  MembershipRole.BUYER,
+  MembershipRole.SALES,
+  MembershipRole.WAREHOUSE_CLERK,
+  MembershipRole.FINANCE,
+  MembershipRole.READ_ONLY,
+  MembershipRole.MEMBER,
+] as const;
+
+export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
 
 export class CreateOrganizationDto {
   @ApiProperty({ minLength: 2, maxLength: 160 })
@@ -39,9 +57,24 @@ export class InviteMemberDto {
   @MaxLength(320)
   email!: string;
 
-  @ApiProperty({ enum: ["ADMIN", "MEMBER"] })
-  @IsIn(["ADMIN", "MEMBER"])
-  role!: "ADMIN" | "MEMBER";
+  @ApiProperty({ enum: ASSIGNABLE_ROLES })
+  @IsIn(ASSIGNABLE_ROLES)
+  role!: AssignableRole;
+}
+
+export class UpdateMembershipRoleDto {
+  @ApiProperty({ enum: ASSIGNABLE_ROLES })
+  @IsIn(ASSIGNABLE_ROLES)
+  role!: AssignableRole;
+}
+
+export class SetWarehouseGrantsDto {
+  @ApiProperty({ type: [String], maxItems: 500 })
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ArrayUnique()
+  @IsUUID("4", { each: true })
+  warehouseIds!: string[];
 }
 
 export class AcceptInvitationDto {

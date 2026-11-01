@@ -13,6 +13,7 @@ import {
 import { useRouter } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
+let sessionRestore: Promise<void> | null = null;
 
 type User = { id: string; email: string; emailVerifiedAt: string | null };
 type Organization = { id: string; name: string; slug: string; role?: string };
@@ -33,7 +34,7 @@ type SessionContextValue = {
   authenticatedRequest: <T>(
     path: string,
     body?: unknown,
-    method?: "GET" | "POST" | "PATCH",
+    method?: "GET" | "POST" | "PATCH" | "PUT",
   ) => Promise<T>;
   adoptAccessToken: (token: string) => Promise<void>;
 };
@@ -55,7 +56,7 @@ async function request<T>(
   body?: unknown,
   accessToken?: string,
   csrfOverride?: string | null,
-  method?: "GET" | "POST" | "PATCH",
+  method?: "GET" | "POST" | "PATCH" | "PUT",
 ): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     method: method ?? (body === undefined ? "GET" : "POST"),
@@ -78,6 +79,15 @@ async function request<T>(
     );
   }
   return result;
+}
+
+function restoreSessionOnce(restore: () => Promise<void>): Promise<void> {
+  if (!sessionRestore) {
+    sessionRestore = restore().finally(() => {
+      sessionRestore = null;
+    });
+  }
+  return sessionRestore;
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
@@ -138,7 +148,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [loadUser]);
 
   const authenticatedRequest = useCallback(
-    <T,>(path: string, body?: unknown, method?: "GET" | "POST" | "PATCH") => {
+    <T,>(
+      path: string,
+      body?: unknown,
+      method?: "GET" | "POST" | "PATCH" | "PUT",
+    ) => {
       if (!accessToken.current) throw new Error("Sign in to continue.");
       return request<T>(path, body, accessToken.current, undefined, method);
     },
@@ -153,10 +167,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    const task = Promise.resolve().then(restore);
-    return () => {
-      void task.catch(() => undefined);
-    };
+    void restoreSessionOnce(restore);
   }, [restore]);
 
   const login = useCallback(

@@ -23,6 +23,17 @@ type Invitation = {
   role: string;
   expiresAt: string;
 };
+type Warehouse = { id: string; name: string; code: string };
+const memberRoles = [
+  "MEMBER",
+  "READ_ONLY",
+  "BUYER",
+  "SALES",
+  "WAREHOUSE_CLERK",
+  "FINANCE",
+  "MANAGER",
+  "ADMIN",
+] as const;
 
 function OrganizationManager() {
   const {
@@ -38,25 +49,60 @@ function OrganizationManager() {
   const [busy, setBusy] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [warehouseGrants, setWarehouseGrants] = useState<
+    Record<string, string[]>
+  >({});
+  const [memberRolesById, setMemberRolesById] = useState<
+    Record<string, string>
+  >({});
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"MEMBER" | "ADMIN">("MEMBER");
+  const [inviteRole, setInviteRole] = useState<string>("MEMBER");
 
   const reloadOrganization = useCallback(async () => {
     if (!organization) {
       setMembers([]);
       setInvitations([]);
+      setWarehouses([]);
+      setWarehouseGrants({});
       return;
     }
     const nextMembers = await authenticatedRequest<Member[]>(
       "/organizations/current/members",
     ).catch(() => []);
     setMembers(nextMembers);
+    setMemberRolesById(
+      Object.fromEntries(nextMembers.map((member) => [member.id, member.role])),
+    );
     if (organization.role === "OWNER" || organization.role === "ADMIN") {
-      const nextInvitations = await authenticatedRequest<Invitation[]>(
-        "/organizations/current/invitations",
-      ).catch(() => []);
+      const [nextInvitations, nextWarehouses] = await Promise.all([
+        authenticatedRequest<Invitation[]>(
+          "/organizations/current/invitations",
+        ).catch(() => []),
+        authenticatedRequest<Warehouse[]>(
+          "/organizations/current/warehouses",
+        ).catch(() => []),
+      ]);
       setInvitations(nextInvitations);
-    } else setInvitations([]);
+      setWarehouses(nextWarehouses);
+      const grantEntries = await Promise.all(
+        nextMembers
+          .filter(
+            (member) => member.role !== "OWNER" && member.status === "ACTIVE",
+          )
+          .map(async (member) => {
+            const grants = await authenticatedRequest<Warehouse[]>(
+              `/organizations/current/members/${member.id}/warehouse-grants`,
+            ).catch(() => []);
+            return [member.id, grants.map(({ id }) => id)] as const;
+          }),
+      );
+      setWarehouseGrants(Object.fromEntries(grantEntries));
+    } else {
+      setInvitations([]);
+      setWarehouses([]);
+      setWarehouseGrants({});
+    }
   }, [organization, authenticatedRequest]);
 
   useEffect(() => {
@@ -144,6 +190,51 @@ function OrganizationManager() {
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Could not deactivate member.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function updateRole(memberId: string) {
+    setBusy(true);
+    setError("");
+    try {
+      await authenticatedRequest(
+        `/organizations/current/members/${memberId}/role`,
+        {
+          role: memberRolesById[memberId],
+        },
+        "PATCH",
+      );
+      setMessage("Member role updated.");
+      await reloadOrganization();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not update role.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveWarehouseGrants(memberId: string) {
+    setBusy(true);
+    setError("");
+    try {
+      await authenticatedRequest(
+        `/organizations/current/members/${memberId}/warehouse-grants`,
+        {
+          warehouseIds: warehouseGrants[memberId] ?? [],
+        },
+        "PUT",
+      );
+      setMessage("Warehouse access updated.");
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not update warehouse access.",
       );
     } finally {
       setBusy(false);
@@ -250,6 +341,91 @@ function OrganizationManager() {
                 <li key={member.id}>
                   <strong>{member.user.email}</strong> · {member.role} ·{" "}
                   {member.status}
+                  {(organization.role === "OWNER" ||
+                    organization.role === "ADMIN") &&
+                    member.role !== "OWNER" &&
+                    member.status === "ACTIVE" && (
+                      <div className="auth-form">
+                        <label htmlFor={`role-${member.id}`}>Role</label>
+                        <select
+                          id={`role-${member.id}`}
+                          value={memberRolesById[member.id] ?? member.role}
+                          onChange={(event) =>
+                            setMemberRolesById((current) => ({
+                              ...current,
+                              [member.id]: event.target.value,
+                            }))
+                          }
+                        >
+                          {memberRoles
+                            .filter(
+                              (role) =>
+                                organization.role === "OWNER" ||
+                                (role !== "ADMIN" && role !== "MANAGER"),
+                            )
+                            .map((role) => (
+                              <option key={role} value={role}>
+                                {role.replaceAll("_", " ")}
+                              </option>
+                            ))}
+                        </select>
+                        <button
+                          className="text-button"
+                          disabled={
+                            busy || memberRolesById[member.id] === member.role
+                          }
+                          onClick={() => void updateRole(member.id)}
+                          type="button"
+                        >
+                          Save role
+                        </button>
+                        <fieldset>
+                          <legend>Warehouse access</legend>
+                          {warehouses.length === 0 ? (
+                            <p>
+                              Create a warehouse in Locations to assign access.
+                            </p>
+                          ) : (
+                            warehouses.map((warehouse) => (
+                              <label key={warehouse.id}>
+                                <input
+                                  type="checkbox"
+                                  checked={(
+                                    warehouseGrants[member.id] ?? []
+                                  ).includes(warehouse.id)}
+                                  onChange={(event) =>
+                                    setWarehouseGrants((current) => ({
+                                      ...current,
+                                      [member.id]: event.target.checked
+                                        ? [
+                                            ...(current[member.id] ?? []),
+                                            warehouse.id,
+                                          ]
+                                        : (current[member.id] ?? []).filter(
+                                            (id) => id !== warehouse.id,
+                                          ),
+                                    }))
+                                  }
+                                />
+                                {warehouse.name} ({warehouse.code})
+                              </label>
+                            ))
+                          )}
+                          {warehouses.length > 0 && (
+                            <button
+                              className="text-button"
+                              disabled={busy}
+                              onClick={() =>
+                                void saveWarehouseGrants(member.id)
+                              }
+                              type="button"
+                            >
+                              Save access
+                            </button>
+                          )}
+                        </fieldset>
+                      </div>
+                    )}
                   {member.role !== "OWNER" && member.status === "ACTIVE" && (
                     <button
                       className="text-button"
@@ -283,14 +459,19 @@ function OrganizationManager() {
                   <select
                     id="invite-role"
                     value={inviteRole}
-                    onChange={(event) =>
-                      setInviteRole(event.target.value as "MEMBER" | "ADMIN")
-                    }
+                    onChange={(event) => setInviteRole(event.target.value)}
                   >
-                    <option value="MEMBER">Member</option>
-                    {organization.role === "OWNER" && (
-                      <option value="ADMIN">Administrator</option>
-                    )}
+                    {memberRoles
+                      .filter(
+                        (role) =>
+                          organization.role === "OWNER" ||
+                          (role !== "ADMIN" && role !== "MANAGER"),
+                      )
+                      .map((role) => (
+                        <option key={role} value={role}>
+                          {role.replaceAll("_", " ")}
+                        </option>
+                      ))}
                   </select>
                   <button
                     className="primary-button"

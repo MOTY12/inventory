@@ -17,11 +17,22 @@ enum MembershipRole {
   OWNER
   ADMIN
   MEMBER
+  MANAGER
+  BUYER
+  SALES
+  WAREHOUSE_CLERK
+  FINANCE
+  READ_ONLY
 }
 
 enum MembershipStatus {
   ACTIVE
   DEACTIVATED
+}
+
+enum WarehouseStatus {
+  ACTIVE
+  ARCHIVED
 }
 
 model User {
@@ -51,25 +62,57 @@ model Organization {
   memberships Membership[]
   invitations OrganizationInvitation[]
   sessions    RefreshSession[]
+  warehouses  Warehouse[]
 
   @@map("organizations")
 }
 
 model Membership {
-  id             String           @id @default(uuid()) @db.Uuid
-  organizationId String           @map("organization_id") @db.Uuid
-  userId         String           @map("user_id") @db.Uuid
-  role           MembershipRole   @default(MEMBER)
-  status         MembershipStatus @default(ACTIVE)
-  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String                     @id @default(uuid()) @db.Uuid
+  organizationId  String                     @map("organization_id") @db.Uuid
+  userId          String                     @map("user_id") @db.Uuid
+  role            MembershipRole             @default(MEMBER)
+  status          MembershipStatus           @default(ACTIVE)
+  createdAt       DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization    Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user            User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  warehouseGrants MembershipWarehouseGrant[]
 
   @@unique([organizationId, userId])
   @@index([userId, status])
   @@index([organizationId, status, role])
   @@map("memberships")
+}
+
+model Warehouse {
+  id             String                     @id @default(uuid()) @db.Uuid
+  organizationId String                     @map("organization_id") @db.Uuid
+  name           String                     @db.VarChar(160)
+  code           String                     @db.VarChar(40)
+  status         WarehouseStatus            @default(ACTIVE)
+  createdAt      DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  grants         MembershipWarehouseGrant[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, status, name])
+  @@map("warehouses")
+}
+
+model MembershipWarehouseGrant {
+  organizationId String     @map("organization_id") @db.Uuid
+  userId         String     @map("user_id") @db.Uuid
+  warehouseId    String     @map("warehouse_id") @db.Uuid
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  membership     Membership @relation(fields: [organizationId, userId], references: [organizationId, userId], onDelete: Cascade)
+  warehouse      Warehouse  @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Cascade)
+
+  @@id([organizationId, userId, warehouseId])
+  @@index([organizationId, warehouseId])
+  @@map("membership_warehouse_grants")
 }
 
 model OrganizationInvitation {

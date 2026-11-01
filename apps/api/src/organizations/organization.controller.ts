@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -19,14 +20,20 @@ import {
 import {
   OrganizationContextGuard,
   OrganizationRequest,
-  requireOrganizationAdmin,
 } from "./organization-context.guard";
 import {
   AcceptInvitationDto,
   CreateOrganizationDto,
   InviteMemberDto,
+  SetWarehouseGrantsDto,
   UpdateOrganizationDto,
+  UpdateMembershipRoleDto,
 } from "./organization.dto";
+import {
+  RequireCapabilities,
+  RoleCapabilityGuard,
+  WarehouseScopeGuard,
+} from "./access-policy";
 import { OrganizationService } from "./organization.service";
 
 @ApiTags("organizations")
@@ -87,7 +94,8 @@ export class OrganizationController {
   }
 
   @Get("current")
-  @UseGuards(OrganizationContextGuard)
+  @UseGuards(OrganizationContextGuard, RoleCapabilityGuard)
+  @RequireCapabilities("organization:read")
   @ApiOperation({
     summary: "Get the organization selected in the access token",
   })
@@ -96,52 +104,113 @@ export class OrganizationController {
   }
 
   @Patch("current")
-  @UseGuards(OrganizationContextGuard)
+  @UseGuards(OrganizationContextGuard, RoleCapabilityGuard)
+  @RequireCapabilities("organization:manage")
   @ApiOperation({ summary: "Update the active organization name" })
   updateCurrent(
     @Body() input: UpdateOrganizationDto,
     @Req() request: OrganizationRequest,
   ) {
-    requireOrganizationAdmin(request);
     return this.organizations.updateCurrent(request.organization!, input.name);
   }
 
   @Get("current/members")
-  @UseGuards(OrganizationContextGuard)
+  @UseGuards(OrganizationContextGuard, RoleCapabilityGuard)
+  @RequireCapabilities("members:read")
   @ApiOperation({ summary: "List members in the active organization" })
   members(@Req() request: OrganizationRequest) {
     return this.organizations.listMembers(request.organization!);
   }
 
+  @Patch("current/members/:membershipId/role")
+  @UseGuards(OrganizationContextGuard, RoleCapabilityGuard)
+  @RequireCapabilities("members:manage")
+  updateMemberRole(
+    @Param("membershipId", ParseUUIDPipe) membershipId: string,
+    @Body() input: UpdateMembershipRoleDto,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.organizations.updateMemberRole(
+      request.organization!,
+      membershipId,
+      input.role,
+    );
+  }
+
+  @Get("current/warehouses")
+  @UseGuards(OrganizationContextGuard, RoleCapabilityGuard)
+  @RequireCapabilities("warehouses:read")
+  warehouses(@Req() request: OrganizationRequest) {
+    return this.organizations.listActiveWarehouses(request.organization!);
+  }
+
+  @Get("current/warehouses/:warehouseId")
+  @UseGuards(OrganizationContextGuard, RoleCapabilityGuard, WarehouseScopeGuard)
+  @RequireCapabilities("warehouses:read")
+  warehouse(
+    @Param("warehouseId", ParseUUIDPipe) warehouseId: string,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.organizations.getWarehouse(request.organization!, warehouseId);
+  }
+
+  @Get("current/members/:membershipId/warehouse-grants")
+  @UseGuards(OrganizationContextGuard, RoleCapabilityGuard)
+  @RequireCapabilities("members:manage")
+  warehouseGrants(
+    @Param("membershipId", ParseUUIDPipe) membershipId: string,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.organizations.listWarehouseGrants(
+      request.organization!,
+      membershipId,
+    );
+  }
+
+  @Put("current/members/:membershipId/warehouse-grants")
+  @UseGuards(OrganizationContextGuard, RoleCapabilityGuard)
+  @RequireCapabilities("members:manage")
+  setWarehouseGrants(
+    @Param("membershipId", ParseUUIDPipe) membershipId: string,
+    @Body() input: SetWarehouseGrantsDto,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.organizations.setWarehouseGrants(
+      request.organization!,
+      membershipId,
+      input.warehouseIds,
+    );
+  }
+
   @Post("current/invitations")
   @HttpCode(HttpStatus.CREATED)
-  @UseGuards(OrganizationContextGuard)
+  @UseGuards(OrganizationContextGuard, RoleCapabilityGuard)
+  @RequireCapabilities("members:manage")
   @ApiOperation({
     summary: "Invite a verified user to the active organization",
   })
   invite(@Body() input: InviteMemberDto, @Req() request: OrganizationRequest) {
     const context = request.organization!;
-    requireOrganizationAdmin(request);
     return this.organizations.invite(request.auth!.sub, context, input);
   }
 
   @Get("current/invitations")
-  @UseGuards(OrganizationContextGuard)
+  @UseGuards(OrganizationContextGuard, RoleCapabilityGuard)
+  @RequireCapabilities("members:manage")
   @ApiOperation({ summary: "List active invitations for the organization" })
   invitations(@Req() request: OrganizationRequest) {
-    requireOrganizationAdmin(request);
     return this.organizations.listInvitations(request.organization!);
   }
 
   @Post("current/invitations/:invitationId/revoke")
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(OrganizationContextGuard)
+  @UseGuards(OrganizationContextGuard, RoleCapabilityGuard)
+  @RequireCapabilities("members:manage")
   @ApiOperation({ summary: "Revoke an unused invitation" })
   async revokeInvitation(
     @Param("invitationId", ParseUUIDPipe) invitationId: string,
     @Req() request: OrganizationRequest,
   ): Promise<void> {
-    requireOrganizationAdmin(request);
     await this.organizations.revokeInvitation(
       request.organization!,
       invitationId,
@@ -150,13 +219,13 @@ export class OrganizationController {
 
   @Post("current/members/:membershipId/deactivate")
   @HttpCode(HttpStatus.NO_CONTENT)
-  @UseGuards(OrganizationContextGuard)
+  @UseGuards(OrganizationContextGuard, RoleCapabilityGuard)
+  @RequireCapabilities("members:manage")
   @ApiOperation({ summary: "Deactivate an active member" })
   async deactivateMember(
     @Param("membershipId", ParseUUIDPipe) membershipId: string,
     @Req() request: OrganizationRequest,
   ): Promise<void> {
-    requireOrganizationAdmin(request);
     await this.organizations.deactivateMember(
       request.organization!,
       membershipId,

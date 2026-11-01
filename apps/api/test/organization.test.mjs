@@ -28,6 +28,7 @@ test("organization context requires an active membership in the selected tenant"
   assert.deepEqual(selected.request.organization, {
     organizationId: "org-a",
     membershipId: "membership-a",
+    userId: "user-a",
     role: "MEMBER",
   });
 

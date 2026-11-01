@@ -1,11 +1,10 @@
 # Pending tasks
 
-1. **FOUNDATION-006 (in progress):** Identity migration is applied and live PostgreSQL authentication passed direct and proxied API lifecycle smoke. Add automated database transaction/concurrent-refresh tests; run browser E2E for refresh/session restoration; configure production email and shared rate limiting before production.
-2. **FOUNDATION-007 (in progress):** Organization migration is applied. Add database-backed tenant isolation, invitation email binding/expiry/one-time acceptance and competing-acceptance tests, membership deactivation tests, and full HTTP route authorization tests.
-3. **PROD-002 (in progress):** Record owner-provided provisional inventory/auth defaults. Still resolve target segment/brand, tax/invoice compliance, SaaS pricing and subscription limits before customer commitments.
-4. **ARCH-001 (in progress):** Apply provisional no-negative, weighted-average, confirmation-reservation and immutable-ledger decisions; define complete state transitions and transaction invariants as inventory implementation is built.
-5. **ARCH-002 (in progress):** Implement strict organization-scoped RBAC. Keep RLS and privileged support access as security review gates; don't relax tenant boundaries.
-6. **FOUNDATION-008:** RBAC after FOUNDATION-007 tenant boundary verification; then FOUNDATION-009 branch/warehouse.
-7. Then INV-001 onward for catalog and inventory; procurement and sales remain dependent on product/ledger foundations.
+1. **FOUNDATION-009 (next):** Implement tenant-safe branch and warehouse CRUD, location settings UI, and PostgreSQL scope/integrity tests. Dependencies FOUNDATION-007 and FOUNDATION-008 are complete.
+2. **PROD-002 (in progress):** Confirm target segment/brand, tax/invoice compliance, SaaS pricing and subscription limits before customer commitments. Provisional inventory/auth defaults are not validated business requirements.
+3. **ARCH-001 (in progress):** Define complete inventory state transitions and transaction invariants before ledger implementation.
+4. **ARCH-002 (in progress):** Resolve RLS and privileged support access. Tenant-scoped RBAC baseline is implemented; MFA enforcement remains a later policy decision.
+5. **FOUNDATION-006 production hardening:** Configure production email and shared/distributed rate limiting; run browser E2E for restore and session behavior.
+6. Continue with INV-001 catalog and inventory tasks only after FOUNDATION-009 and applicable architecture gates are satisfied.
 
 Full numbered task/status ledger: `docs/implementation/task-breakdown.md`.

@@ -8,15 +8,18 @@ import type { Request } from "express";
 import { PrismaService } from "../database/prisma.service";
 import { AuthenticatedRequest } from "../identity/access-token.guard";
 import { MembershipRole } from "../generated/prisma/enums";
+import { requireCapability } from "./access-policy";
 
 export type OrganizationContext = {
   organizationId: string;
   membershipId: string;
+  userId: string;
   role: MembershipRole;
 };
 
 export type OrganizationRequest = AuthenticatedRequest & {
   organization?: OrganizationContext;
+  warehouseId?: string;
 };
 
 @Injectable()
@@ -45,6 +48,7 @@ export class OrganizationContextGuard implements CanActivate {
     request.organization = {
       organizationId: claims.organizationId,
       membershipId: membership.id,
+      userId: claims.sub,
       role: membership.role,
     };
     return true;
@@ -52,12 +56,9 @@ export class OrganizationContextGuard implements CanActivate {
 }
 
 export function requireOrganizationAdmin(request: OrganizationRequest): void {
-  if (
-    request.organization?.role !== "OWNER" &&
-    request.organization?.role !== "ADMIN"
-  ) {
-    throw new ForbiddenException("Organization administrator role required");
-  }
+  if (!request.organization)
+    throw new ForbiddenException("Organization context is unavailable");
+  requireCapability(request.organization.role, "members:manage");
 }
 
 export function organizationContext(
