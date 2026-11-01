@@ -2,7 +2,7 @@
 
 ## Checkpoint (2026-11-01, Africa/Lagos)
 
-Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`. This session did not commit. Start by running `git status --short --branch` and `git log -5 --oneline`. Preserve `.vscode/` and `apps/web/AGENTS.md`; `.env` is ignored and secret-bearing. Build-generated `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo` were already modified at session start; inspect their diffs before touching them.
+Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; milestone commit `080a4fc feat(authz): add organization roles and warehouse scope`. Start by running `git status --short --branch` and `git log -5 --oneline`. Preserve `.vscode/` and `apps/web/AGENTS.md`; `.env` is ignored and secret-bearing. Build-generated `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo` were already modified at session start; inspect their diffs before touching them.
 
 ## Completed tasks
 
