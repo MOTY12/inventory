@@ -1,6 +1,6 @@
 # Numbered task breakdown
 
-Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001 through FOUNDATION-008 are COMPLETED; PROD-002, ARCH-001 and ARCH-002 are IN_PROGRESS; remaining tasks are NOT_STARTED. FOUNDATION-006/007/008 have automated PostgreSQL concurrency, tenant-isolation and warehouse-scope coverage as recorded in progress documentation. Completed count: 10/47.
+Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001 through FOUNDATION-009 are COMPLETED; PROD-002, ARCH-001 and ARCH-002 are IN_PROGRESS; remaining tasks are NOT_STARTED. FOUNDATION-006/007/008/009 have automated PostgreSQL concurrency, tenant-isolation and scope coverage as recorded in progress documentation. Completed count: 11/47.
 
 ## Phase 0–2: research, product, architecture
 
@@ -62,7 +62,7 @@ Description: Roles/capabilities and per-warehouse grants. Priority: P0. Dependen
 
 ### FOUNDATION-009: Branch and warehouse management
 **Files/modules affected:** apps/api/src/locations/, apps/web/src/features/locations/, Prisma branch/warehouse schema.
-Description: Branch/warehouse CRUD, active defaults, scope. Priority: P0. Dependencies: FOUNDATION-007–008. Deliverables: tables/API/settings screens. Acceptance: locations tenant-owned and referenced documents cannot cross tenants. Tests: CRUD/auth/integrity tests. Status: NOT_STARTED.
+Description: Branch/warehouse CRUD, active defaults, scope. Priority: P0. Dependencies: FOUNDATION-007–008. Deliverables: tables/API/settings screens. Acceptance: locations tenant-owned and referenced documents cannot cross tenants. Tests: CRUD/auth/integrity tests. Status: COMPLETED (additive Branch/AuditEvent schema and nullable composite-tenant warehouse-to-branch FK; tenant-scoped searchable/paginated APIs; RBAC and per-warehouse management guards; create/edit/archive/activate UI; transactional audit events. Migration `20261101150000_branches_and_location_audit` applied without reset; PostgreSQL integration suite passed 9/9, covering tenant integrity, lifecycle, audit and scope. Unit checks and manual Chrome registration/verification/login, organization setup, branch/warehouse creation and persistence passed. Fixed session restoration to retain the selected organization membership role so management controls render).
 
 ## Phase 5: catalog
 

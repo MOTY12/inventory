@@ -33,6 +33,12 @@ function LocationsManager() {
   const [warehouseName, setWarehouseName] = useState("");
   const [warehouseCode, setWarehouseCode] = useState("");
   const [warehouseBranch, setWarehouseBranch] = useState("");
+  const [branchEdits, setBranchEdits] = useState<
+    Record<string, { name: string; address: string }>
+  >({});
+  const [warehouseEdits, setWarehouseEdits] = useState<
+    Record<string, { name: string; code: string; branchId: string }>
+  >({});
   const [filter, setFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ACTIVE" | "ARCHIVED" | "">(
     "ACTIVE",
@@ -157,6 +163,33 @@ function LocationsManager() {
     }
   }
 
+  async function saveBranch(branch: Branch) {
+    const edit = branchEdits[branch.id];
+    if (!edit) return;
+    setBusy(true);
+    setError("");
+    try {
+      await authenticatedRequest(
+        `/organizations/current/branches/${branch.id}`,
+        edit,
+        "PATCH",
+      );
+      setBranchEdits((current) => {
+        const next = { ...current };
+        delete next[branch.id];
+        return next;
+      });
+      setMessage("Branch details saved.");
+      await reload();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not update branch.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function setWarehouseStatus(warehouse: Warehouse) {
     setBusy(true);
     setError("");
@@ -183,9 +216,45 @@ function LocationsManager() {
     }
   }
 
+  async function saveWarehouse(warehouse: Warehouse) {
+    const edit = warehouseEdits[warehouse.id];
+    if (!edit) return;
+    setBusy(true);
+    setError("");
+    try {
+      await authenticatedRequest(
+        `/organizations/current/warehouses/${warehouse.id}`,
+        {
+          name: edit.name,
+          code: edit.code,
+          ...(edit.branchId && edit.branchId !== warehouse.branchId
+            ? { branchId: edit.branchId }
+            : {}),
+        },
+        "PATCH",
+      );
+      setWarehouseEdits((current) => {
+        const next = { ...current };
+        delete next[warehouse.id];
+        return next;
+      });
+      setMessage("Warehouse details saved.");
+      await reload();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not update warehouse.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="auth-page">
-      <section className="auth-card" aria-labelledby="locations-title">
+      <section
+        className="auth-card locations-card"
+        aria-labelledby="locations-title"
+      >
         <Link href="/" className="text-button">
           ← Dashboard
         </Link>
@@ -202,45 +271,117 @@ function LocationsManager() {
         )}
         {organization && (
           <>
-            <label htmlFor="location-search">Search locations</label>
-            <input
-              id="location-search"
-              value={filter}
-              onChange={(event) => setFilter(event.target.value)}
-              placeholder="Branch, warehouse or code"
-            />
-            <label htmlFor="location-status">Status</label>
-            <select
-              id="location-status"
-              value={statusFilter}
-              onChange={(event) =>
-                setStatusFilter(
-                  event.target.value as "ACTIVE" | "ARCHIVED" | "",
-                )
-              }
-            >
-              <option value="ACTIVE">Active</option>
-              <option value="ARCHIVED">Archived</option>
-              <option value="">All</option>
-            </select>
+            <div className="locations-filters">
+              <div className="locations-field">
+                <label htmlFor="location-search">Search locations</label>
+                <input
+                  id="location-search"
+                  value={filter}
+                  onChange={(event) => setFilter(event.target.value)}
+                  placeholder="Branch, warehouse or code"
+                />
+              </div>
+              <div className="locations-field">
+                <label htmlFor="location-status">Status</label>
+                <select
+                  id="location-status"
+                  value={statusFilter}
+                  onChange={(event) =>
+                    setStatusFilter(
+                      event.target.value as "ACTIVE" | "ARCHIVED" | "",
+                    )
+                  }
+                >
+                  <option value="ACTIVE">Active</option>
+                  <option value="ARCHIVED">Archived</option>
+                  <option value="">All</option>
+                </select>
+              </div>
+            </div>
             <h2>Branches</h2>
             {branches.length === 0 ? (
               <p>No branches match these filters.</p>
             ) : (
-              <ul>
+              <ul className="locations-list">
                 {branches.map((branch) => (
                   <li key={branch.id}>
                     <strong>{branch.name}</strong> · {branch.status}
                     {branch.address ? ` · ${branch.address}` : ""}
                     {canManage && (
-                      <button
-                        className="text-button"
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void setBranchStatus(branch)}
-                      >
-                        {branch.status === "ACTIVE" ? "Archive" : "Activate"}
-                      </button>
+                      <>
+                        <details>
+                          <summary>Edit branch</summary>
+                          <form
+                            className="auth-form locations-form"
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              void saveBranch(branch);
+                            }}
+                          >
+                            <label htmlFor={`branch-name-${branch.id}`}>
+                              Name
+                            </label>
+                            <input
+                              id={`branch-name-${branch.id}`}
+                              minLength={2}
+                              maxLength={160}
+                              required
+                              value={
+                                branchEdits[branch.id]?.name ?? branch.name
+                              }
+                              onChange={(event) =>
+                                setBranchEdits((current) => ({
+                                  ...current,
+                                  [branch.id]: {
+                                    name: event.target.value,
+                                    address:
+                                      current[branch.id]?.address ??
+                                      branch.address ??
+                                      "",
+                                  },
+                                }))
+                              }
+                            />
+                            <label htmlFor={`branch-address-${branch.id}`}>
+                              Address
+                            </label>
+                            <input
+                              id={`branch-address-${branch.id}`}
+                              maxLength={500}
+                              value={
+                                branchEdits[branch.id]?.address ??
+                                branch.address ??
+                                ""
+                              }
+                              onChange={(event) =>
+                                setBranchEdits((current) => ({
+                                  ...current,
+                                  [branch.id]: {
+                                    name:
+                                      current[branch.id]?.name ?? branch.name,
+                                    address: event.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                            <button
+                              className="text-button"
+                              type="submit"
+                              disabled={busy}
+                            >
+                              Save branch
+                            </button>
+                          </form>
+                        </details>
+                        <button
+                          className="text-button"
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void setBranchStatus(branch)}
+                        >
+                          {branch.status === "ACTIVE" ? "Archive" : "Activate"}
+                        </button>
+                      </>
                     )}
                   </li>
                 ))}
@@ -250,7 +391,7 @@ function LocationsManager() {
               <>
                 <h3>Create a branch</h3>
                 <form
-                  className="auth-form"
+                  className="auth-form locations-form"
                   onSubmit={(event) => void createBranch(event)}
                 >
                   <label htmlFor="branch-name">Name</label>
@@ -285,21 +426,137 @@ function LocationsManager() {
             {warehouses.length === 0 ? (
               <p>No warehouses match these filters.</p>
             ) : (
-              <ul>
+              <ul className="locations-list">
                 {warehouses.map((warehouse) => (
                   <li key={warehouse.id}>
                     <strong>{warehouse.name}</strong> · {warehouse.code} ·{" "}
                     {warehouse.branch?.name ?? "Unassigned legacy warehouse"} ·{" "}
                     {warehouse.status}
                     {canManage && (
-                      <button
-                        className="text-button"
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void setWarehouseStatus(warehouse)}
-                      >
-                        {warehouse.status === "ACTIVE" ? "Archive" : "Activate"}
-                      </button>
+                      <>
+                        <details>
+                          <summary>Edit warehouse</summary>
+                          <form
+                            className="auth-form locations-form"
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              void saveWarehouse(warehouse);
+                            }}
+                          >
+                            <label htmlFor={`warehouse-name-${warehouse.id}`}>
+                              Name
+                            </label>
+                            <input
+                              id={`warehouse-name-${warehouse.id}`}
+                              minLength={2}
+                              maxLength={160}
+                              required
+                              value={
+                                warehouseEdits[warehouse.id]?.name ??
+                                warehouse.name
+                              }
+                              onChange={(event) =>
+                                setWarehouseEdits((current) => ({
+                                  ...current,
+                                  [warehouse.id]: {
+                                    name: event.target.value,
+                                    code:
+                                      current[warehouse.id]?.code ??
+                                      warehouse.code,
+                                    branchId:
+                                      current[warehouse.id]?.branchId ??
+                                      warehouse.branchId ??
+                                      "",
+                                  },
+                                }))
+                              }
+                            />
+                            <label htmlFor={`warehouse-code-${warehouse.id}`}>
+                              Code
+                            </label>
+                            <input
+                              id={`warehouse-code-${warehouse.id}`}
+                              pattern="[A-Za-z0-9][A-Za-z0-9._-]*"
+                              maxLength={40}
+                              required
+                              value={
+                                warehouseEdits[warehouse.id]?.code ??
+                                warehouse.code
+                              }
+                              onChange={(event) =>
+                                setWarehouseEdits((current) => ({
+                                  ...current,
+                                  [warehouse.id]: {
+                                    name:
+                                      current[warehouse.id]?.name ??
+                                      warehouse.name,
+                                    code: event.target.value,
+                                    branchId:
+                                      current[warehouse.id]?.branchId ??
+                                      warehouse.branchId ??
+                                      "",
+                                  },
+                                }))
+                              }
+                            />
+                            <label htmlFor={`warehouse-branch-${warehouse.id}`}>
+                              Branch
+                            </label>
+                            <select
+                              id={`warehouse-branch-${warehouse.id}`}
+                              required
+                              value={
+                                warehouseEdits[warehouse.id]?.branchId ??
+                                warehouse.branchId ??
+                                ""
+                              }
+                              onChange={(event) =>
+                                setWarehouseEdits((current) => ({
+                                  ...current,
+                                  [warehouse.id]: {
+                                    name:
+                                      current[warehouse.id]?.name ??
+                                      warehouse.name,
+                                    code:
+                                      current[warehouse.id]?.code ??
+                                      warehouse.code,
+                                    branchId: event.target.value,
+                                  },
+                                }))
+                              }
+                            >
+                              {branches
+                                .filter(
+                                  (branch) =>
+                                    branch.status === "ACTIVE" ||
+                                    branch.id === warehouse.branchId,
+                                )
+                                .map((branch) => (
+                                  <option key={branch.id} value={branch.id}>
+                                    {branch.name}
+                                  </option>
+                                ))}
+                            </select>
+                            <button
+                              className="text-button"
+                              type="submit"
+                              disabled={busy}
+                            >
+                              Save warehouse
+                            </button>
+                          </form>
+                        </details>
+                        <button
+                          className="text-button"
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void setWarehouseStatus(warehouse)}
+                        >
+                          {warehouse.status === "ACTIVE"
+                            ? "Archive"
+                            : "Activate"}
+                        </button>
+                      </>
                     )}
                   </li>
                 ))}
@@ -312,7 +569,7 @@ function LocationsManager() {
                   <p>Create or activate a branch first.</p>
                 ) : (
                   <form
-                    className="auth-form"
+                    className="auth-form locations-form"
                     onSubmit={(event) => void createWarehouse(event)}
                   >
                     <label htmlFor="warehouse-branch">Branch</label>

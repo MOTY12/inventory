@@ -115,6 +115,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     } catch {
       activeOrganization = null;
     }
+    const activeMembership = memberships.find(
+      (membership) => membership.organization.id === activeOrganization?.id,
+    );
     accessToken.current = token;
     setUser(currentUser);
     setOrganizations(
@@ -123,7 +126,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         role: membership.role,
       })),
     );
-    setOrganization(activeOrganization);
+    setOrganization(
+      activeOrganization
+        ? { ...activeOrganization, role: activeMembership?.role }
+        : null,
+    );
     setState("authenticated");
   }, []);
 

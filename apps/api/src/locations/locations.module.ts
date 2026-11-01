@@ -2,7 +2,9 @@ import { Module } from "@nestjs/common";
 import { AuthModule } from "../identity/auth.module";
 import { OrganizationContextGuard } from "../organizations/organization-context.guard";
 import {
+  BranchManagementScopeGuard,
   RoleCapabilityGuard,
+  WarehouseManagementScopeGuard,
   WarehouseScopeGuard,
 } from "../organizations/access-policy";
 import { LocationsController } from "./locations.controller";
@@ -16,6 +18,8 @@ import { LocationsService } from "./locations.service";
     OrganizationContextGuard,
     RoleCapabilityGuard,
     WarehouseScopeGuard,
+    WarehouseManagementScopeGuard,
+    BranchManagementScopeGuard,
   ],
 })
 export class LocationsModule {}

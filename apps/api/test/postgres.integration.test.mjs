@@ -12,7 +12,11 @@ import { PasswordHasher } from "../dist/identity/password-hasher.js";
 import { OrganizationContextGuard } from "../dist/organizations/organization-context.guard.js";
 import { requireOrganizationAdmin } from "../dist/organizations/organization-context.guard.js";
 import { OrganizationService } from "../dist/organizations/organization.service.js";
-import { WarehouseScopeGuard } from "../dist/organizations/access-policy.js";
+import {
+  BranchManagementScopeGuard,
+  WarehouseManagementScopeGuard,
+  WarehouseScopeGuard,
+} from "../dist/organizations/access-policy.js";
 import { LocationsService } from "../dist/locations/locations.service.js";
 
 const enabled = process.env.RUN_POSTGRES_INTEGRATION === "1";
@@ -514,14 +518,22 @@ test(
         const otherOwner = await createVerifiedUser("locations-other-owner");
         const ownerSession = await createSession(owner);
         const otherSession = await createSession(otherOwner);
-        const org = await organizations.create(owner.userId, ownerSession.sessionId, {
-          name: "Integration Locations Org",
-          slug: `integration-locations-${randomUUID()}`,
-        });
-        const otherOrg = await organizations.create(otherOwner.userId, otherSession.sessionId, {
-          name: "Integration Foreign Locations Org",
-          slug: `integration-foreign-locations-${randomUUID()}`,
-        });
+        const org = await organizations.create(
+          owner.userId,
+          ownerSession.sessionId,
+          {
+            name: "Integration Locations Org",
+            slug: `integration-locations-${randomUUID()}`,
+          },
+        );
+        const otherOrg = await organizations.create(
+          otherOwner.userId,
+          otherSession.sessionId,
+          {
+            name: "Integration Foreign Locations Org",
+            slug: `integration-foreign-locations-${randomUUID()}`,
+          },
+        );
         organizationIds.push(org.organization.id, otherOrg.organization.id);
         const context = {
           organizationId: org.organization.id,
@@ -535,7 +547,9 @@ test(
           address: "Lagos",
         });
         await assert.rejects(
-          service.createBranch(context, owner.userId, { name: "Central Branch" }),
+          service.createBranch(context, owner.userId, {
+            name: "Central Branch",
+          }),
           (error) => error.getStatus() === 409,
         );
         const foreignBranch = await service.createBranch(
@@ -576,7 +590,9 @@ test(
         assert.equal(searched.total, 1);
         assert.equal(searched.data[0].branchId, branch.id);
         await assert.rejects(
-          service.updateBranch(context, owner.userId, branch.id, { status: "ARCHIVED" }),
+          service.updateBranch(context, owner.userId, branch.id, {
+            status: "ARCHIVED",
+          }),
           (error) => error.getStatus() === 409,
         );
         await service.updateWarehouse(context, owner.userId, warehouse.id, {
@@ -598,7 +614,10 @@ test(
           status: "ACTIVE",
         });
         const auditCount = await prisma.auditEvent.count({
-          where: { organizationId: org.organization.id, actorUserId: owner.userId },
+          where: {
+            organizationId: org.organization.id,
+            actorUserId: owner.userId,
+          },
         });
         assert.equal(auditCount, 6);
         const visibleBranches = await service.listBranches(context, {
@@ -607,6 +626,98 @@ test(
           status: "ACTIVE",
         });
         assert.equal(visibleBranches.total, 1);
+
+        const manager = await createVerifiedUser("locations-manager");
+        const managerSession = await createSession(manager);
+        await organizations.invite(owner.userId, context, {
+          email: manager.email,
+          role: "MANAGER",
+        });
+        const managerInvite = email
+          .readMessages(manager.email)
+          .find((message) => message.type === "organization-invitation");
+        assert.ok(managerInvite);
+        await organizations.acceptInvitation(
+          manager.userId,
+          managerSession.sessionId,
+          managerInvite.token,
+        );
+        const managerContext = {
+          organizationId: org.organization.id,
+          membershipId: randomUUID(),
+          userId: manager.userId,
+          role: "MANAGER",
+        };
+        const managerWarehouse = await service.createWarehouse(
+          managerContext,
+          manager.userId,
+          {
+            branchId: branch.id,
+            name: "Manager Store",
+            code: `MS-${randomUUID().slice(0, 8)}`,
+          },
+        );
+        assert.equal(
+          await prisma.membershipWarehouseGrant.count({
+            where: {
+              organizationId: org.organization.id,
+              userId: manager.userId,
+              warehouseId: managerWarehouse.id,
+            },
+          }),
+          1,
+        );
+        const managerRequest = {
+          auth: { sub: manager.userId },
+          organization: managerContext,
+          params: { warehouseId: managerWarehouse.id, branchId: branch.id },
+          query: {},
+        };
+        const managerExecution = {
+          switchToHttp: () => ({ getRequest: () => managerRequest }),
+        };
+        assert.equal(
+          await new WarehouseScopeGuard(prisma).canActivate(managerExecution),
+          true,
+        );
+        managerRequest.params.warehouseId = warehouse.id;
+        await assert.rejects(
+          new WarehouseManagementScopeGuard(prisma).canActivate(
+            managerExecution,
+          ),
+          (error) => error.getStatus() === 404,
+        );
+        managerRequest.params.warehouseId = managerWarehouse.id;
+        assert.equal(
+          await new WarehouseManagementScopeGuard(prisma).canActivate(
+            managerExecution,
+          ),
+          true,
+        );
+        assert.equal(
+          await new BranchManagementScopeGuard(prisma).canActivate(
+            managerExecution,
+          ),
+          true,
+        );
+        await service.updateWarehouse(
+          managerContext,
+          manager.userId,
+          managerWarehouse.id,
+          {
+            status: "ARCHIVED",
+          },
+        );
+        await assert.rejects(
+          new WarehouseScopeGuard(prisma).canActivate(managerExecution),
+          (error) => error.getStatus() === 404,
+        );
+        assert.equal(
+          await new WarehouseManagementScopeGuard(prisma).canActivate(
+            managerExecution,
+          ),
+          true,
+        );
       },
     );
   },

@@ -19,8 +19,10 @@ import {
   OrganizationRequest,
 } from "../organizations/organization-context.guard";
 import {
+  BranchManagementScopeGuard,
   RequireCapabilities,
   RoleCapabilityGuard,
+  WarehouseManagementScopeGuard,
   WarehouseScopeGuard,
 } from "../organizations/access-policy";
 import {
@@ -76,6 +78,7 @@ export class LocationsController {
   }
 
   @Patch("branches/:branchId")
+  @UseGuards(BranchManagementScopeGuard)
   @RequireCapabilities("warehouses:manage")
   @ApiOperation({ summary: "Update or archive a branch" })
   updateBranch(
@@ -128,6 +131,7 @@ export class LocationsController {
   }
 
   @Patch("warehouses/:warehouseId")
+  @UseGuards(WarehouseManagementScopeGuard)
   @RequireCapabilities("warehouses:manage")
   @ApiOperation({ summary: "Update or archive a warehouse" })
   updateWarehouse(

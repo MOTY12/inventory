@@ -204,3 +204,81 @@ export class WarehouseScopeGuard implements CanActivate {
     return true;
   }
 }
+
+@Injectable()
+export class WarehouseManagementScopeGuard implements CanActivate {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<OrganizationRequest>();
+    const organization = request.organization;
+    const warehouseId = request.params.warehouseId;
+    if (!organization || !request.auth || typeof warehouseId !== "string") {
+      throw new ForbiddenException(
+        "Organization and warehouse scope are required",
+      );
+    }
+    const warehouse = await this.prisma.warehouse.findFirst({
+      where: { id: warehouseId, organizationId: organization.organizationId },
+      select: { id: true },
+    });
+    if (!warehouse) throw new NotFoundException();
+    if (
+      organization.role === MembershipRole.OWNER ||
+      organization.role === MembershipRole.ADMIN
+    ) {
+      request.warehouseId = warehouse.id;
+      return true;
+    }
+    const grant = await this.prisma.membershipWarehouseGrant.findUnique({
+      where: {
+        organizationId_userId_warehouseId: {
+          organizationId: organization.organizationId,
+          userId: request.auth.sub,
+          warehouseId,
+        },
+      },
+      select: { warehouseId: true },
+    });
+    if (!grant) throw new NotFoundException();
+    request.warehouseId = grant.warehouseId;
+    return true;
+  }
+}
+
+@Injectable()
+export class BranchManagementScopeGuard implements CanActivate {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<OrganizationRequest>();
+    const organization = request.organization;
+    const branchId = request.params.branchId;
+    if (!organization || !request.auth || typeof branchId !== "string") {
+      throw new ForbiddenException(
+        "Organization and branch scope are required",
+      );
+    }
+    const branch = await this.prisma.branch.findFirst({
+      where: { id: branchId, organizationId: organization.organizationId },
+      select: { id: true },
+    });
+    if (!branch) throw new NotFoundException();
+    if (
+      organization.role === MembershipRole.OWNER ||
+      organization.role === MembershipRole.ADMIN
+    ) {
+      return true;
+    }
+    const grant = await this.prisma.membershipWarehouseGrant.findFirst({
+      where: {
+        organizationId: organization.organizationId,
+        userId: request.auth.sub,
+        warehouse: { branchId },
+      },
+      select: { warehouseId: true },
+    });
+    if (!grant) throw new NotFoundException();
+    return true;
+  }
+}

@@ -2,12 +2,13 @@
 
 ## Implementation follow-ups
 
-- **Browser E2E:** Browser automation is unavailable in this session. Auth API/proxy behavior and RBAC database behavior were tested, but browser reload and role/grant settings interactions remain unverified.
-- **Docker observability:** A non-escalated Docker socket check was denied. The local PostgreSQL integration suite connected and passed; Compose container health was not rechecked during this session.
+- **Automated browser E2E:** No automated browser test suite exists. Manual Chrome testing verified registration, mailbox email verification, login, dashboard, organization setup, locations page, branch/warehouse creation, and persistence after reload. Role/grant settings and full refresh/logout UI remain unverified in Chrome.
+- **Docker access in sandbox:** Docker Compose services were started and verified using approved external access. PostgreSQL, Redis and S3Mock report healthy; PostgreSQL is reachable at `localhost:5433`.
 - **Production email:** Only the development/test delivery adapter is configured. Production email provider and operational delivery behavior remain open.
 - **Distributed rate limits:** Authentication throttling is process-local and does not coordinate multiple API replicas. Add shared storage before horizontal production operation.
-- **FOUNDATION-009:** Branch/warehouse CRUD, branch relationships, and location UI are not implemented yet. They are the next roadmap task.
-- **Build artifacts:** `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo` are modified generated files in the worktree. Inspect before cleanup; preserve unrelated user changes.
+- **FOUNDATION-009:** Complete. Migration applied and PostgreSQL integration tests passed 9/9. Manual Chrome workflow succeeded.
+- **Local development account:** Created and email-verified using the local development mailbox; Chrome login and dashboard navigation passed. Credentials were given to the user in this session; do not store the password in progress documentation.
+- **Development server lifecycle:** `npm run build` replaces the API `dist` output while `nest start --watch` is running, briefly stopping the API; restart the dev API after production builds. Current API has been restarted successfully. The existing frontend on port 3000 returned HTTP 200.
 
 ## Planning constraints
 

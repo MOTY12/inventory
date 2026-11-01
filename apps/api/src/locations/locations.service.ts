@@ -283,6 +283,15 @@ export class LocationsService {
             updatedAt: true,
           },
         });
+        if (!isAdmin(context)) {
+          await tx.membershipWarehouseGrant.create({
+            data: {
+              organizationId: context.organizationId,
+              userId: actorUserId,
+              warehouseId: warehouse.id,
+            },
+          });
+        }
         await this.audit(
           tx,
           context.organizationId,
@@ -345,6 +354,17 @@ export class LocationsService {
             throw new NotFoundException(
               "Active branch not found in this organization",
             );
+          if (!isAdmin(context)) {
+            const branchGrant = await tx.membershipWarehouseGrant.findFirst({
+              where: {
+                organizationId: context.organizationId,
+                userId: context.userId,
+                warehouse: { branchId },
+              },
+              select: { warehouseId: true },
+            });
+            if (!branchGrant) throw new NotFoundException();
+          }
         }
         const warehouse = await tx.warehouse.update({
           where: { id: warehouseId },
@@ -409,7 +429,6 @@ export class LocationsService {
         ? {
             warehouses: {
               some: {
-                status: WarehouseStatus.ACTIVE,
                 grants: {
                   some: {
                     organizationId: context.organizationId,
