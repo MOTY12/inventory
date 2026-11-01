@@ -1,6 +1,6 @@
 # Numbered task breakdown
 
-Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001, FOUNDATION-003, FOUNDATION-004 and FOUNDATION-005 are COMPLETED; PROD-002, ARCH-001, ARCH-002, FOUNDATION-006 and FOUNDATION-007 are IN_PROGRESS; FOUNDATION-002 is BLOCKED; remaining tasks are NOT_STARTED. Tests include local config, API conventions, auth lifecycle fakes and isolated tenant-guard checks. FOUNDATION-006 and FOUNDATION-007 both retain database-backed verification work.
+Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001 through FOUNDATION-005 are COMPLETED; PROD-002, ARCH-001, ARCH-002, FOUNDATION-006 and FOUNDATION-007 are IN_PROGRESS; remaining tasks are NOT_STARTED. Tests include local config, API conventions, auth lifecycle fakes and isolated tenant-guard checks. FOUNDATION-006 and FOUNDATION-007 retain database-backed concurrency/isolation verification; authentication lifecycle has additionally been smoke-tested against PostgreSQL.
 
 ## Phase 0–2: research, product, architecture
 
@@ -32,7 +32,7 @@ Description: Establish workspace package manager, web/API packages, shared schem
 
 ### FOUNDATION-002: Local infrastructure and configuration
 **Files/modules affected:** `compose.yaml`, `.env.example`, infrastructure/local/.
-Description: Compose PostgreSQL, Redis and object storage; validated env schema and safe local defaults. Priority: P0. Dependencies: FOUNDATION-001. Deliverables: Docker Compose and `.env.example`. Acceptance: services start, health checks work, no secret committed. Tests: Compose config, env validation and startup/health smoke. Status: BLOCKED (Compose/env schema and config checks pass; Docker daemon unavailable for startup/health verification).
+Description: Compose PostgreSQL, Redis and object storage; validated env schema and safe local defaults. Priority: P0. Dependencies: FOUNDATION-001. Deliverables: Docker Compose and `.env.example`. Acceptance: services start, health checks work, no secret committed. Tests: Compose config, env validation and startup/health smoke. Status: COMPLETED (2026-11-01; PostgreSQL, Redis and S3Mock are healthy in Docker Compose; env validation and Prisma validation pass; configured migrations are applied without resetting the database; host PostgreSQL on 5432 was preserved and project PostgreSQL uses 5433).
 
 ### FOUNDATION-003: API conventions and OpenAPI
 **Files/modules affected:** apps/api/src/common/, apps/api/src/main.ts, OpenAPI configuration.

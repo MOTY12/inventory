@@ -12,8 +12,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
 
 type User = { id: string; email: string; emailVerifiedAt: string | null };
 type Organization = { id: string; name: string; slug: string; role?: string };

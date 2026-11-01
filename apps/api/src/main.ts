@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { ValidationPipe } from "@nestjs/common";
-import "dotenv/config";
+import { resolve } from "node:path";
+import dotenv from "dotenv";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
@@ -9,6 +10,8 @@ import {
   validationExceptionFactory,
 } from "./common/api-exception.filter";
 import { RequestIdMiddleware } from "./common/request-id.middleware";
+
+dotenv.config({ path: resolve(__dirname, "../../../.env") });
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);

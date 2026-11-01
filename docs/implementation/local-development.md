@@ -18,11 +18,13 @@ Named volumes preserve local database, Redis and S3Mock files across container r
 
 ## Endpoints
 
-- PostgreSQL: `localhost:5432`, database `inventory_dev`, user `inventory`.
+- PostgreSQL: `localhost:${POSTGRES_PORT}`, default `5432`, database `inventory_dev`, user `inventory`. If another local PostgreSQL owns the default port, choose a free `POSTGRES_PORT` and update the port in `DATABASE_URL` to match. Existing local databases are not reset by Compose.
 - Redis: `localhost:6379`, password from local `.env`.
 - S3Mock: `http://localhost:9090`, region `us-east-1`, bucket `inventory-local`.
 
 All published ports bind to loopback. Choose different host ports in `.env` if there is a conflict.
+
+For account verification in local development, start the API with `NODE_ENV=development npm run dev:api`. This enables the loopback-only in-memory development mailbox; it is unavailable outside development mode. Start the web app with `npm run dev:web`.
 
 ## Limitations
 
