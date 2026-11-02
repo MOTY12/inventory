@@ -1,6 +1,6 @@
 # Numbered task breakdown
 
-Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001 through FOUNDATION-009 are COMPLETED; PROD-002, ARCH-001 and ARCH-002 are IN_PROGRESS; remaining tasks are NOT_STARTED. FOUNDATION-006/007/008/009 have automated PostgreSQL concurrency, tenant-isolation and scope coverage as recorded in progress documentation. Completed count: 11/47.
+Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001 through FOUNDATION-009, and ARCH-001 are COMPLETED; PROD-002, ARCH-002, INV-001, and INV-002 are IN_PROGRESS; remaining tasks are NOT_STARTED. FOUNDATION-006/007/008/009 have automated PostgreSQL concurrency, tenant-isolation and scope coverage as recorded in progress documentation. Completed count: 12/47.
 
 ## Phase 0–2: research, product, architecture
 
@@ -18,7 +18,7 @@ Description: Resolve open decisions: reservation point, negative stock, valuatio
 
 ### ARCH-001: Approve transaction and inventory semantics
 **Files/modules affected:** docs/architecture/, docs/research/inflow-business-rules.md.
-Description: Finalize on-hand/reserved/available/in-transit, transfer and reversal semantics. Priority: P0. Dependencies: PROD-002. Affected database, API, business rules. Deliverables: state diagrams and invariants. Acceptance: every stock transition has balanced ledger postings and rollback behavior. Tests: scenario matrix. Status: IN_PROGRESS (owner supplied provisional no-negative, weighted-average, confirmation reservation, immutable-ledger defaults; transition matrix remains to implement).
+Description: Finalize on-hand/reserved/available/in-transit, transfer and reversal semantics. Priority: P0. Dependencies: PROD-002. Affected database, API, business rules. Deliverables: state diagrams and invariants. Acceptance: every stock transition has balanced ledger postings and rollback behavior. Tests: scenario matrix. Status: COMPLETED for the implementation contract (2026-11-02). Documented quantity definitions, stock transition flow, balanced movement/counterparty expectations, transaction rollback behavior, idempotency, reversal, concurrency and scenario acceptance matrix in `docs/architecture/inventory-semantics.md`, using owner-authorized provisional DEC-007 defaults. These are not validated accounting/customer requirements; PROD-002 remains open for release commitments and non-core business policies.
 
 ### ARCH-002: Approve tenant isolation/security model
 **Files/modules affected:** docs/architecture/, docs/research/inflow-business-rules.md.
@@ -67,12 +67,10 @@ Description: Branch/warehouse CRUD, active defaults, scope. Priority: P0. Depend
 ## Phase 5: catalog
 
 ### INV-001: Units and product categories
-**Files/modules affected:** apps/api/src/catalog/units/, apps/api/src/catalog/categories/, Prisma unit/category schema.
-Description: Tenant units, base conversion and hierarchical categories. Priority: P0. Dependencies: FOUNDATION-009, ARCH-001. Deliverables: models/API/validation. Acceptance: valid conversion and same-tenant references enforced. Tests: unit conversion and tenant tests. Status: NOT_STARTED.
-
-### INV-002: Product entity and database schema
+**Files/modules affected:** apps/api/src/catalog/, Prisma unit/category schema.
+Description: Tenant units, product-specific base conversion and hierarchical categories. Priority: P0. Dependencies: FOUNDATION-009, ARCH-001. Deliverables: models/API/validation. Acceptance: valid conversion and same-tenant references enforced. Tests: unit conversion and tenant tests. Status: IN_PROGRESS (2026-11-02). Added tenant-owned Unit and hierarchical Category models with organization-composite category parent FK, organization-unique unit code/category name, indexes, statuses and precision validation; applied additive migration `20261102082437_catalog_units_categories` to existing local `inventory_dev`. Added tenant-scoped list/create APIs, capability guards, DTO validation, transactional audit writes, unit tests from the prior milestone, and a responsive authenticated catalog setup page for creating/listing units and hierarchical categories. Product/base-unit/conversion schema plus tenant-scoped conversion creation now exists in an unapplied migration/API. Remaining: apply and integration-verify migrations; complete conversion listing/update/error acceptance and automated conversion/tenant checks. Those automated tests are deferred under the current accelerated-development instruction.
 **Files/modules affected:** apps/api/src/catalog/products/, Prisma product schema and migrations.
-Description: Product type, normalized SKU, barcode, prices/cost, base unit, archive. Priority: P0. Dependencies: INV-001. Deliverables: Prisma migration and indexes. Acceptance: unique SKU policy; Decimal-safe money; no direct quantity field writes. Tests: schema and validation tests. Status: NOT_STARTED.
+Description: Product type, normalized SKU, barcode, prices/cost, base unit, archive. Priority: P0. Dependencies: INV-001. Deliverables: Prisma migration and indexes. Acceptance: unique SKU policy; Decimal-safe money; no direct quantity field writes. Tests: schema and validation tests. Status: IN_PROGRESS (2026-11-02). Added Product and ProductUnitConversion models plus additive migration `20261102113000_products_and_unit_conversions` (not applied); schema validation and client generation pass. Added tenant-scoped product list/create and product-specific conversion-create endpoints with normalized unique SKU/barcode, active same-tenant category/unit checks, role capabilities and transactional audit entries. Remaining: migration apply/integration checks, product management lifecycle (update/archive), UI, and automated tests. Product endpoint implementation was started here to unblock INV-001 conversion behavior; full INV-003 acceptance is not claimed.
 
 ### INV-003: Product catalog APIs and table
 **Files/modules affected:** apps/api/src/catalog/products/, apps/web/src/features/products/.

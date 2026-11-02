@@ -1,6 +1,7 @@
 # Session log
 
 ## 2026-10-31 — Research and planning baseline
+
 - Verified workspace path and empty Git state: `main` has no commits and `origin/main` is gone; no existing AGENTS/project files found.
 - Read pasted master prompt.
 - Reviewed official REA repository README and docs links; actual connected REA tool inventory includes passive web inspection, viewport screenshot and bounded observation.
@@ -11,6 +12,7 @@
 - Next: present plan and decisions for owner review; after approval continue with PROD-001/PROD-002 before FOUNDATION-001.
 
 ## 2026-10-31 — Resume and PROD-001 preparation
+
 - Read the required startup files in order, then task breakdown and relevant product/architecture/decision docs.
 - Verified `HEAD` is commit `918de84` (“The plans”); clean worktree before changes; no app manifests/source/tests; task ledger has DOC-001 complete and PROD-001 first incomplete with DOC-001 satisfied.
 - Added `docs/product/user-research-plan.md` with sampling plan, interview guide, anonymized note template and explicit completion criteria. Updated PROD-001 to IN_PROGRESS; no interviews or findings fabricated.
@@ -19,6 +21,7 @@
 - Next: real interviews → synthesis/segment decision → PROD-002 policy approvals → ARCH-001/002 → FOUNDATION-001.
 
 ## 2026-10-31 — Implementation start and foundation scaffold
+
 - Re-read the required startup docs, then checked architecture, progress evidence, source tree and Git. Actual HEAD was `3fb6777` (`update the reasearch plan`), not the earlier stale `7739ce4` checkpoint.
 - Owner explicitly authorized implementation and stated the research/planning phase is complete. Logged DEC-006: interviews are deferred to pilot validation; no interviews/findings are claimed. PROD-001 is closed as planning deliverables only.
 - Added npm workspace foundation, Next.js/NestJS/shared shells, tooling, local Compose configuration for PostgreSQL/Redis/S3Mock, `.env.example`, README and local development instructions.
@@ -28,6 +31,7 @@
 - Next: start Docker engine and verify service health to close FOUNDATION-002; if unavailable, continue with FOUNDATION-003, whose dependency FOUNDATION-001 is satisfied.
 
 ## 2026-10-31 — FOUNDATION-002 configuration, API, UI and operations
+
 - Resumed at actual HEAD `594131d` (`next js app seetup`); verified the existing scaffold and read product/API/security/tenancy architecture before implementation.
 - Finished FOUNDATION-002 configuration work without Docker: shared Zod schema for Compose environment variables, `scripts/validate-local-env.mjs`, `npm run validate:env`, safe sample defaults, and local setup documentation. Compose parses, but runtime remains blocked by missing Docker daemon.
 - Completed FOUNDATION-003: versioned Nest API, status route, Swagger/OpenAPI, global DTO transformation/validation, bounded pagination DTO, request ID middleware, stable error filter. Added live HTTP smoke and unit contract cases.
@@ -41,6 +45,7 @@
 - Git state at final checkpoint: branch `develop`, HEAD `42245b9` (`Dashboard build`) contains the application implementation; progress docs and the last test-only assertion remain uncommitted. This differs from the start-of-session branch/HEAD and has been reflected in current state and handoff.
 
 ## 2026-10-31 — Provisional decisions and authentication security primitives
+
 - Resumed on `develop`; HEAD `42245b9`, preserving uncommitted prior progress and generated `apps/web/next-env.d.ts`. Read current startup docs, task ledger, database, security, tenancy and API designs. Docker daemon remained unavailable.
 - Recorded DEC-007/008 from the owner's explicit provisional defaults. These are not validated business requirements. PROD-002, ARCH-001/002 remain IN_PROGRESS; authentication and organization defaults now permit FOUNDATION-006 development.
 - Installed `argon2` and `@nestjs/jwt`. Implemented Argon2id hashing/verification, 15-minute HS256 access JWTs with issuer/audience/secret checks, and 256-bit opaque refresh-token generation with SHA-256 persistence digest. Password parameters follow the [OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html) minimum Argon2id recommendation (19 MiB, 2 iterations, p=1).
@@ -50,6 +55,7 @@
 - Verified milestone committed as `e8fe304 feat(auth): add password and token primitives`. Final branch is `develop`, one commit ahead of `origin/develop`. Post-commit checkpoint corrections in `current-state.md`, `next-session.md` and this log are uncommitted, alongside the pre-existing Next generated-types and completed-tasks files.
 
 ## 2026-10-31 — FOUNDATION-006 persistence foundation
+
 - Resumed after verifying actual HEAD `f377d8f` (`Backend update`), `develop` two commits ahead of `origin/develop`, with a clean starting worktree. The earlier next-session note was stale: Prisma was not installed then, but the stable dependency install succeeded in this continuation.
 - Confirmed Docker still cannot reach `/Users/newuser/.docker/run/docker.sock`; FOUNDATION-002 remains BLOCKED.
 - Installed Prisma 7.10.1 and matching Prisma Client/PostgreSQL adapter, `pg`, types, and dotenv. Official Prisma 7 docs confirm the driver adapter requirement and `prisma.config.ts` datasource setup. No Prisma 8 RC used.
@@ -60,6 +66,7 @@
 - Verified milestone committed as `447ee2d feat(db): add Prisma identity schema foundation`, followed by progress-only checkpoint commits. Branch `develop` is ahead of `origin/develop`; worktree was clean at checkpoint.
 
 ## 2026-10-31 — FOUNDATION-006 auth lifecycle implementation
+
 - Resumed at `12bf2d0` on `develop`; worktree was clean. Verified the prior identity schema and auth primitives; Docker remained unavailable.
 - Added `PrismaService`/`PrismaModule` with Prisma 7 PostgreSQL adapter, a `SELECT 1` startup probe, readiness state, safe 503 on connection failure, and shutdown disconnect. Added database lifecycle tests.
 - Added password-reset token/family schema fields and updated the SQL migration; regenerated client and confirmed the SQL diff exactly matches the schema.
@@ -69,7 +76,9 @@
 - Verification passed: Prisma validate/generate/format and offline migration/schema diff; production `npm run build`; typecheck; lint; format check; local env validation; `git diff --check`; full `npm test` 19/19 on approved rerun. Auth service unit tests use fake Prisma behavior. No PostgreSQL migration/integration or actual two-client concurrency test was possible.
 - Docker check still fails because `/Users/newuser/.docker/run/docker.sock` is unavailable. Production email transport, shared/distributed throttling, auth audit events and browser E2E remain outstanding. A `.vscode/settings.json` appeared as untracked local tooling state and was intentionally preserved.
 - Commit `0b0ee43 feat(auth): add persisted identity lifecycle foundation` contains the implementation milestone. FOUNDATION-006 remains IN_PROGRESS; no roadmap task was newly completed.
+
 # 2026-10-31 — FOUNDATION-007 organization and membership implementation
+
 - Resumed from `d8579fc` on `develop`, read the required implementation roadmap and progress files, confirmed FOUNDATION-007 is the next approved task after FOUNDATION-006, and preserved the existing untracked `.vscode/settings.json`.
 - Extended the Prisma model with organizations, unique organization slugs, memberships and role/status enums, expiring one-time hashed invitation tokens, and organization selection on refresh sessions. Added additive migration `20261031120000_organizations`; generated SQL matches the schema diff. Migration is not applied to a database.
 - Implemented organization create/list/select, owner membership creation, selected-organization session/access token binding, membership context guard, organization admin authorization, organization detail update, member listing/deactivation, invite/revoke/list, and email-bound one-time invite acceptance. Invitation/raw token delivery uses the existing development mail adapter; no production provider is claimed.
@@ -79,6 +88,7 @@
 - Verified implementation milestone committed as `6c338a4 feat(orgs): implement organization membership foundation`; `.vscode/settings.json` remains untracked and was not included.
 
 ## 2026-11-01 — Local environment recovery and auth verification
+
 - Resumed at actual HEAD `075726e` on `develop`; read root AGENTS, current state, next session, master plan and task breakdown in required order. Preserved existing `.vscode/` and `apps/web/AGENTS.md` untracked files.
 - Started the installed Docker Desktop stack. PostgreSQL, Redis and S3Mock health checks are all healthy. Host PostgreSQL already owned port 5432, so left it untouched and configured Compose PostgreSQL on 5433 with matching ignored local `.env` `DATABASE_URL`. No reset, volume deletion or seed was run; no seed script exists.
 - Fixed root Prisma config dotenv resolution and added root config paths to API Prisma scripts; fixed API `.env` load path for compiled/runtime context. Added Next same-origin `/api/v1` rewrite and changed the browser API default to that path.
@@ -89,6 +99,7 @@
 - FOUNDATION-002 is now COMPLETED, raising roadmap count legitimately from 6/47 to 7/47. FOUNDATION-006/007 remain IN_PROGRESS. No code commit created; `.env` is ignored. Next: automate DB-backed auth concurrency + organization tenant/invitation cases; repeat browser session restore when browser controls are available; only then advance to FOUNDATION-008.
 
 ## 2026-11-01 — Complete FOUNDATION-006/007 and implement FOUNDATION-008
+
 - Resumed from the previous checkpoint and compared progress records with source, migration and Git evidence. Preserved untracked `.vscode/` and `apps/web/AGENTS.md`; did not stage `.env`.
 - Added opt-in PostgreSQL integration tests covering refresh race/reuse revocation, failed-rotation rollback, logout, expiry, organization membership isolation, cross-tenant selection, invitation one-time concurrent acceptance/email binding/expiry, membership deactivation, and warehouse grants/scope.
 - Fixed session restoration effect de-duplication for React Strict Mode replay; interactive browser verification remains unavailable.
@@ -97,13 +108,17 @@
 - Updated roadmap to 10/47. FOUNDATION-006, 007 and 008 are marked complete against their acceptance criteria. Production email, distributed throttling, browser E2E and Foundation009 CRUD remain explicit follow-ups.
 - Next task is FOUNDATION-009: branch/warehouse CRUD, tenant-safe branch relationships, locations UI, database integrity/scope tests, additive migration, then full checks and progress updates.
 - Verified milestone committed as `080a4fc feat(authz): add organization roles and warehouse scope`; generated build artifacts and unrelated untracked files were excluded.
+
 # 2026-11-01 — FOUNDATION-009 implementation continuation
+
 - Resumed from `c415989 organisation flow` on `develop`, preserving the existing generated web files. Verified the current-state and handoff documentation and confirmed FOUNDATION-009 remains the first incomplete eligible implementation task; PostgreSQL at `localhost:5433` is unavailable.
 - Hardened location management authorization with tenant-scoped branch/warehouse scope guards. Scoped users receive access to a warehouse they create; branch reassignment requires scope in the target branch. Added branch and warehouse edit controls to the locations UI and expanded unit plus opt-in PostgreSQL coverage.
 - Verification recorded for this work: Prisma validation, typecheck, lint, format check, production build, and `npm test` passed (27 passed, 1 opt-in PostgreSQL suite skipped). `git diff --check` passed. The PostgreSQL migration/integration test was not run; do not claim FOUNDATION-009 complete.
 - Updated task ledger and progress state. FOUNDATION-009 remains IN_PROGRESS and roadmap remains 10/47. Requested dev account remains uncreated because API readiness requires PostgreSQL. No commit was created in this continuation; no push or Docker socket retry was performed.
 - Exact next actions: start PostgreSQL at configured port 5433 without resetting data; deploy migration `20261101150000_branches_and_location_audit`; run `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/postgres.integration.test.mjs`; address failures; then re-run quality checks, verify account workflow, update task status only if acceptance evidence supports completion, and proceed to the next task whose dependencies are satisfied.
+
 # 2026-11-01 — Local runtime recovery and Chrome workflow fix
+
 - Resumed with API and frontend processes down. Docker commands from the sandbox were denied by the daemon socket; authorized external Docker Compose startup verified PostgreSQL, Redis and S3Mock healthy. PostgreSQL on 5433 accepted connections; `.env` validation and Prisma validation passed.
 - Applied pending migration `20261101150000_branches_and_location_audit` to existing `inventory_dev` without reset/deletion. Opt-in PostgreSQL integration suite passed 9/9.
 - Started `NODE_ENV=development npm run dev:api`; API readiness and same-origin web proxy returned 200, frontend login returned 200. Existing Next dev server already held port 3000; a duplicate launch moved to 3001 and exited without changing the existing server.
@@ -113,3 +128,29 @@
 - Production build replaced shared API `dist` while `nest start --watch` was running, stopping that dev API process. Restarted API afterward in development mode. Keep this lifecycle issue documented; verify runtime health after build.
 - FOUNDATION-009 now meets recorded acceptance criteria; roadmap count is 11/47. No commit or push. Next: continue architecture gate ARCH-001 with provisional assumptions labeled, then applicable PROD-002/ARCH-002 gates before dependent inventory work. Keep production email, distributed throttling and automated browser E2E as follow-ups.
 - Final Chrome inspection exposed cramped location filters/forms; added responsive page-specific styles. Reselected the local demo organization and verified the branch, warehouse, role controls, and selected organization persisted after reload. After these UI changes, typecheck, lint, format check and production build passed; API was restarted after the build.
+
+# 2026-11-01 — Organizations settings UI polish
+
+- Addressed the supplied Chrome screenshot: Organizations was rendered in the 430px authentication card, causing cramped lists and labels/inputs to collide. Added page-specific wide responsive layout, separated settings sections, card-style organization/member/invitation lists, aligned controls, and responsive forms.
+- Chrome manual visual check showed the signed-in Organizations page with active organization, selectable organizations, and aligned form fields. No application data was submitted or changed during the visual check.
+- `npm run typecheck`, `npm run lint`, `npm run format:check`, and `git diff --check` passed. No new roadmap task was created/completed; progress remains 11/47. No commit created.
+- Files changed for this fix: `apps/web/src/app/organizations/page.tsx`, `apps/web/src/app/globals.css`, `docs/progress/current-state.md`, `docs/progress/next-session.md`, and this log. Existing unrelated worktree changes remain untouched.
+
+# 2026-11-02 — Inventory semantics and catalog start
+
+- Verified task ledger/current state: FOUNDATION-009 remained complete; ARCH-001 was the next incomplete architecture gate with only provisional defaults recorded, not the required detailed transition/rollback matrix.
+- Added `docs/architecture/inventory-semantics.md` with on-hand/reserved/available/in-transit definitions, stock state flow, transition and rollback matrix, invariants, and required scenario review. Marked ARCH-001 complete for the owner-authorized provisional implementation contract only; PROD-002 remains open for customer/release decisions. Roadmap advances from 11/47 to 12/47.
+- Started INV-001: added Prisma Category/Unit schema, tenant-composite category-parent relation, unique/index constraints, list/create API endpoints guarded by organization context and catalog capabilities, DTO validation, audit records in the same transaction, and unit tests. Applied additive migration `20261102082437_catalog_units_categories` to `inventory_dev`; no reset/deletion.
+- Verification: Prisma validate, typecheck, lint, format check, `git diff --check` passed. `npm test` passed 32, failed 0, skipped 1 (opt-in PostgreSQL suite). Initial local listener-limited run failed under sandbox; elevated rerun passed. PostgreSQL suite was attempted separately but could not connect in the sandbox; elevated retry was rejected. A catalog-specific PostgreSQL test is present but not verified.
+- INV-001 remains IN_PROGRESS because live PostgreSQL isolation/integrity cases and product-specific unit conversion semantics are outstanding. Exact follow-up: obtain approved DB connectivity, run `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/postgres.integration.test.mjs`, then complete/test unit conversion with the product/base-unit relation. No commit created; generated/unrelated worktree changes preserved.
+
+# 2026-11-02 — Catalog setup UI
+- Continued INV-001 per the attached accelerated implementation prompt. Added `apps/web/src/app/catalog/page.tsx` with organization-scoped category/unit create and list flows, parent-category selection, precision controls, role-aware write controls, and loading/error/success states. Added a Catalog setup route to workspace navigation and responsive styles in `apps/web/src/app/globals.css`.
+- Verification: typecheck passed before the final lint cleanup; final `npm run lint`, `npm run format:check`, and production `npm run build` passed (Next production build completed TypeScript verification). No tests were run after these changes, per the accelerated instruction. No live API/database smoke was possible: API port 4000 was previously connection-refused and Docker status was unavailable in the restricted shell.
+- INV-001 remains IN_PROGRESS because product-specific unit conversions need the Product/base-unit relation planned under INV-002; do not model variable pack sizes as global unit conversions. No roadmap task count change. No commit created because existing uncommitted work spans prior UI, schema, migration, docs and generated files.
+
+# 2026-11-02 — Product schema and catalog API start
+- Continued the next dependency-ready Phase 5 work. Added Product and ProductUnitConversion Prisma models and additive migration `20261102113000_products_and_unit_conversions`; this migration is created but not applied. It uses organization-composite foreign keys, organization-unique normalized SKU/barcode, Decimal cost/price, and positive per-product base-unit conversion quantities.
+- Added organization-scoped product list/create and product conversion-create API routes with catalog capability authorization, DTO validation, active same-tenant category/unit checks, and same-transaction audit events. Product UI, update/archive lifecycle, conversion listing, and full integration are still incomplete. INV-001 and INV-002 remain IN_PROGRESS; completed count remains 12/47.
+- Verified `npx prisma validate`, `npm run db:generate --workspace=@inventory/api`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build`, and `git diff --check` passed. Automated tests were not run per the attached acceleration instruction. The local API/session flow could not be smoke-tested; Chrome’s catalog route returned to login when API session refresh was unavailable. Do not claim end-to-end functionality.
+- No commit created because the worktree contains mixed pre-existing changes. Exact next steps are in `docs/progress/next-session.md`.

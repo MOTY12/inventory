@@ -18,6 +18,7 @@ import {
   WarehouseScopeGuard,
 } from "../dist/organizations/access-policy.js";
 import { LocationsService } from "../dist/locations/locations.service.js";
+import { CatalogService } from "../dist/catalog/catalog.service.js";
 
 const enabled = process.env.RUN_POSTGRES_INTEGRATION === "1";
 
@@ -718,6 +719,95 @@ test(
           ),
           true,
         );
+      },
+    );
+    await t.test(
+      "catalog units and category hierarchy are tenant safe",
+      async () => {
+        const ownerA = await createVerifiedUser("catalog-tenant-a");
+        const ownerB = await createVerifiedUser("catalog-tenant-b");
+        const sessionA = await createSession(ownerA);
+        const sessionB = await createSession(ownerB);
+        const orgA = await organizations.create(
+          ownerA.userId,
+          sessionA.sessionId,
+          {
+            name: "Catalog Tenant A",
+            slug: `catalog-a-${randomUUID()}`,
+          },
+        );
+        const orgB = await organizations.create(
+          ownerB.userId,
+          sessionB.sessionId,
+          {
+            name: "Catalog Tenant B",
+            slug: `catalog-b-${randomUUID()}`,
+          },
+        );
+        organizationIds.push(orgA.organization.id, orgB.organization.id);
+        const contextA = {
+          organizationId: orgA.organization.id,
+          membershipId: randomUUID(),
+          userId: ownerA.userId,
+          role: "OWNER",
+        };
+        const contextB = {
+          organizationId: orgB.organization.id,
+          membershipId: randomUUID(),
+          userId: ownerB.userId,
+          role: "OWNER",
+        };
+        const catalog = new CatalogService(prisma);
+        const parent = await catalog.createCategory(contextA, ownerA.userId, {
+          name: "Beverages",
+        });
+        const child = await catalog.createCategory(contextA, ownerA.userId, {
+          name: "Tea",
+          parentId: parent.id,
+        });
+        const foreign = await catalog.createCategory(contextB, ownerB.userId, {
+          name: "Foreign parent",
+        });
+        assert.equal(child.parentId, parent.id);
+        await assert.rejects(
+          catalog.createCategory(contextA, ownerA.userId, {
+            name: "Cross tenant child",
+            parentId: foreign.id,
+          }),
+          (error) => error.getStatus() === 404,
+        );
+        await assert.rejects(
+          prisma.category.create({
+            data: {
+              organizationId: orgA.organization.id,
+              name: `Constraint ${randomUUID()}`,
+              parentId: foreign.id,
+            },
+          }),
+          (error) => error.code === "P2003",
+        );
+        const unit = await catalog.createUnit(contextA, ownerA.userId, {
+          code: " pcs ",
+          name: "Pieces",
+          precision: 0,
+        });
+        const otherTenantUnit = await catalog.createUnit(
+          contextB,
+          ownerB.userId,
+          {
+            code: "PCS",
+            name: "Pieces",
+            precision: 0,
+          },
+        );
+        assert.equal(unit.code, "PCS");
+        assert.notEqual(unit.organizationId, otherTenantUnit.organizationId);
+        const listed = await catalog.listUnits(contextA, {
+          page: 1,
+          page_size: 10,
+        });
+        assert.equal(listed.total, 1);
+        assert.equal(listed.data[0].id, unit.id);
       },
     );
   },

@@ -40,6 +40,16 @@ enum BranchStatus {
   ARCHIVED
 }
 
+enum CatalogStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ProductType {
+  STOCKED
+  NON_STOCK
+}
+
 model User {
   id                  String                   @id @default(uuid()) @db.Uuid
   email               String                   @unique @db.VarChar(320)
@@ -71,6 +81,9 @@ model Organization {
   warehouses  Warehouse[]
   branches    Branch[]
   auditEvents AuditEvent[]
+  categories  Category[]
+  units       Unit[]
+  products    Product[]
 
   @@map("organizations")
 }
@@ -128,6 +141,91 @@ model Branch {
   @@unique([organizationId, name])
   @@index([organizationId, status, name])
   @@map("branches")
+}
+
+model Category {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  parentId       String?       @map("parent_id") @db.Uuid
+  name           String        @db.VarChar(120)
+  status         CatalogStatus @default(ACTIVE)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent         Category?     @relation("CategoryTree", fields: [organizationId, parentId], references: [organizationId, id], onDelete: Restrict)
+  children       Category[]    @relation("CategoryTree")
+  products       Product[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, name])
+  @@index([organizationId, parentId, status, name])
+  @@map("categories")
+}
+
+model Unit {
+  id              String                  @id @default(uuid()) @db.Uuid
+  organizationId  String                  @map("organization_id") @db.Uuid
+  code            String                  @db.VarChar(24)
+  name            String                  @db.VarChar(80)
+  precision       Int                     @default(0) @db.SmallInt
+  status          CatalogStatus           @default(ACTIVE)
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization    Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  baseForProducts Product[]               @relation("ProductBaseUnit")
+  conversions     ProductUnitConversion[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, code])
+  @@index([organizationId, status, name])
+  @@map("units")
+}
+
+model Product {
+  id                String                  @id @default(uuid()) @db.Uuid
+  organizationId    String                  @map("organization_id") @db.Uuid
+  name              String                  @db.VarChar(180)
+  sku               String                  @db.VarChar(80)
+  skuNormalized     String                  @map("sku_normalized") @db.VarChar(80)
+  barcode           String?                 @db.VarChar(100)
+  barcodeNormalized String?                 @map("barcode_normalized") @db.VarChar(100)
+  description       String?                 @db.VarChar(2000)
+  type              ProductType             @default(STOCKED)
+  categoryId        String?                 @map("category_id") @db.Uuid
+  baseUnitId        String                  @map("base_unit_id") @db.Uuid
+  trackInventory    Boolean                 @default(true) @map("track_inventory")
+  defaultCost       Decimal?                @map("default_cost") @db.Decimal(20, 4)
+  costCurrency      String?                 @map("cost_currency") @db.Char(3)
+  defaultSalePrice  Decimal?                @map("default_sale_price") @db.Decimal(20, 4)
+  saleCurrency      String?                 @map("sale_currency") @db.Char(3)
+  status            CatalogStatus           @default(ACTIVE)
+  createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization      Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category          Category?               @relation(fields: [organizationId, categoryId], references: [organizationId, id], onDelete: Restrict)
+  baseUnit          Unit                    @relation("ProductBaseUnit", fields: [organizationId, baseUnitId], references: [organizationId, id], onDelete: Restrict)
+  unitConversions   ProductUnitConversion[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, skuNormalized])
+  @@unique([organizationId, barcodeNormalized])
+  @@index([organizationId, status, name])
+  @@index([organizationId, categoryId, status])
+  @@index([organizationId, type, status])
+  @@map("products")
+}
+
+model ProductUnitConversion {
+  organizationId String  @map("organization_id") @db.Uuid
+  productId      String  @map("product_id") @db.Uuid
+  unitId         String  @map("unit_id") @db.Uuid
+  baseQuantity   Decimal @map("base_quantity") @db.Decimal(20, 6)
+  product        Product @relation(fields: [organizationId, productId], references: [organizationId, id], onDelete: Cascade)
+  unit           Unit    @relation(fields: [organizationId, unitId], references: [organizationId, id], onDelete: Restrict)
+
+  @@id([organizationId, productId, unitId])
+  @@index([organizationId, unitId])
+  @@map("product_unit_conversions")
 }
 
 model AuditEvent {

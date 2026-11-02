@@ -261,246 +261,289 @@ function OrganizationManager() {
   }
 
   return (
-    <main className="auth-page">
-      <section className="auth-card" aria-labelledby="org-title">
+    <main className="auth-page organization-page">
+      <section
+        className="auth-card organization-card"
+        aria-labelledby="org-title"
+      >
         <Link href="/" className="text-button">
           ← Dashboard
         </Link>
         <p className="eyebrow">WORKSPACE SETTINGS</p>
         <h1 id="org-title">Organizations</h1>
-        <p>
+        <p className="organization-description">
           Manage the organizations connected to your account. Organization data
           is scoped to active membership.
         </p>
         {message && <p role="status">{message}</p>}
         {error && <p role="alert">{error}</p>}
-        <h2>Choose an organization</h2>
-        {organizations.length === 0 ? (
-          <p>You are not a member of an organization yet.</p>
-        ) : (
-          <ul>
-            {organizations.map(
-              (item: Membership["organization"] & { role?: string }) => (
-                <li key={item.id}>
-                  <strong>{item.name}</strong>{" "}
-                  <span>({item.role ?? "MEMBER"})</span>
-                  {organization?.id === item.id ? (
-                    <span> · Active</span>
-                  ) : (
-                    <button
-                      className="text-button"
-                      disabled={busy}
-                      onClick={() => void select(item.id)}
-                      type="button"
-                    >
-                      Select
-                    </button>
-                  )}
-                </li>
-              ),
-            )}
-          </ul>
-        )}
-        <h2>Create an organization</h2>
-        <form className="auth-form" onSubmit={(event) => void create(event)}>
-          <label htmlFor="org-name">Organization name</label>
-          <input
-            id="org-name"
-            autoComplete="organization"
-            minLength={2}
-            maxLength={160}
-            required
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-          <label htmlFor="org-slug">
-            URL slug <span>(optional)</span>
-          </label>
-          <input
-            id="org-slug"
-            pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-            maxLength={80}
-            value={slug}
-            onChange={(event) => setSlug(event.target.value)}
-          />
-          <button className="primary-button" disabled={busy} type="submit">
-            {busy ? "Please wait…" : "Create organization"}
-          </button>
-        </form>
-        <p>
-          <Link href="/locations">Manage branches and warehouses</Link>
-        </p>
-        <p>
-          <Link href="/organizations/accept-invitation">
-            Accept an invitation
-          </Link>{" "}
-          if you have an invitation token.
-        </p>
-        {organization && (
-          <>
-            <h2>Members</h2>
-            <ul>
-              {members.map((member) => (
-                <li key={member.id}>
-                  <strong>{member.user.email}</strong> · {member.role} ·{" "}
-                  {member.status}
-                  {(organization.role === "OWNER" ||
-                    organization.role === "ADMIN") &&
-                    member.role !== "OWNER" &&
-                    member.status === "ACTIVE" && (
-                      <div className="auth-form">
-                        <label htmlFor={`role-${member.id}`}>Role</label>
-                        <select
-                          id={`role-${member.id}`}
-                          value={memberRolesById[member.id] ?? member.role}
-                          onChange={(event) =>
-                            setMemberRolesById((current) => ({
-                              ...current,
-                              [member.id]: event.target.value,
-                            }))
-                          }
-                        >
-                          {memberRoles
-                            .filter(
-                              (role) =>
-                                organization.role === "OWNER" ||
-                                (role !== "ADMIN" && role !== "MANAGER"),
-                            )
-                            .map((role) => (
-                              <option key={role} value={role}>
-                                {role.replaceAll("_", " ")}
-                              </option>
-                            ))}
-                        </select>
-                        <button
-                          className="text-button"
-                          disabled={
-                            busy || memberRolesById[member.id] === member.role
-                          }
-                          onClick={() => void updateRole(member.id)}
-                          type="button"
-                        >
-                          Save role
-                        </button>
-                        <fieldset>
-                          <legend>Warehouse access</legend>
-                          {warehouses.length === 0 ? (
-                            <p>
-                              Create a warehouse in Locations to assign access.
-                            </p>
-                          ) : (
-                            warehouses.map((warehouse) => (
-                              <label key={warehouse.id}>
-                                <input
-                                  type="checkbox"
-                                  checked={(
-                                    warehouseGrants[member.id] ?? []
-                                  ).includes(warehouse.id)}
-                                  onChange={(event) =>
-                                    setWarehouseGrants((current) => ({
-                                      ...current,
-                                      [member.id]: event.target.checked
-                                        ? [
-                                            ...(current[member.id] ?? []),
-                                            warehouse.id,
-                                          ]
-                                        : (current[member.id] ?? []).filter(
-                                            (id) => id !== warehouse.id,
-                                          ),
-                                    }))
-                                  }
-                                />
-                                {warehouse.name} ({warehouse.code})
-                              </label>
-                            ))
-                          )}
-                          {warehouses.length > 0 && (
-                            <button
-                              className="text-button"
-                              disabled={busy}
-                              onClick={() =>
-                                void saveWarehouseGrants(member.id)
-                              }
-                              type="button"
-                            >
-                              Save access
-                            </button>
-                          )}
-                        </fieldset>
-                      </div>
-                    )}
-                  {member.role !== "OWNER" && member.status === "ACTIVE" && (
-                    <button
-                      className="text-button"
-                      disabled={busy}
-                      onClick={() => void deactivate(member.id)}
-                      type="button"
-                    >
-                      Deactivate
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-            {(organization.role === "OWNER" ||
-              organization.role === "ADMIN") && (
-              <>
-                <h2>Invite a member</h2>
-                <form
-                  className="auth-form"
-                  onSubmit={(event) => void invite(event)}
-                >
-                  <label htmlFor="invite-email">Email address</label>
-                  <input
-                    id="invite-email"
-                    type="email"
-                    required
-                    value={inviteEmail}
-                    onChange={(event) => setInviteEmail(event.target.value)}
-                  />
-                  <label htmlFor="invite-role">Role</label>
-                  <select
-                    id="invite-role"
-                    value={inviteRole}
-                    onChange={(event) => setInviteRole(event.target.value)}
-                  >
-                    {memberRoles
-                      .filter(
-                        (role) =>
-                          organization.role === "OWNER" ||
-                          (role !== "ADMIN" && role !== "MANAGER"),
-                      )
-                      .map((role) => (
-                        <option key={role} value={role}>
-                          {role.replaceAll("_", " ")}
-                        </option>
-                      ))}
-                  </select>
-                  <button
-                    className="primary-button"
-                    disabled={busy}
-                    type="submit"
-                  >
-                    Send invitation
-                  </button>
-                </form>
-                <h2>Pending invitations</h2>
-                <ul>
-                  {invitations.map((invitation) => (
-                    <li key={invitation.id}>
-                      {invitation.emailNormalized} · {invitation.role} · expires{" "}
-                      {new Date(invitation.expiresAt).toLocaleDateString()}{" "}
+        <section
+          className="organization-section"
+          aria-labelledby="choose-org-title"
+        >
+          <h2 id="choose-org-title">Choose an organization</h2>
+          {organizations.length === 0 ? (
+            <p>You are not a member of an organization yet.</p>
+          ) : (
+            <ul className="organization-list">
+              {organizations.map(
+                (item: Membership["organization"] & { role?: string }) => (
+                  <li key={item.id}>
+                    <span className="organization-list-info">
+                      <strong>{item.name}</strong>
+                      <span className="organization-role">
+                        {item.role ?? "MEMBER"}
+                      </span>
+                    </span>
+                    {organization?.id === item.id ? (
+                      <span className="organization-active">Active</span>
+                    ) : (
                       <button
                         className="text-button"
                         disabled={busy}
-                        onClick={() => void revoke(invitation.id)}
+                        onClick={() => void select(item.id)}
                         type="button"
                       >
-                        Revoke
+                        Select
                       </button>
-                    </li>
-                  ))}
-                </ul>
+                    )}
+                  </li>
+                ),
+              )}
+            </ul>
+          )}
+        </section>
+        <section
+          className="organization-section"
+          aria-labelledby="create-org-title"
+        >
+          <h2 id="create-org-title">Create an organization</h2>
+          <form
+            className="organization-form"
+            onSubmit={(event) => void create(event)}
+          >
+            <label htmlFor="org-name">
+              Organization name
+              <input
+                id="org-name"
+                autoComplete="organization"
+                minLength={2}
+                maxLength={160}
+                required
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </label>
+            <label htmlFor="org-slug">
+              URL slug <span>(optional)</span>
+              <input
+                id="org-slug"
+                pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+                maxLength={80}
+                value={slug}
+                onChange={(event) => setSlug(event.target.value)}
+              />
+            </label>
+            <button className="primary-button" disabled={busy} type="submit">
+              {busy ? "Please wait…" : "Create organization"}
+            </button>
+          </form>
+          <p className="organization-help-links">
+            <Link href="/locations">Manage branches and warehouses</Link>
+          </p>
+          <p className="organization-help-links">
+            <Link href="/organizations/accept-invitation">
+              Accept an invitation
+            </Link>{" "}
+            if you have an invitation token.
+          </p>
+        </section>
+        {organization && (
+          <>
+            <section
+              className="organization-section"
+              aria-labelledby="members-title"
+            >
+              <h2 id="members-title">Members</h2>
+              <ul className="organization-list organization-members">
+                {members.map((member) => (
+                  <li key={member.id}>
+                    <strong>{member.user.email}</strong> · {member.role} ·{" "}
+                    {member.status}
+                    {(organization.role === "OWNER" ||
+                      organization.role === "ADMIN") &&
+                      member.role !== "OWNER" &&
+                      member.status === "ACTIVE" && (
+                        <div className="organization-member-controls">
+                          <label htmlFor={`role-${member.id}`}>Role</label>
+                          <select
+                            id={`role-${member.id}`}
+                            value={memberRolesById[member.id] ?? member.role}
+                            onChange={(event) =>
+                              setMemberRolesById((current) => ({
+                                ...current,
+                                [member.id]: event.target.value,
+                              }))
+                            }
+                          >
+                            {memberRoles
+                              .filter(
+                                (role) =>
+                                  organization.role === "OWNER" ||
+                                  (role !== "ADMIN" && role !== "MANAGER"),
+                              )
+                              .map((role) => (
+                                <option key={role} value={role}>
+                                  {role.replaceAll("_", " ")}
+                                </option>
+                              ))}
+                          </select>
+                          <button
+                            className="text-button"
+                            disabled={
+                              busy || memberRolesById[member.id] === member.role
+                            }
+                            onClick={() => void updateRole(member.id)}
+                            type="button"
+                          >
+                            Save role
+                          </button>
+                          <fieldset>
+                            <legend>Warehouse access</legend>
+                            {warehouses.length === 0 ? (
+                              <p>
+                                Create a warehouse in Locations to assign
+                                access.
+                              </p>
+                            ) : (
+                              warehouses.map((warehouse) => (
+                                <label key={warehouse.id}>
+                                  <input
+                                    type="checkbox"
+                                    checked={(
+                                      warehouseGrants[member.id] ?? []
+                                    ).includes(warehouse.id)}
+                                    onChange={(event) =>
+                                      setWarehouseGrants((current) => ({
+                                        ...current,
+                                        [member.id]: event.target.checked
+                                          ? [
+                                              ...(current[member.id] ?? []),
+                                              warehouse.id,
+                                            ]
+                                          : (current[member.id] ?? []).filter(
+                                              (id) => id !== warehouse.id,
+                                            ),
+                                      }))
+                                    }
+                                  />
+                                  {warehouse.name} ({warehouse.code})
+                                </label>
+                              ))
+                            )}
+                            {warehouses.length > 0 && (
+                              <button
+                                className="text-button"
+                                disabled={busy}
+                                onClick={() =>
+                                  void saveWarehouseGrants(member.id)
+                                }
+                                type="button"
+                              >
+                                Save access
+                              </button>
+                            )}
+                          </fieldset>
+                        </div>
+                      )}
+                    {member.role !== "OWNER" && member.status === "ACTIVE" && (
+                      <button
+                        className="text-button"
+                        disabled={busy}
+                        onClick={() => void deactivate(member.id)}
+                        type="button"
+                      >
+                        Deactivate
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+            {(organization.role === "OWNER" ||
+              organization.role === "ADMIN") && (
+              <>
+                <section
+                  className="organization-section"
+                  aria-labelledby="invite-title"
+                >
+                  <h2 id="invite-title">Invite a member</h2>
+                  <form
+                    className="organization-form organization-invite-form"
+                    onSubmit={(event) => void invite(event)}
+                  >
+                    <label htmlFor="invite-email">
+                      Email address
+                      <input
+                        id="invite-email"
+                        type="email"
+                        required
+                        value={inviteEmail}
+                        onChange={(event) => setInviteEmail(event.target.value)}
+                      />
+                    </label>
+                    <label htmlFor="invite-role">
+                      Role
+                      <select
+                        id="invite-role"
+                        value={inviteRole}
+                        onChange={(event) => setInviteRole(event.target.value)}
+                      >
+                        {memberRoles
+                          .filter(
+                            (role) =>
+                              organization.role === "OWNER" ||
+                              (role !== "ADMIN" && role !== "MANAGER"),
+                          )
+                          .map((role) => (
+                            <option key={role} value={role}>
+                              {role.replaceAll("_", " ")}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                    <button
+                      className="primary-button"
+                      disabled={busy}
+                      type="submit"
+                    >
+                      Send invitation
+                    </button>
+                  </form>
+                </section>
+                <section
+                  className="organization-section"
+                  aria-labelledby="pending-title"
+                >
+                  <h2 id="pending-title">Pending invitations</h2>
+                  <ul className="organization-list">
+                    {invitations.map((invitation) => (
+                      <li key={invitation.id}>
+                        {invitation.emailNormalized} · {invitation.role} ·
+                        expires{" "}
+                        {new Date(invitation.expiresAt).toLocaleDateString()}{" "}
+                        <button
+                          className="text-button"
+                          disabled={busy}
+                          onClick={() => void revoke(invitation.id)}
+                          type="button"
+                        >
+                          Revoke
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               </>
             )}
           </>

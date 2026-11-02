@@ -1,13 +1,23 @@
 # Next session handoff
 
-## Checkpoint (2026-11-01, Africa/Lagos)
+## Checkpoint (2026-11-02, Africa/Lagos)
 
-Workspace `/Users/newuser/Documents/GitHub/inventory`, branch `develop`, HEAD `c415989 organisation flow`. Roadmap is **11/47**; FOUNDATION-009 is complete. Worktree has uncommitted source, test, generated, and documentation changes. Preserve all existing changes; do not stage `.env` or secrets.
+Workspace `/Users/newuser/Documents/GitHub/inventory`, branch `develop`, HEAD `7d86388 update the latest update`. Roadmap is **12/47**; FOUNDATION-009 and ARCH-001 are complete; Phase 5 INV-001 and INV-002 are in progress. Worktree has uncommitted source, test, generated, migration, and documentation changes. Preserve all existing changes; do not stage `.env` or secrets.
 
 ## Completed this session
 
+- Verified FOUNDATION-009 is complete against its migration and PostgreSQL evidence. Added the ARCH-001 inventory state/rollback contract and scenario matrix; marked it complete for provisional implementation, not business/accounting validation.
+- Began INV-001: added Prisma Category/Unit tables and `20261102082437_catalog_units_categories` migration (applied, no reset), tenant-scoped category/unit list/create endpoints, DTO validation, role-capability authorization, audit writes, existing catalog unit tests, and a responsive `/catalog` UI with create/list forms and role-aware controls.
+- Earlier checks: Prisma validate and `npm test` **32 passed, 0 failed, 1 opt-in PostgreSQL suite skipped**. After catalog API/schema changes: Prisma validate/generate, typecheck, lint, format check, production build, and `git diff --check` passed; Next build included a TypeScript check. No automated tests were run after these changes per the accelerated-development instruction. Added a catalog PostgreSQL integration subtest, but running the opt-in suite was blocked (database unavailable in sandbox; elevated rerun rejected). Do not claim that suite passed.
+- `npm run db:migrate:dev --workspace=@inventory/api -- --name catalog_units_categories` applied migration successfully to existing `inventory_dev` without reset/deletion. No API runtime health check after the test build; a current readiness request was refused on port 4000, while Docker state could not be inspected from the restricted shell.
+- At the previous checkpoint, INV-001 was awaiting product-specific UoM conversion. That schema and create endpoint are now present; conversion listing and database verification remain pending. The `/catalog` screen is build-verified but not smoke-tested against a running API.
+
+- Continued INV-001/INV-002: added Product and ProductUnitConversion Prisma models with tenant-composite references, normalized SKU/barcode uniqueness, Decimal prices/cost fields, and migration `20261102113000_products_and_unit_conversions` (created, not applied). Added tenant-scoped product list/create and per-product conversion-create routes, input validation, capability checks, active same-tenant category/base-unit references, and transactional audit entries. `npx prisma validate`, Prisma client generation, `npm run typecheck`, `npm run lint`, and `npm run format:check` passed. No tests run per attached acceleration prompt. Browser/API remains unavailable: `/catalog` redirected to login when auth refresh could not reach API; do not claim UI workflow.
+- Current files include `apps/api/prisma/schema.prisma`, new product migration, `apps/api/src/catalog/*`, catalog UI/styles, progress docs, and existing unrelated modified files. No commit created because worktree contains mixed pre-existing changes; preserve and review before staging.
+
 - Started/verified Docker Compose PostgreSQL, Redis and S3Mock. All three containers reported healthy; PostgreSQL is reachable at `localhost:5433`.
 - Applied migration `20261101150000_branches_and_location_audit` to `inventory_dev` without reset/deletion. PostgreSQL integration suite passed **9/9**.
+- Fixed the Organizations settings page UI after the Chrome screenshot showed the narrow auth-card layout was squeezing lists and forms. Added responsive page-specific layout, section hierarchy, organization cards, and grouped fields in `apps/web/src/app/organizations/page.tsx` and `apps/web/src/app/globals.css`; inspected the signed-in result in Chrome. Typecheck, lint, format check, and `git diff --check` passed. This is a UI quality fix, not a new roadmap task; roadmap stays 11/47.
 - Fixed owner controls disappearing on the locations page after reload: `SessionProvider.loadUser` now restores the selected organization’s role from its membership record. Added responsive locations-page layout styles after Chrome inspection exposed cramped search/create forms.
 - Created and verified local account `inventory.owner.20261101@example.test`, created and selected `Local Demo Workspace`, and tested branch `Main Branch` and warehouse `Main Warehouse` (`MAIN-01`) through Chrome. The selected organization and data persisted after reload. The account password is in the chat response, not in repository docs.
 - Checks passed: env validation, Prisma validation, migration deploy, typecheck, lint, format check, production build; `npm test` passed 27 with 1 opt-in DB suite skipped (then the DB suite passed separately 9/9). Direct and proxied API readiness returned 200; frontend login returned 200.
@@ -15,8 +25,9 @@ Workspace `/Users/newuser/Documents/GitHub/inventory`, branch `develop`, HEAD `c
 
 ## Exact next steps
 
-1. Review `git status --short --branch` and diffs. Preserve generated `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo`; no commit or push has been made for this session.
-2. Continue with ARCH-001: document transaction and inventory invariants using provisional DEC-007 defaults, and keep unvalidated business assumptions clearly labeled. Do not start ledger implementation until its acceptance gate is met.
-3. Progress PROD-002 and ARCH-002 decisions as required before customer commitments or changing security boundaries. INV-001 still depends on ARCH-001.
+1. Review `git status --short --branch` and diffs for all UI/session, architecture, and catalog changes. Preserve generated `apps/web/next-env.d.ts`, `apps/web/tsconfig.tsbuildinfo`, and generated Prisma client; no commit or push has been made.
+2. Check database/API/Docker availability. If PostgreSQL is available, apply only the additive migration `20261102113000_products_and_unit_conversions` with the documented migration command (never reset/delete), then verify migrations and API behavior. Database and browser auth are currently unavailable; migration remains unapplied.
+3. Continue INV-001/INV-002: implement conversion list/read behavior, product edit/archive lifecycle, then add product catalog UI and conversion controls. Keep both tasks IN_PROGRESS; no task count change. Automated tests are deferred by the current acceleration instruction, but record that accurately and do not claim acceptance verified.
+3. Continue PROD-002 and ARCH-002 open decisions before customer commitments or security-boundary changes.
 4. Keep production email, distributed rate limiting, and automated browser E2E tracked. Manual Chrome flow passed, but no automated browser suite was run.
 5. After future app changes, run task-relevant checks and update the roadmap plus current-state, next-session, blockers, pending/completed tasks, and session log. Do not store account password or verification token in docs.

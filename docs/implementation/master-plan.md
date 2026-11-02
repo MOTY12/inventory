@@ -1,7 +1,7 @@
 # Master implementation plan
 
 ## Current phase
-**Phase 0 Research + Phase 1 Product/Phase 2 Architecture planning — CLOSED FOR IMPLEMENTATION START by owner direction on 2026-10-31.** REA public-page inspection remains unavailable as documented. Target-user interviews are deferred to pilot validation; no interview findings are claimed. Open product/security/accounting decisions remain explicit gates for domain-specific implementation, but do not block isolated workspace and infrastructure foundation tasks.
+**Phase 5 Catalog — INV-001 and INV-002 IN_PROGRESS (2026-11-02).** Unit/category setup UI and API are underway; product and per-product conversion schema plus initial tenant-scoped APIs are implemented, with the product migration unapplied and product UI/lifecycle incomplete. Research/product/architecture planning was closed for implementation start by owner direction on 2026-10-31. ARCH-001 inventory transition semantics are documented for provisional core implementation. PROD-002 and ARCH-002 release/security decisions remain open. REA public-page inspection remains unavailable as documented. Target-user interviews are deferred to pilot validation; no interview findings are claimed. Open product/security/accounting decisions remain explicit gates for domain-specific implementation, but do not block isolated workspace and infrastructure foundation tasks.
 
 ## Phases
 0. Research: inspect REA docs/capabilities; review public official inFlow sources; distinguish verified/documented/inferred/unknown. (Draft complete; some direct UI research remains unknown.)
