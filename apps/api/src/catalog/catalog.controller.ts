@@ -4,6 +4,8 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
+  ParseUUIDPipe,
   Post,
   Param,
   Query,
@@ -26,6 +28,7 @@ import {
   CreateProductConversionDto,
   CreateProductDto,
   CreateUnitDto,
+  UpdateProductDto,
 } from "./catalog.dto";
 import { CatalogService } from "./catalog.service";
 
@@ -61,12 +64,65 @@ export class CatalogController {
     );
   }
 
+  @Get("products/:productId")
+  @RequireCapabilities("catalog:read")
+  @ApiOperation({ summary: "Get product details and unit conversions" })
+  getProduct(
+    @Param("productId", new ParseUUIDPipe()) productId: string,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.catalog.getProduct(request.organization!, productId);
+  }
+
+  @Patch("products/:productId")
+  @RequireCapabilities("catalog:write")
+  @ApiOperation({ summary: "Update a product in the active organization" })
+  updateProduct(
+    @Param("productId", new ParseUUIDPipe()) productId: string,
+    @Body() input: UpdateProductDto,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.catalog.updateProduct(
+      request.organization!,
+      request.auth!.sub,
+      productId,
+      input,
+    );
+  }
+
+  @Patch("products/:productId/archive")
+  @RequireCapabilities("catalog:write")
+  @ApiOperation({ summary: "Archive a product in the active organization" })
+  archiveProduct(
+    @Param("productId", new ParseUUIDPipe()) productId: string,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.catalog.archiveProduct(
+      request.organization!,
+      request.auth!.sub,
+      productId,
+    );
+  }
+
+  @Get("products/:productId/unit-conversions")
+  @RequireCapabilities("catalog:read")
+  @ApiOperation({ summary: "List unit conversions for a product" })
+  listProductConversions(
+    @Param("productId", new ParseUUIDPipe()) productId: string,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.catalog.listProductConversions(
+      request.organization!,
+      productId,
+    );
+  }
+
   @Post("products/:productId/unit-conversions")
   @HttpCode(HttpStatus.CREATED)
   @RequireCapabilities("catalog:write")
   @ApiOperation({ summary: "Add a product-specific unit conversion" })
   addProductConversion(
-    @Param("productId") productId: string,
+    @Param("productId", new ParseUUIDPipe()) productId: string,
     @Body() input: CreateProductConversionDto,
     @Req() request: OrganizationRequest,
   ) {

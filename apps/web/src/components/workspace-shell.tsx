@@ -7,6 +7,8 @@ import { useSession } from "../features/auth/session-provider";
 const navigation = [
   { href: "#overview", label: "Overview", icon: "⌂" },
   { href: "/catalog", label: "Catalog setup", icon: "▧" },
+  { href: "/products", label: "Products", icon: "◫" },
+  { href: "/products", label: "Products", icon: "◫" },
   { href: "#inventory", label: "Inventory", icon: "▦" },
   { href: "#purchasing", label: "Purchasing", icon: "⇣" },
   { href: "#sales", label: "Sales", icon: "⇡" },

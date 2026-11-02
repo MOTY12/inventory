@@ -50,6 +50,21 @@ enum ProductType {
   NON_STOCK
 }
 
+enum StockMovementType {
+  OPENING_BALANCE
+  RECEIPT
+  SALE_FULFILLMENT
+  TRANSFER_OUT
+  TRANSFER_IN
+  ADJUSTMENT
+  REVERSAL
+}
+
+enum IdempotencyStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
 model User {
   id                  String                   @id @default(uuid()) @db.Uuid
   email               String                   @unique @db.VarChar(320)
@@ -70,20 +85,24 @@ model User {
 }
 
 model Organization {
-  id          String                   @id @default(uuid()) @db.Uuid
-  name        String                   @db.VarChar(160)
-  slug        String                   @unique @db.VarChar(80)
-  createdAt   DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
-  memberships Membership[]
-  invitations OrganizationInvitation[]
-  sessions    RefreshSession[]
-  warehouses  Warehouse[]
-  branches    Branch[]
-  auditEvents AuditEvent[]
-  categories  Category[]
-  units       Unit[]
-  products    Product[]
+  id                 String                   @id @default(uuid()) @db.Uuid
+  name               String                   @db.VarChar(160)
+  slug               String                   @unique @db.VarChar(80)
+  createdAt          DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  memberships        Membership[]
+  invitations        OrganizationInvitation[]
+  sessions           RefreshSession[]
+  warehouses         Warehouse[]
+  branches           Branch[]
+  auditEvents        AuditEvent[]
+  categories         Category[]
+  units              Unit[]
+  products           Product[]
+  stockMovements     StockMovement[]
+  inventoryBalances  InventoryBalance[]
+  idempotencyRecords IdempotencyRecord[]
+  outboxEvents       OutboxEvent[]
 
   @@map("organizations")
 }
@@ -99,6 +118,7 @@ model Membership {
   organization    Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user            User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
   warehouseGrants MembershipWarehouseGrant[]
+  stockMovements  StockMovement[]
 
   @@unique([organizationId, userId])
   @@index([userId, status])
@@ -107,17 +127,19 @@ model Membership {
 }
 
 model Warehouse {
-  id             String                     @id @default(uuid()) @db.Uuid
-  organizationId String                     @map("organization_id") @db.Uuid
-  branchId       String?                    @map("branch_id") @db.Uuid
-  name           String                     @db.VarChar(160)
-  code           String                     @db.VarChar(40)
-  status         WarehouseStatus            @default(ACTIVE)
-  createdAt      DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
-  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  branch         Branch?                    @relation(fields: [organizationId, branchId], references: [organizationId, id], onDelete: Restrict)
-  grants         MembershipWarehouseGrant[]
+  id                String                     @id @default(uuid()) @db.Uuid
+  organizationId    String                     @map("organization_id") @db.Uuid
+  branchId          String?                    @map("branch_id") @db.Uuid
+  name              String                     @db.VarChar(160)
+  code              String                     @db.VarChar(40)
+  status            WarehouseStatus            @default(ACTIVE)
+  createdAt         DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization      Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch            Branch?                    @relation(fields: [organizationId, branchId], references: [organizationId, id], onDelete: Restrict)
+  grants            MembershipWarehouseGrant[]
+  stockMovements    StockMovement[]
+  inventoryBalances InventoryBalance[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -205,6 +227,8 @@ model Product {
   category          Category?               @relation(fields: [organizationId, categoryId], references: [organizationId, id], onDelete: Restrict)
   baseUnit          Unit                    @relation("ProductBaseUnit", fields: [organizationId, baseUnitId], references: [organizationId, id], onDelete: Restrict)
   unitConversions   ProductUnitConversion[]
+  stockMovements    StockMovement[]
+  inventoryBalances InventoryBalance[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, skuNormalized])
@@ -226,6 +250,93 @@ model ProductUnitConversion {
   @@id([organizationId, productId, unitId])
   @@index([organizationId, unitId])
   @@map("product_unit_conversions")
+}
+
+model StockMovement {
+  id              String            @id @default(uuid()) @db.Uuid
+  organizationId  String            @map("organization_id") @db.Uuid
+  warehouseId     String            @map("warehouse_id") @db.Uuid
+  productId       String            @map("product_id") @db.Uuid
+  documentType    String            @map("document_type") @db.VarChar(48)
+  documentId      String            @map("document_id") @db.Uuid
+  documentLineId  String?           @map("document_line_id") @db.Uuid
+  movementType    StockMovementType @map("movement_type")
+  quantityDelta   Decimal           @map("quantity_delta") @db.Decimal(20, 6)
+  costPerBaseUnit Decimal?          @map("cost_per_base_unit") @db.Decimal(20, 4)
+  costCurrency    String?           @map("cost_currency") @db.Char(3)
+  occurredAt      DateTime          @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  actorUserId     String            @map("actor_user_id") @db.Uuid
+  reversalOfId    String?           @map("reversal_of_id") @db.Uuid
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  warehouse       Warehouse         @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Restrict)
+  product         Product           @relation(fields: [organizationId, productId], references: [organizationId, id], onDelete: Restrict)
+  actorMembership Membership        @relation(fields: [organizationId, actorUserId], references: [organizationId, userId], onDelete: Restrict)
+  reversalOf      StockMovement?    @relation("MovementReversal", fields: [organizationId, reversalOfId], references: [organizationId, id], onDelete: Restrict)
+  reversals       StockMovement[]   @relation("MovementReversal")
+
+  @@unique([organizationId, id])
+  @@index([organizationId, productId, occurredAt, id])
+  @@index([organizationId, warehouseId, occurredAt, id])
+  @@index([organizationId, documentType, documentId])
+  @@index([organizationId, reversalOfId])
+  @@map("stock_movements")
+}
+
+model InventoryBalance {
+  organizationId String       @map("organization_id") @db.Uuid
+  warehouseId    String       @map("warehouse_id") @db.Uuid
+  productId      String       @map("product_id") @db.Uuid
+  onHand         Decimal      @default(0) @map("on_hand") @db.Decimal(20, 6)
+  reserved       Decimal      @default(0) @db.Decimal(20, 6)
+  inTransit      Decimal      @default(0) @map("in_transit") @db.Decimal(20, 6)
+  averageCost    Decimal?     @map("average_cost") @db.Decimal(20, 4)
+  costCurrency   String?      @map("cost_currency") @db.Char(3)
+  version        Int          @default(0)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  warehouse      Warehouse    @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Restrict)
+  product        Product      @relation(fields: [organizationId, productId], references: [organizationId, id], onDelete: Restrict)
+
+  @@id([organizationId, warehouseId, productId])
+  @@index([organizationId, productId, warehouseId])
+  @@index([organizationId, warehouseId, onHand])
+  @@map("inventory_balances")
+}
+
+model IdempotencyRecord {
+  organizationId String            @map("organization_id") @db.Uuid
+  key            String            @db.VarChar(160)
+  payloadHash    String            @map("payload_hash") @db.Char(64)
+  status         IdempotencyStatus @default(IN_PROGRESS)
+  resultType     String?           @map("result_type") @db.VarChar(48)
+  resultId       String?           @map("result_id") @db.Uuid
+  response       Json?
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  completedAt    DateTime?         @map("completed_at") @db.Timestamptz(3)
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, key])
+  @@index([organizationId, status, createdAt])
+  @@map("idempotency_records")
+}
+
+model OutboxEvent {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  eventType      String       @map("event_type") @db.VarChar(100)
+  aggregateType  String       @map("aggregate_type") @db.VarChar(80)
+  aggregateId    String       @map("aggregate_id") @db.Uuid
+  payload        Json
+  occurredAt     DateTime     @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  publishedAt    DateTime?    @map("published_at") @db.Timestamptz(3)
+  attemptCount   Int          @default(0) @map("attempt_count")
+  lastError      String?      @map("last_error") @db.VarChar(1000)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, publishedAt, occurredAt])
+  @@index([organizationId, aggregateType, aggregateId, occurredAt])
+  @@map("outbox_events")
 }
 
 model AuditEvent {

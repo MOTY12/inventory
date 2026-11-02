@@ -7,6 +7,7 @@ import { AuthModule } from "./identity/auth.module";
 import { OrganizationModule } from "./organizations/organization.module";
 import { LocationsModule } from "./locations/locations.module";
 import { CatalogModule } from "./catalog/catalog.module";
+import { InventoryModule } from "./inventory/inventory.module";
 
 @ApiTags("system")
 @Controller()
@@ -28,6 +29,7 @@ class AppController {
     OrganizationModule,
     LocationsModule,
     CatalogModule,
+    InventoryModule,
   ],
   controllers: [AppController, HealthController],
 })

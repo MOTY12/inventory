@@ -1,8 +1,9 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional, PartialType } from "@nestjs/swagger";
 import { Transform } from "class-transformer";
 import {
   IsIn,
   IsEnum,
+  IsBoolean,
   IsInt,
   IsOptional,
   IsString,
@@ -110,9 +111,38 @@ export class CreateProductDto {
 
   @ApiPropertyOptional({ default: true })
   @IsOptional()
-  @Transform(({ value }) => value === true || value === "true")
+  @Transform(({ value }) =>
+    value === "true" ? true : value === "false" ? false : value,
+  )
+  @IsBoolean()
   trackInventory?: boolean;
+
+  @ApiPropertyOptional({ example: "12.5000" })
+  @IsOptional()
+  @IsString()
+  @Matches(/^(?:0|[1-9]\d{0,15})(?:\.\d{1,4})?$/)
+  defaultCost?: string;
+
+  @ApiPropertyOptional({ example: "NGN", minLength: 3, maxLength: 3 })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Za-z]{3}$/)
+  costCurrency?: string;
+
+  @ApiPropertyOptional({ example: "15.0000" })
+  @IsOptional()
+  @IsString()
+  @Matches(/^(?:0|[1-9]\d{0,15})(?:\.\d{1,4})?$/)
+  defaultSalePrice?: string;
+
+  @ApiPropertyOptional({ example: "NGN", minLength: 3, maxLength: 3 })
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Za-z]{3}$/)
+  saleCurrency?: string;
 }
+
+export class UpdateProductDto extends PartialType(CreateProductDto) {}
 
 export class CreateProductConversionDto {
   @ApiProperty({ format: "uuid" })

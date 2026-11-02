@@ -12,6 +12,7 @@ import {
   CreateProductConversionDto,
   CreateProductDto,
   CreateUnitDto,
+  UpdateProductDto,
 } from "./catalog.dto";
 import { ProductType } from "../generated/prisma/enums";
 
@@ -55,6 +56,195 @@ export class CatalogService {
     return { data, total, page: query.page, page_size: query.page_size };
   }
 
+  async getProduct(context: OrganizationContext, productId: string) {
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, organizationId: context.organizationId },
+      include: {
+        category: { select: { id: true, name: true } },
+        baseUnit: {
+          select: { id: true, code: true, name: true, precision: true },
+        },
+        unitConversions: {
+          include: {
+            unit: {
+              select: { id: true, code: true, name: true, precision: true },
+            },
+          },
+        },
+      },
+    });
+    if (!product) throw new NotFoundException("Product not found");
+    return product;
+  }
+
+  async listProductConversions(
+    context: OrganizationContext,
+    productId: string,
+  ) {
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, organizationId: context.organizationId },
+      select: { id: true },
+    });
+    if (!product) throw new NotFoundException("Product not found");
+    return this.prisma.productUnitConversion.findMany({
+      where: { organizationId: context.organizationId, productId },
+      include: {
+        unit: { select: { id: true, code: true, name: true, precision: true } },
+      },
+      orderBy: { unit: { name: "asc" } },
+    });
+  }
+
+  async updateProduct(
+    context: OrganizationContext,
+    actorUserId: string,
+    productId: string,
+    input: UpdateProductDto,
+  ) {
+    const data: Record<string, unknown> = {};
+    if (input.name !== undefined) data.name = input.name.trim();
+    if (input.sku !== undefined) {
+      data.sku = input.sku.trim();
+      data.skuNormalized = input.sku.trim().toLocaleUpperCase("en-US");
+    }
+    if (input.barcode !== undefined) {
+      const barcode = input.barcode.trim() || null;
+      data.barcode = barcode;
+      data.barcodeNormalized = barcode?.toLocaleUpperCase("en-US") ?? null;
+    }
+    if (input.description !== undefined)
+      data.description = input.description.trim() || null;
+    if (input.type !== undefined) data.type = input.type;
+    if (input.trackInventory !== undefined)
+      data.trackInventory = input.trackInventory;
+    if (input.categoryId !== undefined)
+      data.categoryId = input.categoryId || null;
+    if (input.baseUnitId !== undefined) data.baseUnitId = input.baseUnitId;
+    if (input.defaultCost !== undefined) data.defaultCost = input.defaultCost;
+    if (input.costCurrency !== undefined)
+      data.costCurrency = input.costCurrency.toUpperCase();
+    if (input.defaultSalePrice !== undefined)
+      data.defaultSalePrice = input.defaultSalePrice;
+    if (input.saleCurrency !== undefined)
+      data.saleCurrency = input.saleCurrency.toUpperCase();
+    if (input.defaultCost !== undefined || input.costCurrency !== undefined)
+      validateMoneyPair(input.defaultCost, input.costCurrency, "Cost");
+    if (
+      input.defaultSalePrice !== undefined ||
+      input.saleCurrency !== undefined
+    )
+      validateMoneyPair(
+        input.defaultSalePrice,
+        input.saleCurrency,
+        "Sale price",
+      );
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const existing = await tx.product.findFirst({
+          where: { id: productId, organizationId: context.organizationId },
+          select: {
+            id: true,
+            status: true,
+            type: true,
+            trackInventory: true,
+            baseUnitId: true,
+            _count: { select: { unitConversions: true } },
+          },
+        });
+        if (!existing) throw new NotFoundException("Product not found");
+        if (existing.status !== CatalogStatus.ACTIVE)
+          throw new ConflictException("Archived products cannot be edited");
+        const type = input.type ?? existing.type;
+        const tracks = input.trackInventory ?? existing.trackInventory;
+        if (type === ProductType.NON_STOCK && tracks)
+          throw new ConflictException(
+            "Non-stock products cannot track inventory",
+          );
+        if (input.baseUnitId) {
+          if (
+            input.baseUnitId !== existing.baseUnitId &&
+            existing._count.unitConversions > 0
+          ) {
+            throw new ConflictException(
+              "Remove or recreate product conversions before changing its base unit",
+            );
+          }
+          const unit = await tx.unit.findFirst({
+            where: {
+              id: input.baseUnitId,
+              organizationId: context.organizationId,
+              status: CatalogStatus.ACTIVE,
+            },
+            select: { id: true },
+          });
+          if (!unit) throw new NotFoundException("Base unit not found");
+        }
+        if (input.categoryId) {
+          const category = await tx.category.findFirst({
+            where: {
+              id: input.categoryId,
+              organizationId: context.organizationId,
+              status: CatalogStatus.ACTIVE,
+            },
+            select: { id: true },
+          });
+          if (!category) throw new NotFoundException("Category not found");
+        }
+        const updated = await tx.product.update({
+          where: { id: productId },
+          data,
+          include: { category: true, baseUnit: true },
+        });
+        await tx.auditEvent.create({
+          data: {
+            organizationId: context.organizationId,
+            actorUserId,
+            entityType: "PRODUCT",
+            entityId: productId,
+            action: "UPDATED",
+            metadata: { fields: Object.keys(data) },
+          },
+        });
+        return updated;
+      });
+    } catch (error) {
+      if (isUniqueViolation(error))
+        throw new ConflictException("SKU or barcode already exists");
+      throw error;
+    }
+  }
+
+  async archiveProduct(
+    context: OrganizationContext,
+    actorUserId: string,
+    productId: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const product = await tx.product.findFirst({
+        where: { id: productId, organizationId: context.organizationId },
+        select: { id: true, status: true },
+      });
+      if (!product) throw new NotFoundException("Product not found");
+      if (product.status === CatalogStatus.ARCHIVED) return product;
+      const archived = await tx.product.update({
+        where: { id: productId },
+        data: { status: CatalogStatus.ARCHIVED },
+        select: { id: true, status: true },
+      });
+      await tx.auditEvent.create({
+        data: {
+          organizationId: context.organizationId,
+          actorUserId,
+          entityType: "PRODUCT",
+          entityId: productId,
+          action: "ARCHIVED",
+          metadata: {},
+        },
+      });
+      return archived;
+    });
+  }
+
   async createProduct(
     context: OrganizationContext,
     actorUserId: string,
@@ -62,6 +252,8 @@ export class CatalogService {
   ) {
     const sku = input.sku.trim();
     const barcode = input.barcode?.trim() || null;
+    validateMoneyPair(input.defaultCost, input.costCurrency, "Cost");
+    validateMoneyPair(input.defaultSalePrice, input.saleCurrency, "Sale price");
     try {
       return await this.prisma.$transaction(async (tx) => {
         const unit = await tx.unit.findFirst({
@@ -105,6 +297,10 @@ export class CatalogService {
             trackInventory,
             categoryId: input.categoryId ?? null,
             baseUnitId: input.baseUnitId,
+            defaultCost: input.defaultCost,
+            costCurrency: input.costCurrency?.toUpperCase(),
+            defaultSalePrice: input.defaultSalePrice,
+            saleCurrency: input.saleCurrency?.toUpperCase(),
           },
           include: { category: true, baseUnit: true },
         });
@@ -346,4 +542,16 @@ function isUniqueViolation(error: unknown): boolean {
     "code" in error &&
     error.code === "P2002"
   );
+}
+
+function validateMoneyPair(
+  amount: string | undefined,
+  currency: string | undefined,
+  label: string,
+) {
+  if ((amount === undefined) !== (currency === undefined)) {
+    throw new ConflictException(
+      `${label} and currency must be supplied together`,
+    );
+  }
 }
