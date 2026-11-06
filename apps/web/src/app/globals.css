@@ -1364,13 +1364,105 @@ p {
 }
 .product-editor,
 .product-list-panel,
-.product-detail-card {
+.product-detail-card,
+.inventory-count-list {
   margin: 20px 0;
   padding: 26px;
   border: 1px solid #e2eae4;
   border-radius: 18px;
   background: #fff;
   box-shadow: 0 8px 28px #152d2010;
+}
+
+.inventory-page {
+  width: min(1160px, 100%);
+  margin: 0 auto;
+  padding: 48px 32px 80px;
+  color: #182b22;
+}
+.inventory-count-form,
+.inventory-page > .product-editor > label {
+  display: grid;
+  max-width: 620px;
+  gap: 14px;
+}
+.inventory-count-form label,
+.inventory-page > .product-editor > label {
+  display: grid;
+  gap: 7px;
+  color: #526258;
+  font-size: 13px;
+  font-weight: 650;
+}
+.inventory-count-form input,
+.inventory-count-form select,
+.inventory-count-form textarea,
+.inventory-page > .product-editor > label select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #dce5de;
+  border-radius: 9px;
+  padding: 9px 11px;
+  background: #fff;
+  color: #182b22;
+}
+.inventory-count-form textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+.inventory-count-form button,
+.inventory-count-row button {
+  width: fit-content;
+  border: 0;
+  border-radius: 9px;
+  padding: 11px 15px;
+  background: #1f6249;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.inventory-count-list h2 {
+  margin-top: 0;
+}
+.inventory-count-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 0;
+  border-top: 1px solid #e8ece8;
+}
+.inventory-count-row > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+.inventory-count-row span,
+.inventory-count-row small {
+  color: #64746a;
+}
+.inventory-count-row > div:last-child {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.inventory-status {
+  font-size: 12px;
+  font-weight: 800;
+}
+.inventory-status-posted {
+  color: #1f6249 !important;
+}
+.inventory-count-row button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+@media (max-width: 680px) {
+  .inventory-page {
+    padding: 28px 18px 60px;
+  }
+  .inventory-count-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 .product-form-grid {
   display: grid;

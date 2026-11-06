@@ -65,6 +65,11 @@ enum IdempotencyStatus {
   COMPLETED
 }
 
+enum StockAdjustmentStatus {
+  DRAFT
+  POSTED
+}
+
 model User {
   id                  String                   @id @default(uuid()) @db.Uuid
   email               String                   @unique @db.VarChar(320)
@@ -103,22 +108,24 @@ model Organization {
   inventoryBalances  InventoryBalance[]
   idempotencyRecords IdempotencyRecord[]
   outboxEvents       OutboxEvent[]
+  stockAdjustments   StockAdjustment[]
 
   @@map("organizations")
 }
 
 model Membership {
-  id              String                     @id @default(uuid()) @db.Uuid
-  organizationId  String                     @map("organization_id") @db.Uuid
-  userId          String                     @map("user_id") @db.Uuid
-  role            MembershipRole             @default(MEMBER)
-  status          MembershipStatus           @default(ACTIVE)
-  createdAt       DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
-  organization    Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user            User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  warehouseGrants MembershipWarehouseGrant[]
-  stockMovements  StockMovement[]
+  id               String                     @id @default(uuid()) @db.Uuid
+  organizationId   String                     @map("organization_id") @db.Uuid
+  userId           String                     @map("user_id") @db.Uuid
+  role             MembershipRole             @default(MEMBER)
+  status           MembershipStatus           @default(ACTIVE)
+  createdAt        DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization     Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user             User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  warehouseGrants  MembershipWarehouseGrant[]
+  stockMovements   StockMovement[]
+  stockAdjustments StockAdjustment[]
 
   @@unique([organizationId, userId])
   @@index([userId, status])
@@ -140,6 +147,7 @@ model Warehouse {
   grants            MembershipWarehouseGrant[]
   stockMovements    StockMovement[]
   inventoryBalances InventoryBalance[]
+  stockAdjustments  StockAdjustment[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -229,6 +237,7 @@ model Product {
   unitConversions   ProductUnitConversion[]
   stockMovements    StockMovement[]
   inventoryBalances InventoryBalance[]
+  stockAdjustments  StockAdjustment[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, skuNormalized])
@@ -274,6 +283,7 @@ model StockMovement {
   actorMembership Membership        @relation(fields: [organizationId, actorUserId], references: [organizationId, userId], onDelete: Restrict)
   reversalOf      StockMovement?    @relation("MovementReversal", fields: [organizationId, reversalOfId], references: [organizationId, id], onDelete: Restrict)
   reversals       StockMovement[]   @relation("MovementReversal")
+  adjustment      StockAdjustment?  @relation("AdjustmentMovement")
 
   @@unique([organizationId, id])
   @@index([organizationId, productId, occurredAt, id])
@@ -302,6 +312,33 @@ model InventoryBalance {
   @@index([organizationId, productId, warehouseId])
   @@index([organizationId, warehouseId, onHand])
   @@map("inventory_balances")
+}
+
+model StockAdjustment {
+  id               String                @id @default(uuid()) @db.Uuid
+  organizationId   String                @map("organization_id") @db.Uuid
+  warehouseId      String                @map("warehouse_id") @db.Uuid
+  productId        String                @map("product_id") @db.Uuid
+  reason           String                @db.VarChar(500)
+  systemQuantity   Decimal               @map("system_quantity") @db.Decimal(20, 6)
+  countedQuantity  Decimal               @map("counted_quantity") @db.Decimal(20, 6)
+  status           StockAdjustmentStatus @default(DRAFT)
+  createdByUserId  String                @map("created_by_user_id") @db.Uuid
+  postedMovementId String?               @unique @map("posted_movement_id") @db.Uuid
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  postedAt         DateTime?             @map("posted_at") @db.Timestamptz(3)
+  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  warehouse        Warehouse             @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Restrict)
+  product          Product               @relation(fields: [organizationId, productId], references: [organizationId, id], onDelete: Restrict)
+  createdBy        Membership            @relation(fields: [organizationId, createdByUserId], references: [organizationId, userId], onDelete: Restrict)
+  postedMovement   StockMovement?        @relation("AdjustmentMovement", fields: [organizationId, postedMovementId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, postedMovementId])
+  @@index([organizationId, warehouseId, status, createdAt])
+  @@index([organizationId, productId, createdAt])
+  @@map("stock_adjustments")
 }
 
 model IdempotencyRecord {

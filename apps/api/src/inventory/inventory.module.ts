@@ -8,6 +8,7 @@ import {
 import { InventoryController } from "./inventory.controller";
 import { InventoryReadService } from "./inventory-read.service";
 import { InventoryPostingService } from "./inventory-posting.service";
+import { StockAdjustmentsService } from "./adjustments.service";
 
 @Module({
   imports: [AuthModule],
@@ -15,6 +16,7 @@ import { InventoryPostingService } from "./inventory-posting.service";
   providers: [
     InventoryReadService,
     InventoryPostingService,
+    StockAdjustmentsService,
     OrganizationContextGuard,
     RoleCapabilityGuard,
     WarehouseScopeGuard,

@@ -26,6 +26,8 @@ export type PostWarehouseMovement = {
   reservedDelta?: string;
   costPerBaseUnit?: string;
   costCurrency?: string;
+  adjustmentId?: string;
+  expectedOnHand?: string;
 };
 
 @Injectable()
@@ -113,6 +115,8 @@ export class InventoryPostingService {
       reservedDelta.toFixed(6),
       input.costPerBaseUnit ?? "",
       input.costCurrency ?? "",
+      input.adjustmentId ?? "",
+      input.expectedOnHand ?? "",
     ];
     const payloadHash = createHash("sha256")
       .update(JSON.stringify(hashInput))
@@ -222,6 +226,35 @@ export class InventoryPostingService {
               throw new ConflictException(
                 "Could not lock the inventory balance",
               );
+            if (input.movementType === StockMovementType.ADJUSTMENT) {
+              if (!input.adjustmentId || input.expectedOnHand === undefined)
+                throw new ConflictException(
+                  "Adjustment document and count snapshot are required",
+                );
+              const adjustment = await tx.stockAdjustment.findFirst({
+                where: {
+                  id: input.adjustmentId,
+                  organizationId: context.organizationId,
+                  warehouseId: warehouse.id,
+                  productId: product.id,
+                  status: "DRAFT",
+                },
+              });
+              if (!adjustment)
+                throw new ConflictException("Draft adjustment is unavailable");
+              if (!current.on_hand.equals(input.expectedOnHand))
+                throw new ConflictException(
+                  "Inventory changed after this count was recorded; create a fresh count",
+                );
+              if (
+                !adjustment.countedQuantity
+                  .minus(adjustment.systemQuantity)
+                  .equals(delta)
+              )
+                throw new ConflictException(
+                  "Adjustment quantity does not match its count variance",
+                );
+            }
             const nextOnHand = current.on_hand.plus(delta);
             const nextReserved = current.reserved.plus(reservedDelta);
             if (nextReserved.isNegative() || nextOnHand.lessThan(nextReserved))
@@ -272,6 +305,16 @@ export class InventoryPostingService {
                 actorUserId,
               },
             });
+            if (input.adjustmentId) {
+              await tx.stockAdjustment.update({
+                where: { id: input.adjustmentId },
+                data: {
+                  status: "POSTED",
+                  postedMovementId: movement.id,
+                  postedAt: new Date(),
+                },
+              });
+            }
             await tx.inventoryBalance.update({
               where: {
                 organizationId_warehouseId_productId: {
