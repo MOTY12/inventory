@@ -115,4 +115,19 @@ export class InventoryController {
   ) {
     return this.inventory.reconcile(request.organization!, warehouseId);
   }
+
+  @Get("movements")
+  @RequireCapabilities("inventory:read")
+  @ApiOperation({ summary: "List immutable stock movements for a warehouse" })
+  movements(
+    @Param("warehouseId", new ParseUUIDPipe()) warehouseId: string,
+    @Query() query: PaginationQueryDto,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.inventory.listMovements(
+      request.organization!,
+      warehouseId,
+      query,
+    );
+  }
 }

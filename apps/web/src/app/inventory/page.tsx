@@ -18,6 +18,14 @@ type Adjustment = {
   status: "DRAFT" | "POSTED";
   createdAt: string;
 };
+type Movement = {
+  id: string;
+  movementType: string;
+  quantityDelta: string;
+  documentType: string;
+  occurredAt: string;
+  product: { name: string; sku: string };
+};
 type Page<T> = { data: T[]; total: number };
 
 function subtractQuantities(left: string, right: string): string {
@@ -37,6 +45,7 @@ function InventoryManager() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
+  const [movements, setMovements] = useState<Movement[]>([]);
   const [warehouseId, setWarehouseId] = useState("");
   const [productId, setProductId] = useState("");
   const [countedQuantity, setCountedQuantity] = useState("");
@@ -68,6 +77,15 @@ function InventoryManager() {
           ? (
               await authenticatedRequest<Page<Adjustment>>(
                 `/inventory/warehouses/${selected}/adjustments?page=1&page_size=100`,
+              )
+            ).data
+          : [],
+      );
+      setMovements(
+        selected
+          ? (
+              await authenticatedRequest<Page<Movement>>(
+                `/inventory/warehouses/${selected}/movements?page=1&page_size=50`,
               )
             ).data
           : [],
@@ -266,6 +284,29 @@ function InventoryManager() {
               </article>
             );
           })
+        )}
+      </section>
+      <section className="inventory-count-list">
+        <h2>Stock movement history</h2>
+        {loading ? (
+          <p>Loading movements…</p>
+        ) : movements.length === 0 ? (
+          <p>No stock movements recorded for this warehouse.</p>
+        ) : (
+          movements.map((movement) => (
+            <article className="inventory-count-row" key={movement.id}>
+              <div>
+                <strong>
+                  {movement.product.name} · {movement.product.sku}
+                </strong>
+                <span>
+                  {movement.movementType} · {movement.documentType}
+                </span>
+                <small>{new Date(movement.occurredAt).toLocaleString()}</small>
+              </div>
+              <strong>{movement.quantityDelta}</strong>
+            </article>
+          ))
         )}
       </section>
     </main>

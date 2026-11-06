@@ -37,6 +37,28 @@ export class InventoryReadService {
     return { data, total, page: query.page, page_size: query.page_size };
   }
 
+  async listMovements(
+    context: OrganizationContext,
+    warehouseId: string,
+    query: PaginationQueryDto,
+  ) {
+    const where = { organizationId: context.organizationId, warehouseId };
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.stockMovement.findMany({
+        where,
+        orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+        skip: (query.page - 1) * query.page_size,
+        take: query.page_size,
+        include: {
+          product: { select: { id: true, name: true, sku: true } },
+          actorMembership: { include: { user: { select: { email: true } } } },
+        },
+      }),
+      this.prisma.stockMovement.count({ where }),
+    ]);
+    return { data, total, page: query.page, page_size: query.page_size };
+  }
+
   async reconcile(context: OrganizationContext, warehouseId: string) {
     const rows = await this.prisma.$queryRaw<
       {
