@@ -1,28 +1,35 @@
 # Next session handoff
 
-## Checkpoint (2026-11-02, Africa/Lagos)
+## Checkpoint — 2026-11-06 (Africa/Lagos)
 
-Workspace `/Users/newuser/Documents/GitHub/inventory`, branch `develop`, committed HEAD `bb3ed64 the catalogue build` (branch ahead of origin by one). Current work is uncommitted and the worktree was clean at session start. Preserve all changes in this session and generated `apps/web/tsconfig.tsbuildinfo`; do not stage `.env` or secrets. Completed roadmap count remains **12/47**.
+Workspace `/Users/newuser/Documents/GitHub/inventory`, branch `develop`, HEAD `57fa537 update the code` (equal to `origin/develop`). The worktree was clean before this session's progress-document edits. Preserve all existing work; never reset the database, stage `.env`, or delete user data. Roadmap count remains **12/47**.
 
-## Implemented this session
+## Work completed in this session
 
-- INV-001: product-specific conversion list/create APIs and detail UI; per-product/unit uniqueness, strictly positive conversion factor, same-tenant product/unit references, no base-unit duplication, and base-unit changes rejected while conversions exist. Existing `/catalog` still manages categories/units.
-- INV-002/003: product list/detail/create/edit/archive APIs, tenant-scoped search and pagination, normalized SKU/barcode uniqueness, Decimal money and currency validation, transactional audit events, UUID path validation, authenticated `/products` list/form and `/products/[productId]` details/conversion UI. UI states include loading, empty, error, search/filter/pagination. No browser/API runtime flow was verified.
-- INV-005: additive StockMovement schema and migration `20261102143000_inventory_ledger_schema`, with tenant-composite warehouse/product/reversal references, actor membership reference, cost snapshot, document reference, nonzero quantity constraint, and trigger rejecting UPDATE/DELETE. Added tenant-scoped IdempotencyRecord and OutboxEvent tables. Migration is unapplied.
-- INV-006: InventoryBalance schema and unapplied migration `20261102150000_inventory_balance_projection`; organization/warehouse-scoped balance and reconciliation reads; internal single-warehouse posting service for opening, receipt, sale fulfillment, and adjustment. It uses a row lock, strict reserve floor, weighted-average receipt costs, idempotency payload hash/replay/conflict, serialization retry, and atomic movement/balance/audit/outbox/idempotency transaction. Transfer batch posting and reservation flows remain outside this partial implementation.
+- Read the new attached continuation request and repository startup documents. Confirmed the actual task ledger still has INV-001/002/003/005/006 in progress, INV-007 not started, and 12 tasks completed.
+- Started the existing Compose stack; PostgreSQL, Redis, and S3Mock were all healthy. `pg_isready -h localhost -p 5433` accepted connections.
+- Inspected the three pending SQL migrations. They are additive creates/indexes/constraints/trigger only. Applied them with `npm run db:migrate:deploy --workspace=@inventory/api`; all succeeded. `npx prisma migrate status --config prisma.config.ts` reports the schema is up to date.
+- Verified existing counts stayed users=13, organizations=3, memberships=3. New products, stock_movements, and inventory_balances counts were each 0.
+- Quality checks: environment validation, Prisma validation/status, typecheck, lint, format check, production build, and diff check passed. Default suite passed 32/32 with one opt-in DB suite skipped after a sandbox `EPERM` listener failure; elevated rerun passed. Opt-in PostgreSQL suite passed 10/10, but it covers existing auth/org/location/catalog-unit flows, not new product or inventory posting workflows.
+- API port 4000 was not listening at check time. No API readiness, product CRUD, inventory posting, or browser flow is claimed verified.
 
-## Verification and blockers
+## Files and changes
 
-- Passed after changes: `npx prisma validate --schema apps/api/prisma/schema.prisma`, Prisma client generation, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build`, `git diff --check`.
-- Automated tests were not run under the accelerated-development instruction. Do not claim current product, ledger or balance behavior is test-verified.
-- Current environment check: Docker socket permission denied; `pg_isready -h localhost -p 5433` reported no response; API readiness on port 4000 was connection-refused. New migrations are unapplied; no records were changed.
-- INV-001/002/003 implementation is present but database integration and browser workflow remain unverified. INV-005 schema is present but migration/integrity verification is pending. INV-006 includes balance/reconciliation reads and an internal posting service, but its migrations and concurrency behavior are unverified; transfer-batch and reservation creation are still missing.
-- No commit was created in this session. No unrelated changes existed at session start; generated build metadata changed during verification.
+- Implementation code was already committed at `57fa537`; no application code changed in this session.
+- Updated `docs/progress/current-state.md`, `docs/progress/next-session.md`, `docs/implementation/master-plan.md`, `docs/implementation/task-breakdown.md`, `docs/progress/completed-tasks.md`, and `docs/progress/session-log.md` to reflect migration deployment and verification evidence.
+- No task should be marked complete from migration application alone. Keep 12/47 until task acceptance criteria are actually met.
 
-## Exact next steps
+## Exact next implementation steps
 
-1. Restore/authorize local Docker/PostgreSQL access; inspect `inventory_dev` and migration history without resetting or deleting data.
-2. Apply the additive migrations in order with the documented Prisma deploy workflow: `20261102113000_products_and_unit_conversions`, `20261102143000_inventory_ledger_schema`, `20261102150000_inventory_balance_projection`. Verify migration status/schema and preserve existing data.
-3. Run minimal API smoke checks for product create/list/detail/edit/archive and conversion list/create; verify tenant isolation, duplicate conversion/SKU handling, and that stock movement UPDATE/DELETE is rejected. Record actual outcomes.
-4. Verify INV-006 posting/reconciliation against PostgreSQL (including duplicate/reused key, negative available, cost currency, rollback, row-lock race, and ledger mismatch cases). Extend posting to atomic two-location transfer and reservations before claiming INV-006 complete.
-5. Implement INV-007 adjustment draft/count/reason/post history and UI through the internal posting service. Continue in task-breakdown dependency order. Update progress docs after milestones; keep count at 12/47 until acceptance/verification requirements pass.
+1. Add disposable DB-backed tests in `apps/api/test/postgres.integration.test.mjs` for product CRUD/conversions, tenant isolation, stock-movement immutability, inventory posting idempotency replay/conflict, negative available rejection, weighted average cost, transaction rollback, concurrency/serialization, and reconciliation. Ensure fixtures are created under unique test-owned organizations and cleaned up by the test teardown only.
+2. Run `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/postgres.integration.test.mjs` against the now-migrated `inventory_dev`. Do not claim product or inventory behavior verified from the current 10 existing test cases.
+3. Fix failures and run `npm run db:validate --workspace=@inventory/api`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build`, and `npm test` (elevated only if local bind permission blocks it).
+4. Start/restart the API after build and verify readiness, authenticated product/conversion APIs, movement trigger behavior, and balance reconciliation. Verify in browser if feasible; record API/browser checks separately.
+5. When INV-006 acceptance is satisfied, implement INV-007 end-to-end: adjustment draft/count/delta preview/reason/post/history; use additive Prisma migration, atomic stock/document updates, tenant and warehouse checks, required authorization, idempotency, audit/outbox, and UI. Reject posting against a stale count snapshot. Continue to the next dependency-ready task afterward.
+6. Keep task status and completed count honest. Update current-state, this handoff, and session-log at every meaningful milestone. Review `git status` before staging. Commit only a focused verified milestone; do not push.
+
+## Blockers and decisions
+
+- DB migrations are no longer blocked. Compose daemon commands need external permission under this sandbox; successful health result was obtained once, so do not retry a denied request without a changed reason.
+- API/browser inventory smoke remains unverified because the API was stopped at this check.
+- DEC-007 costing and other product/security choices remain provisional and are not business approvals. See `docs/progress/decisions.md`, `docs/architecture/`, and the open PROD-002/ARCH-002 gates.
