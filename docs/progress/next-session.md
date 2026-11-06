@@ -2,7 +2,7 @@
 
 ## Checkpoint — 2026-11-06 (Africa/Lagos)
 
-Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`, latest commit `2185c43` (`implement tenant-scoped supplier directory`), based on `d09a2b9`. Implementation and progress updates are committed locally; no push occurred. Completed count is **14/47**. PROCUREMENT-001 is implemented and IN_PROGRESS pending authenticated browser verification.
+Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. Supplier implementation is committed locally as `2185c43` (`implement tenant-scoped supplier directory`), based on `d09a2b9`; documentation checkpoint commits follow it. No push occurred. Completed count is **14/47**. PROCUREMENT-001 is implemented and IN_PROGRESS pending authenticated browser verification.
 
 ## Supplier management delivered
 

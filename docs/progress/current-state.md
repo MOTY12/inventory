@@ -4,7 +4,7 @@
 
 ## Repository and roadmap
 
-- Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; latest local commit `2185c43` (`implement tenant-scoped supplier directory`), based on `d09a2b9`. No push. Worktree is clean after the checkpoint update.
+- Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; supplier implementation is committed in `2185c43` based on `d09a2b9`. A documentation checkpoint commit follows it. No push. Worktree is clean.
 - Roadmap: **14/47 completed**. INV-005/006 are complete. INV-001/002/003/007 and PROCUREMENT-001 remain IN_PROGRESS; other tasks are as recorded in `docs/implementation/task-breakdown.md`.
 - Work this execution adds supplier schema/service/controller/UI, an additive migration, test schema isolation support, integration and DTO validation tests, and API documentation. Do not discard uncommitted changes.
 
