@@ -109,6 +109,7 @@ model Organization {
   idempotencyRecords IdempotencyRecord[]
   outboxEvents       OutboxEvent[]
   stockAdjustments   StockAdjustment[]
+  suppliers          Supplier[]
 
   @@map("organizations")
 }
@@ -339,6 +340,34 @@ model StockAdjustment {
   @@index([organizationId, warehouseId, status, createdAt])
   @@index([organizationId, productId, createdAt])
   @@map("stock_adjustments")
+}
+
+model Supplier {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  name           String        @db.VarChar(180)
+  nameNormalized String        @map("name_normalized") @db.VarChar(180)
+  contactName    String?       @map("contact_name") @db.VarChar(180)
+  email          String?       @db.VarChar(320)
+  phone          String?       @db.VarChar(40)
+  website        String?       @db.VarChar(500)
+  addressLine1   String?       @map("address_line_1") @db.VarChar(240)
+  addressLine2   String?       @map("address_line_2") @db.VarChar(240)
+  city           String?       @db.VarChar(120)
+  region         String?       @db.VarChar(120)
+  postalCode     String?       @map("postal_code") @db.VarChar(32)
+  countryCode    String?       @map("country_code") @db.Char(2)
+  termsNotes     String?       @map("terms_notes") @db.VarChar(1000)
+  status         CatalogStatus @default(ACTIVE)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, nameNormalized])
+  @@index([organizationId, status, name])
+  @@index([organizationId, email])
+  @@map("suppliers")
 }
 
 model IdempotencyRecord {

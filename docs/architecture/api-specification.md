@@ -13,6 +13,10 @@ Base `/api/v1`; JSON; bearer access token; request ID; critical POST/PATCH comma
 - `GET/POST /categories`, `/units`, `/suppliers`, `/customers`.
 - Search fields SKU/name/barcode; duplicate SKU returns 409; archive referenced products instead of deletion.
 
+## Procurement directory
+- `GET/POST /organizations/current/procurement/suppliers`; `GET/PATCH /organizations/current/procurement/suppliers/:supplierId`; `PATCH /organizations/current/procurement/suppliers/:supplierId/archive`; `GET /organizations/current/procurement/suppliers/:supplierId/audit`.
+- Supplier records are organization-scoped; normalized names are unique within an organization. Reads require `procurement:read`; writes require `procurement:write`.
+
 ## Inventory
 - `GET /inventory/balances?warehouse_id=&product_id=&availability=`
 - `GET /inventory/movements` and `/products/:id/movements`

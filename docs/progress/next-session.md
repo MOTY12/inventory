@@ -2,35 +2,33 @@
 
 ## Checkpoint — 2026-11-06 (Africa/Lagos)
 
-Workspace `/Users/newuser/Documents/GitHub/inventory`, branch `develop`, starting HEAD `d865079` matched `origin/develop`. Current worktree has uncommitted source/test changes: inventory movement history API/UI and an isolated PostgreSQL integration suite. Preserve all edits. Do not stage `.env`, generated files, or unrelated changes. Roadmap progress is **14/47 completed**; INV-005/006 are complete, while INV-001/002/003/007 remain in progress.
+Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. This execution started at commit `d09a2b9`; changes below are uncommitted. Preserve them. No push occurred. Completed count is **14/47**. PROCUREMENT-001 is implemented and IN_PROGRESS pending authenticated browser verification.
 
-## Delivered and verified this execution
+## Supplier management delivered
 
-- Added `apps/api/test/inventory.postgres.integration.test.mjs`. It creates a unique schema, deploys all Prisma migrations there, runs tests, drops only its own schema, and restores `DATABASE_URL`.
-- Database integration verifies product lifecycle, SKU/barcode uniqueness, Decimal prices/costs, search, tenant denial, unit conversion uniqueness and foreign-unit denial; opening/receipt/fulfillment posting; weighted-average cost; idempotent replay/conflict; stock reservation floor; immutable movement UPDATE/DELETE rejection; adjustment posting and stale competing count safety; audit/outbox; failed outbox rollback; and balance/ledger reconciliation.
-- Added tenant/warehouse-scoped paginated inventory movement history endpoint and `/inventory` history UI.
-- INV-005 and INV-006 acceptance criteria now pass; their statuses were changed to COMPLETED. No owner database rows were changed by the disposable-schema suite.
+- Added additive migration `20261106190000_supplier_directory`, applied to local `inventory_dev`; Prisma reports 10 migrations, schema up to date.
+- Added tenant-owned `Supplier` with normalized organization-unique name, contact, email, phone, website, address, country, notes and active/archive status.
+- Added NestJS supplier CRUD, search/pagination, detail, archive and audit-history APIs guarded by `procurement:read`/`procurement:write`. DTOs validate email, phone, URL, country code, and lengths. Create/update/archive are audited and updates reject archived rows.
+- Added Next.js `/suppliers` page and workspace navigation with real API integration, form, active/archive filter, search, pagination, detail and change history.
+- Added service-level PostgreSQL supplier lifecycle/search/uniqueness/tenant/audit coverage and DTO validation tests. Added procurement endpoint documentation.
 
-## Checks
+## Test-isolation correction and retained fixtures
 
-- `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs`: **5 passed, 0 failed**. Elevated local DB access was required; suite cleaned up its temporary schema.
-- `npm test`: **35 passed, 0 failed, 2 skipped** (opt-in PostgreSQL suites). Elevated permission was required for its temporary local HTTP listener.
-- `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build`, `npm run db:validate --workspace=@inventory/api`, `git diff --check`: passed.
-- Fresh `npx prisma migrate status --config prisma.config.ts` and `curl http://localhost:4000/api/v1/health/ready` did not connect in this sandbox. No live API readiness or browser workflow is claimed. A previous checkpoint verified nine migrations applied to `inventory_dev`; this session made no migration against that database.
-- No commit or push created.
+- Found that prior integration-suite runs were not truly isolated: `?schema=` selected the migration schema but Prisma's pg adapter needed its explicit schema option. Fixed `PrismaService` to accept `DATABASE_SCHEMA`; integration tests set this and PostgreSQL `search_path`, and assert `current_schema()` before seeding.
+- Corrected isolated integration result: **6 passed, 0 failed**; generated schema dropped. Full suite: **37 passed, 0 failed, 2 skipped**. Typecheck, lint, format, build, and Prisma validation passed.
+- Read-only audit found old test-labeled fixture rows in `inventory_dev.public`: 12 tenant-a/tenant-b organizations and memberships, 9 branches, 5 warehouses, 15 units, 20 products, 25 movements, and 104 audit events. No cleanup was done; preserve all existing records unless the owner explicitly authorizes targeted cleanup. Older progress statements saying all runs left owner DB unchanged were incorrect and have been corrected in `current-state.md` and `session-log.md`.
 
-## Remaining task status and decisions
+## Runtime checks
 
-- INV-001/002/003: implementation and database service behavior are tested, but authenticated browser/API workflows remain unverified.
-- INV-007: PostgreSQL posting, stale snapshot, reserve floor, audit/outbox, rollback, reconciliation and movement history are tested. Still needs live authenticated browser flow and explicit foreign-tenant/warehouse denial tests for adjustment routes.
-- INV-008 is now dependency-ready (INV-006 and FOUNDATION-009 complete). Implement draft, dispatch, in-transit, partial receive and safe/idempotent ledger postings per `docs/architecture/inventory-semantics.md`.
-- Reservation lifecycle is part of SALES-002, depending on SALES-001, INV-006 and ARCH-001; there is no separate reservation task ID in the approved 47-task roadmap.
-- DEC-007 weighted-average cost and strict nonnegative availability remain provisional. PROD-002/ARCH-002 open product/security/release decisions remain documented.
+- Local API started; readiness `200`; unauthenticated supplier list `401`.
+- Next `/suppliers` route returned `200`. Chrome had no authenticated app session (login page), so actual supplier UI CRUD was not browser-tested.
+- No purchase order or goods receipt workflows are implemented. INV-008 transfers remain unimplemented; reservations are in SALES-002, not a standalone task.
 
 ## Exact next steps
 
-1. Start Docker services and API with repository commands; confirm readiness and migration status. Do not reset `inventory_dev`.
-2. Run authenticated product and inventory browser flows in Chrome. Add explicit adjustment cross-tenant and warehouse-scope denial tests. Complete INV-007 only after these pass.
-3. Implement INV-008 end-to-end: schema/migration, APIs, services, DTO validation, tenant/warehouse permissions, transaction/idempotency, UI, and disposable PostgreSQL tests for success, partial receiving, concurrency, rollback and scope.
-4. Continue eligible task selection from `docs/implementation/task-breakdown.md`; implement SALES-001 before reservations in SALES-002. INV-004 is also dependency-ready now that INV-006 is complete.
-5. Update task ledger, current-state, completed-tasks and session-log after each verified task. Do not push without authorization.
+1. Run `git diff --check`, `npm run db:validate --workspace=@inventory/api`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, and `npm run build` after final edits; rerun the isolated PostgreSQL suite with `RUN_POSTGRES_INTEGRATION=1` and required DB permission.
+2. Verify supplier browser workflows using an existing authenticated owner/buyer session. Keep PROCUREMENT-001 IN_PROGRESS until this is done.
+3. Resolve INV-003's remaining authenticated API/browser acceptance before PROCUREMENT-002, which depends on PROCUREMENT-001 and INV-003.
+4. Implement PROCUREMENT-002 PO draft/submit/cancel, line Decimal math, search/history, and UI; avoid unapproved tax/approval policies.
+5. Implement PROCUREMENT-003 partial/full receiving through the inventory posting service, transaction, audit/outbox and idempotency; test over-receive/concurrency/rollback.
+6. Keep the fixture data noted above untouched. Update task ledger, completed count, current-state and session log. Commit coherently if permitted; do not push.

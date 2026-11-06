@@ -21,7 +21,12 @@ export class PrismaService
     }
 
     super({
-      adapter: new PrismaPg({ connectionString }),
+      adapter: new PrismaPg(
+        { connectionString },
+        process.env.DATABASE_SCHEMA
+          ? { schema: process.env.DATABASE_SCHEMA }
+          : undefined,
+      ),
     });
   }
 

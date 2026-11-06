@@ -11,11 +11,12 @@ import { LocationsService } from "../dist/locations/locations.service.js";
 import { InventoryPostingService } from "../dist/inventory/inventory-posting.service.js";
 import { InventoryReadService } from "../dist/inventory/inventory-read.service.js";
 import { StockAdjustmentsService } from "../dist/inventory/adjustments.service.js";
+import { SuppliersService } from "../dist/procurement/suppliers.service.js";
 
 const enabled = process.env.RUN_POSTGRES_INTEGRATION === "1";
 
 test(
-  "isolated PostgreSQL catalog, ledger, balance, and adjustment integration",
+  "isolated PostgreSQL catalog, supplier, ledger, balance, and adjustment integration",
   {
     skip:
       !enabled &&
@@ -25,8 +26,10 @@ test(
     assert.ok(process.env.DATABASE_URL, "DATABASE_URL is required");
     const schema = `inventory_it_${randomUUID().replaceAll("-", "")}`;
     const baseUrl = process.env.DATABASE_URL;
+    const baseSchema = process.env.DATABASE_SCHEMA;
     const testUrl = new URL(baseUrl);
     testUrl.searchParams.set("schema", schema);
+    testUrl.searchParams.set("options", `-c search_path=${schema}`);
     const admin = new Client({ connectionString: process.env.DATABASE_URL });
     await admin.connect();
     await admin.query(`CREATE SCHEMA "${schema}"`);
@@ -42,8 +45,12 @@ test(
         },
       );
       process.env.DATABASE_URL = testUrl.toString();
+      process.env.DATABASE_SCHEMA = schema;
       prisma = new PrismaService();
       await prisma.onModuleInit();
+      const activeSchema =
+        await prisma.$queryRaw`SELECT current_schema() AS schema`;
+      assert.equal(activeSchema[0].schema, schema);
 
       const ownerA = await seedOwner(prisma, "tenant-a");
       const ownerB = await seedOwner(prisma, "tenant-b");
@@ -52,6 +59,7 @@ test(
       const inventory = new InventoryPostingService(prisma);
       const read = new InventoryReadService(prisma);
       const adjustments = new StockAdjustmentsService(prisma, inventory);
+      const suppliers = new SuppliersService(prisma);
       const contextA = ownerA.context;
       const contextB = ownerB.context;
       const branch = await locations.createBranch(contextA, ownerA.userId, {
@@ -196,6 +204,77 @@ test(
             product.id,
           );
           assert.equal(archived.status, "ARCHIVED");
+        },
+      );
+
+      await t.test(
+        "supplier CRUD, search, tenant isolation, uniqueness and audit history",
+        async () => {
+          const supplier = await suppliers.create(contextA, ownerA.userId, {
+            name: "  North Supply  ",
+            contactName: "Ada Buyer",
+            email: "ORDERS@NORTH.EXAMPLE",
+            phone: "+234 801 234 5678",
+            addressLine1: "12 Market Road",
+            city: "Lagos",
+            region: "Lagos",
+            countryCode: "ng",
+          });
+          assert.equal(supplier.name, "North Supply");
+          assert.equal(supplier.email, "orders@north.example");
+          assert.equal(supplier.countryCode, "NG");
+          await assert.rejects(
+            suppliers.create(contextA, ownerA.userId, {
+              name: "north   supply",
+            }),
+            (e) => e.getStatus() === 409,
+          );
+          await assert.rejects(
+            suppliers.get(contextB, supplier.id),
+            (e) => e.getStatus() === 404,
+          );
+          const search = await suppliers.list(contextA, {
+            page: 1,
+            page_size: 10,
+            q: "Ada Buyer",
+          });
+          assert.equal(search.total, 1);
+          const edited = await suppliers.update(
+            contextA,
+            ownerA.userId,
+            supplier.id,
+            {
+              phone: "+234 809 111 2222",
+              termsNotes: "Delivery contact to confirm each order",
+            },
+          );
+          assert.equal(edited.phone, "+234 809 111 2222");
+          assert.equal(
+            await prisma.auditEvent.count({
+              where: {
+                organizationId: contextA.organizationId,
+                entityType: "SUPPLIER",
+                entityId: supplier.id,
+              },
+            }),
+            2,
+          );
+          assert.equal(
+            (await suppliers.archive(contextA, ownerA.userId, supplier.id))
+              .status,
+            "ARCHIVED",
+          );
+          const history = await suppliers.auditHistory(contextA, supplier.id);
+          assert.deepEqual(
+            history.map((event) => event.action).sort(),
+            ["ARCHIVED", "CREATED", "UPDATED"],
+          );
+          await assert.rejects(
+            suppliers.update(contextA, ownerA.userId, supplier.id, {
+              name: "Changed",
+            }),
+            (e) => e.getStatus() === 409,
+          );
         },
       );
 
@@ -581,6 +660,8 @@ test(
       await admin.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
       await admin.end();
       process.env.DATABASE_URL = baseUrl;
+      if (baseSchema === undefined) delete process.env.DATABASE_SCHEMA;
+      else process.env.DATABASE_SCHEMA = baseSchema;
     }
   },
 );

@@ -8,6 +8,7 @@ import { OrganizationModule } from "./organizations/organization.module";
 import { LocationsModule } from "./locations/locations.module";
 import { CatalogModule } from "./catalog/catalog.module";
 import { InventoryModule } from "./inventory/inventory.module";
+import { ProcurementModule } from "./procurement/procurement.module";
 
 @ApiTags("system")
 @Controller()
@@ -30,6 +31,7 @@ class AppController {
     LocationsModule,
     CatalogModule,
     InventoryModule,
+    ProcurementModule,
   ],
   controllers: [AppController, HealthController],
 })

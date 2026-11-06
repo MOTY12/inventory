@@ -1,6 +1,6 @@
 # Numbered task breakdown
 
-Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001 through FOUNDATION-009, ARCH-001, INV-005, and INV-006 are COMPLETED; PROD-002, ARCH-002, INV-001, INV-002, INV-003, and INV-007 are IN_PROGRESS; remaining tasks are NOT_STARTED. FOUNDATION-006/007/008/009 have automated PostgreSQL concurrency, tenant-isolation and scope coverage as recorded in progress documentation. Completed count: 14/47.
+Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001 through FOUNDATION-009, ARCH-001, INV-005, and INV-006 are COMPLETED; PROD-002, ARCH-002, INV-001, INV-002, INV-003, INV-007, and PROCUREMENT-001 are IN_PROGRESS; remaining tasks are NOT_STARTED. FOUNDATION-006/007/008/009 have automated PostgreSQL concurrency, tenant-isolation and scope coverage as recorded in progress documentation. Completed count: 14/47.
 
 ## Phase 0–2: research, product, architecture
 
@@ -110,7 +110,7 @@ Description: Scanner keyboard input, barcode lookup and camera API feasibility f
 
 ### PROCUREMENT-001: Supplier directory
 **Files/modules affected:** apps/api/src/procurement/, apps/web/src/features/procurement/, Prisma procurement schema.
-Description: Supplier CRUD/search/contact/terms. Priority: P0. Dependencies: FOUNDATION-009. Deliverables: model/API/UI. Acceptance: tenant scope and referenced supplier archive rules. Tests: CRUD/auth tests. Status: NOT_STARTED.
+Description: Supplier CRUD/search/contact/terms. Priority: P0. Dependencies: FOUNDATION-009. Deliverables: model/API/UI. Acceptance: tenant scope and referenced supplier archive rules. Tests: CRUD/auth tests. Status: IN_PROGRESS. Added tenant-owned Supplier model, tenant-unique normalized name, contact/email/phone/website/address and notes fields, additive migration `20261106190000_supplier_directory` applied to inventory_dev, CRUD/detail/search/pagination/archive/audit API, procurement capability guards, validated DTOs and `/suppliers` UI. PostgreSQL service integration verifies lifecycle, uniqueness, search, tenant denial and audit; DTO validation tests cover contact formats. Authenticated browser workflow remains unverified.
 
 ### PROCUREMENT-002: Purchase order lifecycle
 **Files/modules affected:** apps/api/src/procurement/, apps/web/src/features/procurement/, Prisma procurement schema.
