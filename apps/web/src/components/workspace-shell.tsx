@@ -152,6 +152,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
                   "BUYER",
                   "WAREHOUSE_CLERK",
                   "READ_ONLY",
+                  "MEMBER",
                   "SALES",
                   "FINANCE",
                 ].includes(role)
@@ -162,6 +163,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
                   "BUYER",
                   "WAREHOUSE_CLERK",
                   "READ_ONLY",
+                  "MEMBER",
                   "SALES",
                   "FINANCE",
                 ].includes(role),

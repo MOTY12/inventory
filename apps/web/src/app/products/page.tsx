@@ -209,6 +209,8 @@ function ProductManager() {
           </p>
         </div>
         <button
+          aria-controls="product-editor"
+          aria-expanded={formOpen || Boolean(editing)}
           className="button button-primary"
           onClick={() => {
             clearForm();
@@ -230,7 +232,7 @@ function ProductManager() {
         </p>
       )}
       {canWrite && (formOpen || editing) && (
-        <form className="product-editor" onSubmit={save}>
+        <form className="product-editor" id="product-editor" onSubmit={save}>
           <div className="catalog-panel-heading">
             <div>
               <span className="catalog-eyebrow">

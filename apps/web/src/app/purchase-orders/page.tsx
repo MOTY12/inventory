@@ -178,8 +178,20 @@ export default function PurchaseOrdersPage() {
           </p>
         </div>
         <div className="dashboard-actions">
-          <Link className="button button-secondary" href="/suppliers">Suppliers</Link>
-          {canWrite && <button className="button button-primary" onClick={() => setFormOpen((open) => !open)} type="button">＋ New purchase order</button>}
+          <Link className="button button-secondary" href="/suppliers">
+            Suppliers
+          </Link>
+          {canWrite && (
+            <button
+              aria-controls="purchase-order-editor"
+              aria-expanded={formOpen}
+              className="button button-primary"
+              onClick={() => setFormOpen((open) => !open)}
+              type="button"
+            >
+              ＋ New purchase order
+            </button>
+          )}
         </div>
       </header>
       {notice && (
@@ -202,7 +214,11 @@ export default function PurchaseOrdersPage() {
       ) : (
         <>
           {canWrite && formOpen && (
-            <form className="product-editor" onSubmit={createDraft}>
+            <form
+              className="product-editor"
+              id="purchase-order-editor"
+              onSubmit={createDraft}
+            >
               <div className="catalog-panel-heading">
                 <div>
                   <span className="catalog-eyebrow">NEW PURCHASE ORDER</span>

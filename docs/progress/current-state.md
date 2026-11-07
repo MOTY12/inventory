@@ -1,10 +1,10 @@
 # Current state
 
-**Updated:** 2026-11-07 (Africa/Lagos) — Procurement 002/003 implementation and verification in progress
+**Updated:** 2026-11-07 (Africa/Lagos) — UI/UX redesign and procurement verification
 
 ## Repository and roadmap
 
-- Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; procurement work is committed locally as `86789bd` (`update the supplier`), and the missing Prisma declarations/progress correction are committed as `32744f6` (`restore purchasing Prisma models`). Local `develop` is one commit ahead of `origin/develop`; this execution did not push.
+- Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; current HEAD and `origin/develop` are `816aa06` (`Update page.tsx`). The branch advanced during this session with owner-authored commits `d0f3d18` (`update the UI/UX`) and `816aa06`; no push was performed by this agent. Follow-up dashboard metric, PO register, role visibility and progress-document refinements remain uncommitted. Preserve and inspect before further edits.
 - Roadmap: **14/47 completed**. INV-005/006 are complete. INV-001/002/003/007 and PROCUREMENT-001/002/003 remain IN_PROGRESS; other tasks are in `docs/implementation/task-breakdown.md`.
 - Current changes add PO/receipt schema, migration, service/controller/DTOs, transaction-composable inventory posting, frontend workflows, integration/DTO tests, and progress/API docs.
 
@@ -31,21 +31,19 @@
 - Latest isolated `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs`: 7 reported tests passed, 0 failed. Scenarios include product/supplier lifecycle and tenant denial; PO draft edit/submit/cancel; receipt partial/full/replay/over-receive/concurrency; rollback on receipt-outbox failure; balance, movement, cost and audit/outbox consistency. Generated schema asserted and dropped.
 - Final `npm test`: 40 passed, 0 failed, 2 opt-in PostgreSQL suites skipped. The dedicated isolated PostgreSQL suite was separately rerun after schema reconciliation: 7 reported tests passed, 0 failed.
 - Final `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build`, `npm run db:validate --workspace=@inventory/api`, `npx prisma migrate status --config prisma.config.ts`, and `git diff --check` passed. Production Next.js build includes both purchase order routes.
-- Chrome currently has no authenticated Stockroom session (tab at `/login`). Supplier, product, and purchasing authenticated browser workflows are unverified.
+- Chrome currently has an authenticated owner session selected for `aceall.com`. Read-only browser review confirmed the shared shell and the dashboard’s first-run checklist plus the empty states on `/products` and `/purchase-orders`; authenticated create/edit/receive workflows remain unverified.
 
 ## Exact next steps
 
-1. Run final `npm test`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build`, `npm run db:validate --workspace=@inventory/api`, `npx prisma migrate status --config prisma.config.ts`, and `git diff --check`.
-2. Use an existing authenticated owner/buyer session to verify supplier/product/PO workflows in Chrome, including PO draft edit/submit/cancel, partial/full receive and resulting balances. Do not create or remove accounts solely to fabricate browser acceptance.
-3. Keep PROCUREMENT-001/002/003 and INV-003 IN_PROGRESS until remaining authenticated API/browser and permission checks pass.
-4. Use the existing local commits; do not push without authorization.
-5. After P002/P003 acceptance, continue with dependency-ready INV-008 warehouse transfers. Reservation lifecycle belongs to SALES-002 after SALES-001, INV-006 and ARCH-001.
+1. In Chrome, verify responsive layout and authenticated product/supplier creation, editing and archive; PO draft/submit/cancel; partial/full receiving; and balance changes. Do not create/delete accounts to manufacture results.
+2. Keep PROCUREMENT-001/002/003 and INV-003 IN_PROGRESS until remaining authenticated API/browser and permission checks pass.
+3. Proceed to dependency-ready INV-008 after acceptance checks. Reservation lifecycle remains SALES-002 after SALES-001, INV-006 and ARCH-001.
 
 ## UI/UX redesign checkpoint — 2026-11-07
 
 - Added a root authenticated application frame so dashboard, products, suppliers, inventory, locations, catalog, organizations and purchasing pages share navigation and organization context. The frame uses route-aware breadcrumbs and selection, a mobile navigation drawer, collapsible desktop navigation and role-filtered working links.
 - Organization selection calls the existing `/organizations/:organizationId/select` endpoint and adopts its new access token; no backend or database changes were made.
 - Replaced the placeholder dashboard with live product count, warehouse count, tracked balance count, open PO count, recent movements, purchase orders, and contextual empty/onboarding states. Low-stock and valuation metrics are omitted because there are no threshold/reporting APIs to support them reliably.
-- Product and supplier editors now open only after an explicit action, so the directories remain the default view. Added the UX findings and deferred work in `docs/design/ux-audit.md`.
-- Verification on this pass: web typecheck, repository lint, formatting check and web production build passed. Chrome at `/products` showed the shared shell, active organization, working route navigation, product directory and empty state. No screenshots were captured; no authenticated create/edit workflows or mobile device check was performed.
+- Product, supplier and PO editors now open only after an explicit action, so their registers remain the default view. Added the UX findings and deferred work in `docs/design/ux-audit.md`.
+- Verification on this pass: web typecheck, repository lint, formatting check and web production build passed. Chrome at `/`, `/products` and `/purchase-orders` showed the shared shell, active organization, working route navigation, first-run checklist and register empty states. No screenshots were captured; authenticated create/edit workflows and mobile-device review were not performed.
 - Roadmap remains **14/47**. No task status changed; supplier, product and procurement acceptance still requires authenticated workflow and permission checks. Continue with responsive/browser review, then the dependency-ready INV-008 transfer task after required acceptance work.

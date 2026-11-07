@@ -2,7 +2,7 @@
 
 ## Checkpoint — 2026-11-07 (Africa/Lagos)
 
-Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. `86789bd` (`update the supplier`) contains the procurement implementation/migration; `32744f6` (`restore purchasing Prisma models`) adds the missing Prisma declarations and checkpoint corrections. Local `develop` is one commit ahead of `origin/develop`; no push occurred. Completed roadmap count remains **14/47**. Do not mark procurement tasks complete yet.
+Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. Current HEAD and `origin/develop` are `816aa06` (`Update page.tsx`). Owner-authored commits `d0f3d18` and `816aa06` added the shared shell/dashboard/register UX work while this session was active. No push was performed by this agent. Local follow-up refinements in dashboard metric scoping, PO register form visibility, role visibility and progress docs remain uncommitted. Preserve and inspect them before editing. Completed roadmap count remains **14/47**; procurement and catalog tasks remain in progress.
 
 ## Delivered this session
 
@@ -16,9 +16,9 @@ Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. `86789
 
 - Added a shared authenticated shell at the root layout, covering the existing authenticated pages. Navigation is grouped around working inventory, purchasing and management routes; it has route-aware active state, breadcrumbs, keyboard-visible focus, mobile drawer, collapsible desktop sidebar, role-filtered links and a real organization switcher using the existing select-organization API.
 - Replaced placeholder dashboard cards with live products, warehouses, inventory balances, movements and purchase-order data. Added a guided first-run checklist and honest empty/error states. Low-stock and valuation metrics remain omitted because the application has no threshold/report endpoint to support those figures.
-- Product and supplier directories are now the first view. Their create/edit forms appear only when the user chooses the relevant action.
+- Product, supplier and purchase-order directories are now the first view. Their create/edit forms appear only when the user chooses the relevant action.
 - Added `docs/design/ux-audit.md` to record findings and deferred improvements.
-- Browser check: Chrome loaded `/products` with the shared shell, current organization, route navigation, product-directory header and empty state. No screenshot captured. Authenticated create/edit actions, mobile device rendering and assistive-technology review remain pending.
+- Browser check: Chrome loaded `/`, `/products` and `/purchase-orders` with an existing authenticated owner session, shared shell, selected organization, route navigation, dashboard first-run checklist and register empty states. No screenshot captured. Authenticated create/edit actions, mobile device rendering and assistive-technology review remain pending.
 - Checks after changes: `npm run typecheck --workspace=@inventory/web`, `npm run lint`, `npm run format:check` and `npm run build --workspace=@inventory/web` all passed. `git diff --check` passed before documentation changes; rerun before committing.
 - Roadmap remains **14/47**; this UX work does not change task completion statuses.
 

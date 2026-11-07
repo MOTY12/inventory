@@ -32,6 +32,7 @@ function Dashboard() {
   const [products, setProducts] = useState<Page<Product> | null>(null);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [balances, setBalances] = useState<Balance[]>([]);
+  const [balanceCount, setBalanceCount] = useState(0);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,9 +41,20 @@ function Dashboard() {
   const load = useCallback(async () => {
     if (!organization) {
       setProducts(null);
+      setWarehouses([]);
+      setOrders([]);
+      setBalances([]);
+      setBalanceCount(0);
+      setMovements([]);
       setLoading(false);
       return;
     }
+    setProducts(null);
+    setWarehouses([]);
+    setOrders([]);
+    setBalances([]);
+    setBalanceCount(0);
+    setMovements([]);
     setLoading(true);
     setError("");
     try {
@@ -72,11 +84,15 @@ function Dashboard() {
           ]);
           return {
             balances: balanceResult.data,
+            balanceCount: balanceResult.total,
             movements: movementResult.data,
           };
         }),
       );
       setBalances(stock.flatMap((item) => item.balances));
+      setBalanceCount(
+        stock.reduce((total, item) => total + item.balanceCount, 0),
+      );
       setMovements(
         stock
           .flatMap((item) => item.movements)
@@ -184,7 +200,7 @@ function Dashboard() {
               </article>
               <article className="metric-card">
                 <span>Tracked balances</span>
-                <strong>{loading ? "—" : balances.length}</strong>
+                <strong>{loading ? "—" : balanceCount}</strong>
                 <small>Product and warehouse pairs</small>
               </article>
               <article className="metric-card">

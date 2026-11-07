@@ -204,6 +204,8 @@ function SuppliersPage() {
         </div>
         {canWrite && (
           <button
+            aria-controls="supplier-editor"
+            aria-expanded={formOpen || Boolean(editing)}
             className="button button-primary"
             onClick={() => {
               clearForm();
@@ -235,7 +237,11 @@ function SuppliersPage() {
       ) : (
         <>
           {canWrite && (formOpen || editing) && (
-            <form className="product-editor" onSubmit={save}>
+            <form
+              className="product-editor"
+              id="supplier-editor"
+              onSubmit={save}
+            >
               <div className="catalog-panel-heading">
                 <div>
                   <span className="catalog-eyebrow">
