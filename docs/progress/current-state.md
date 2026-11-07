@@ -4,7 +4,7 @@
 
 ## Repository and roadmap
 
-- Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; current HEAD is `86789bd` (`update the supplier`) and the local `origin/develop` ref points to it. This execution did not push. That commit includes the procurement service/migration/UI/tests, but inspection found its Prisma model declarations missing; the declarations have been restored locally and await a focused fix commit.
+- Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; procurement work is committed locally as `86789bd` (`update the supplier`), and the missing Prisma declarations/progress correction are committed as `32744f6` (`restore purchasing Prisma models`). Local `develop` is one commit ahead of `origin/develop`; this execution did not push.
 - Roadmap: **14/47 completed**. INV-005/006 are complete. INV-001/002/003/007 and PROCUREMENT-001/002/003 remain IN_PROGRESS; other tasks are in `docs/implementation/task-breakdown.md`.
 - Current changes add PO/receipt schema, migration, service/controller/DTOs, transaction-composable inventory posting, frontend workflows, integration/DTO tests, and progress/API docs.
 
@@ -38,5 +38,5 @@
 1. Run final `npm test`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build`, `npm run db:validate --workspace=@inventory/api`, `npx prisma migrate status --config prisma.config.ts`, and `git diff --check`.
 2. Use an existing authenticated owner/buyer session to verify supplier/product/PO workflows in Chrome, including PO draft edit/submit/cancel, partial/full receive and resulting balances. Do not create or remove accounts solely to fabricate browser acceptance.
 3. Keep PROCUREMENT-001/002/003 and INV-003 IN_PROGRESS until remaining authenticated API/browser and permission checks pass.
-4. Commit the missing Prisma model declaration reconciliation with a focused message after reviewing the final diff; do not push.
+4. Use the existing local commits; do not push without authorization.
 5. After P002/P003 acceptance, continue with dependency-ready INV-008 warehouse transfers. Reservation lifecycle belongs to SALES-002 after SALES-001, INV-006 and ARCH-001.

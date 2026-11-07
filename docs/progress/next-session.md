@@ -2,7 +2,7 @@
 
 ## Checkpoint — 2026-11-07 (Africa/Lagos)
 
-Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. Current HEAD is `86789bd` (`update the supplier`) and the local `origin/develop` ref points to it; this execution did not push. Inspection found that the commit contains the procurement implementation/migration but omitted corresponding Prisma model declarations. Those declarations have been restored locally; commit the focused reconciliation after review. Completed roadmap count remains **14/47**. Do not mark procurement tasks complete yet.
+Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. `86789bd` (`update the supplier`) contains the procurement implementation/migration; `32744f6` (`restore purchasing Prisma models`) adds the missing Prisma declarations and checkpoint corrections. Local `develop` is one commit ahead of `origin/develop`; no push occurred. Completed roadmap count remains **14/47**. Do not mark procurement tasks complete yet.
 
 ## Delivered this session
 
@@ -25,8 +25,6 @@ Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. Curren
 
 ## Exact next steps
 
-1. Inspect `git diff -- apps/api/prisma/schema.prisma` and confirm it is only the Prisma model reconciliation needed by the migration and services.
-2. Commit that focused schema fix locally; do not push.
-3. Use an existing authenticated owner/buyer Chrome session to test supplier create/search/detail/audit/edit/archive, product create/edit/search/conversion, PO draft edit/submit/cancel, partial/full receiving, history and warehouse balances. Do not create or remove accounts to manufacture a result.
-4. Keep task count at 14/47 and PROCUREMENT-001/002/003 and INV-003 IN_PROGRESS until authenticated UI/permission acceptance is complete.
-5. After procurement acceptance, inspect dependencies and proceed with dependency-ready INV-008 transfers. Reservation lifecycle remains SALES-002 after SALES-001, INV-006 and ARCH-001.
+1. Use an existing authenticated owner/buyer Chrome session to test supplier create/search/detail/audit/edit/archive, product create/edit/search/conversion, PO draft edit/submit/cancel, partial/full receiving, history and warehouse balances. Do not create or remove accounts to manufacture a result.
+2. Keep task count at 14/47 and PROCUREMENT-001/002/003 and INV-003 IN_PROGRESS until authenticated UI/permission acceptance is complete.
+3. After procurement acceptance, inspect dependencies and proceed with dependency-ready INV-008 transfers. Reservation lifecycle remains SALES-002 after SALES-001, INV-006 and ARCH-001.
