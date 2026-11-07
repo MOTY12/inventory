@@ -17,6 +17,7 @@ const groups = [
     links: [
       { href: "/products", label: "Products", icon: "products" },
       { href: "/inventory", label: "Stock counts", icon: "counts" },
+      { href: "/transfers", label: "Transfers", icon: "purchasing" },
       { href: "/locations", label: "Branches & warehouses", icon: "locations" },
       { href: "/catalog", label: "Categories & units", icon: "catalog" },
     ],
@@ -44,6 +45,7 @@ const names: Record<string, string> = {
   "": "Overview",
   products: "Products",
   inventory: "Stock counts",
+  transfers: "Warehouse transfers",
   locations: "Branches & warehouses",
   catalog: "Categories & units",
   "purchase-orders": "Purchase orders",

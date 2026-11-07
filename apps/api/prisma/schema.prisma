@@ -70,6 +70,15 @@ enum StockAdjustmentStatus {
   POSTED
 }
 
+enum StockTransferStatus {
+  DRAFT
+  SUBMITTED
+  IN_TRANSIT
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
 enum PurchaseOrderStatus {
   DRAFT
   SUBMITTED
@@ -120,6 +129,14 @@ model Organization {
   suppliers          Supplier[]
   purchaseOrders     PurchaseOrder[]
   purchaseOrderSequence PurchaseOrderSequence?
+  stockTransferSequence StockTransferSequence?
+  stockTransfers StockTransfer[]
+  stockTransferDispatches StockTransferDispatch[]
+  stockTransferReceipts StockTransferReceipt[]
+  stockTransferStatusHistory StockTransferStatusHistory[]
+  stockTransferLines StockTransferLine[]
+  stockTransferDispatchLines StockTransferDispatchLine[]
+  stockTransferReceiptLines StockTransferReceiptLine[]
 
   @@map("organizations")
 }
@@ -139,6 +156,10 @@ model Membership {
   stockAdjustments StockAdjustment[]
   purchaseOrders   PurchaseOrder[]
   goodsReceipts    GoodsReceipt[]
+  createdStockTransfers StockTransfer[] @relation("TransferCreator")
+  dispatchedStockTransfers StockTransferDispatch[]
+  receivedStockTransfers StockTransferReceipt[]
+  stockTransferStatusChanges StockTransferStatusHistory[]
 
   @@unique([organizationId, userId])
   @@index([userId, status])
@@ -161,6 +182,8 @@ model Warehouse {
   stockMovements    StockMovement[]
   inventoryBalances InventoryBalance[]
   stockAdjustments  StockAdjustment[]
+  sourceTransfers StockTransfer[] @relation("TransferSourceWarehouse")
+  destinationTransfers StockTransfer[] @relation("TransferDestinationWarehouse")
   purchaseOrders    PurchaseOrder[]
 
   @@unique([organizationId, id])
@@ -254,6 +277,7 @@ model Product {
   inventoryBalances InventoryBalance[]
   stockAdjustments  StockAdjustment[]
   purchaseOrderLines PurchaseOrderLine[]
+  stockTransferLines StockTransferLine[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, skuNormalized])
@@ -301,6 +325,8 @@ model StockMovement {
   reversals       StockMovement[]   @relation("MovementReversal")
   adjustment      StockAdjustment?  @relation("AdjustmentMovement")
   goodsReceiptLine GoodsReceiptLine? @relation("ReceiptMovement")
+  transferDispatchLine StockTransferDispatchLine? @relation("TransferDispatchMovement")
+  transferReceiptLine StockTransferReceiptLine? @relation("TransferReceiptMovement")
 
   @@unique([organizationId, id])
   @@index([organizationId, productId, occurredAt, id])
@@ -356,6 +382,154 @@ model StockAdjustment {
   @@index([organizationId, warehouseId, status, createdAt])
   @@index([organizationId, productId, createdAt])
   @@map("stock_adjustments")
+}
+
+model StockTransferSequence {
+  organizationId String       @id @map("organization_id") @db.Uuid
+  nextNumber     BigInt       @default(1) @map("next_number")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("stock_transfer_sequences")
+}
+
+model StockTransfer {
+  id                  String             @id @default(uuid()) @db.Uuid
+  organizationId      String             @map("organization_id") @db.Uuid
+  sourceWarehouseId   String             @map("source_warehouse_id") @db.Uuid
+  destinationWarehouseId String          @map("destination_warehouse_id") @db.Uuid
+  number              String             @db.VarChar(40)
+  status              StockTransferStatus @default(DRAFT)
+  note                String?            @db.VarChar(500)
+  createdByUserId     String             @map("created_by_user_id") @db.Uuid
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  submittedAt         DateTime?          @map("submitted_at") @db.Timestamptz(3)
+  dispatchedAt        DateTime?          @map("dispatched_at") @db.Timestamptz(3)
+  completedAt         DateTime?          @map("completed_at") @db.Timestamptz(3)
+  organization        Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  sourceWarehouse     Warehouse          @relation("TransferSourceWarehouse", fields: [organizationId, sourceWarehouseId], references: [organizationId, id], onDelete: Restrict)
+  destinationWarehouse Warehouse         @relation("TransferDestinationWarehouse", fields: [organizationId, destinationWarehouseId], references: [organizationId, id], onDelete: Restrict)
+  createdBy           Membership         @relation("TransferCreator", fields: [organizationId, createdByUserId], references: [organizationId, userId], onDelete: Restrict)
+  lines               StockTransferLine[]
+  dispatch            StockTransferDispatch?
+  receipts            StockTransferReceipt[]
+  statusHistory       StockTransferStatusHistory[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, sourceWarehouseId, status, createdAt])
+  @@index([organizationId, destinationWarehouseId, status, createdAt])
+  @@map("stock_transfers")
+}
+
+model StockTransferLine {
+  id                String                   @id @default(uuid()) @db.Uuid
+  organizationId    String                   @map("organization_id") @db.Uuid
+  transferId        String                   @map("transfer_id") @db.Uuid
+  productId         String                   @map("product_id") @db.Uuid
+  requestedQuantity Decimal                  @map("requested_quantity") @db.Decimal(20, 6)
+  createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  organization      Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  transfer          StockTransfer            @relation(fields: [organizationId, transferId], references: [organizationId, id], onDelete: Cascade)
+  product           Product                  @relation(fields: [organizationId, productId], references: [organizationId, id], onDelete: Restrict)
+  dispatchLines     StockTransferDispatchLine[]
+  receiptLines      StockTransferReceiptLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, transferId, productId])
+  @@index([organizationId, productId, createdAt])
+  @@map("stock_transfer_lines")
+}
+
+model StockTransferDispatch {
+  id               String                    @id @default(uuid()) @db.Uuid
+  organizationId   String                    @map("organization_id") @db.Uuid
+  transferId       String                    @map("transfer_id") @db.Uuid
+  dispatchedByUserId String                  @map("dispatched_by_user_id") @db.Uuid
+  dispatchedAt     DateTime                  @default(now()) @map("dispatched_at") @db.Timestamptz(3)
+  organization     Organization              @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  transfer         StockTransfer             @relation(fields: [organizationId, transferId], references: [organizationId, id], onDelete: Restrict)
+  dispatchedBy     Membership                @relation(fields: [organizationId, dispatchedByUserId], references: [organizationId, userId], onDelete: Restrict)
+  lines            StockTransferDispatchLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, transferId])
+  @@map("stock_transfer_dispatches")
+}
+
+model StockTransferDispatchLine {
+  id             String                 @id @default(uuid()) @db.Uuid
+  organizationId String                 @map("organization_id") @db.Uuid
+  dispatchId     String                 @map("dispatch_id") @db.Uuid
+  transferLineId String                 @map("transfer_line_id") @db.Uuid
+  quantity       Decimal                @db.Decimal(20, 6)
+  movementId     String                 @unique @map("movement_id") @db.Uuid
+  costPerBaseUnit Decimal?              @map("cost_per_base_unit") @db.Decimal(20, 4)
+  costCurrency   String?                @map("cost_currency") @db.Char(3)
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  dispatch       StockTransferDispatch  @relation(fields: [organizationId, dispatchId], references: [organizationId, id], onDelete: Cascade)
+  transferLine   StockTransferLine      @relation(fields: [organizationId, transferLineId], references: [organizationId, id], onDelete: Restrict)
+  movement       StockMovement          @relation("TransferDispatchMovement", fields: [organizationId, movementId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, transferLineId])
+  @@unique([organizationId, movementId])
+  @@map("stock_transfer_dispatch_lines")
+}
+
+model StockTransferReceipt {
+  id               String                   @id @default(uuid()) @db.Uuid
+  organizationId   String                   @map("organization_id") @db.Uuid
+  transferId       String                   @map("transfer_id") @db.Uuid
+  idempotencyKey   String                   @map("idempotency_key") @db.VarChar(160)
+  note             String?                  @db.VarChar(500)
+  receivedByUserId String                   @map("received_by_user_id") @db.Uuid
+  receivedAt       DateTime                 @default(now()) @map("received_at") @db.Timestamptz(3)
+  organization     Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  transfer         StockTransfer            @relation(fields: [organizationId, transferId], references: [organizationId, id], onDelete: Restrict)
+  receivedBy       Membership               @relation(fields: [organizationId, receivedByUserId], references: [organizationId, userId], onDelete: Restrict)
+  lines            StockTransferReceiptLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, transferId, receivedAt])
+  @@map("stock_transfer_receipts")
+}
+
+model StockTransferReceiptLine {
+  id             String                @id @default(uuid()) @db.Uuid
+  organizationId String                @map("organization_id") @db.Uuid
+  receiptId      String                @map("receipt_id") @db.Uuid
+  transferLineId String                @map("transfer_line_id") @db.Uuid
+  quantity       Decimal               @db.Decimal(20, 6)
+  movementId     String                @unique @map("movement_id") @db.Uuid
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  receipt        StockTransferReceipt  @relation(fields: [organizationId, receiptId], references: [organizationId, id], onDelete: Cascade)
+  transferLine   StockTransferLine     @relation(fields: [organizationId, transferLineId], references: [organizationId, id], onDelete: Restrict)
+  movement       StockMovement         @relation("TransferReceiptMovement", fields: [organizationId, movementId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, movementId])
+  @@index([organizationId, transferLineId, receiptId])
+  @@map("stock_transfer_receipt_lines")
+}
+
+model StockTransferStatusHistory {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @map("organization_id") @db.Uuid
+  transferId     String              @map("transfer_id") @db.Uuid
+  fromStatus     StockTransferStatus? @map("from_status")
+  toStatus       StockTransferStatus @map("to_status")
+  actorUserId    String              @map("actor_user_id") @db.Uuid
+  note           String?             @db.VarChar(500)
+  occurredAt     DateTime            @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  transfer       StockTransfer       @relation(fields: [organizationId, transferId], references: [organizationId, id], onDelete: Cascade)
+  actor          Membership          @relation(fields: [organizationId, actorUserId], references: [organizationId, userId], onDelete: Restrict)
+
+  @@index([organizationId, transferId, occurredAt])
+  @@map("stock_transfer_status_history")
 }
 
 model Supplier {
