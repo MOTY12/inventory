@@ -53,6 +53,7 @@ export default function PurchaseOrdersPage() {
   const [status, setStatus] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [formOpen, setFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -147,6 +148,7 @@ export default function PurchaseOrdersPage() {
         "POST",
       );
       setNotice(`${order.number} created as a draft.`);
+      setFormOpen(false);
       setLines([{ productId: "", unitId: "", quantity: "1", unitCost: "0" }]);
       await load();
     } catch (cause) {
@@ -175,9 +177,10 @@ export default function PurchaseOrdersPage() {
             to posted deliveries.
           </p>
         </div>
-        <Link className="catalog-secondary-link" href="/suppliers">
-          Suppliers
-        </Link>
+        <div className="dashboard-actions">
+          <Link className="button button-secondary" href="/suppliers">Suppliers</Link>
+          {canWrite && <button className="button button-primary" onClick={() => setFormOpen((open) => !open)} type="button">＋ New purchase order</button>}
+        </div>
       </header>
       {notice && (
         <p className="catalog-notice" role="status">
@@ -198,7 +201,7 @@ export default function PurchaseOrdersPage() {
         </section>
       ) : (
         <>
-          {canWrite && (
+          {canWrite && formOpen && (
             <form className="product-editor" onSubmit={createDraft}>
               <div className="catalog-panel-heading">
                 <div>
