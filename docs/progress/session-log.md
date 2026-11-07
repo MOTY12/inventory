@@ -145,17 +145,20 @@
 - INV-001 remains IN_PROGRESS because live PostgreSQL isolation/integrity cases and product-specific unit conversion semantics are outstanding. Exact follow-up: obtain approved DB connectivity, run `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/postgres.integration.test.mjs`, then complete/test unit conversion with the product/base-unit relation. No commit created; generated/unrelated worktree changes preserved.
 
 # 2026-11-02 — Catalog setup UI
+
 - Continued INV-001 per the attached accelerated implementation prompt. Added `apps/web/src/app/catalog/page.tsx` with organization-scoped category/unit create and list flows, parent-category selection, precision controls, role-aware write controls, and loading/error/success states. Added a Catalog setup route to workspace navigation and responsive styles in `apps/web/src/app/globals.css`.
 - Verification: typecheck passed before the final lint cleanup; final `npm run lint`, `npm run format:check`, and production `npm run build` passed (Next production build completed TypeScript verification). No tests were run after these changes, per the accelerated instruction. No live API/database smoke was possible: API port 4000 was previously connection-refused and Docker status was unavailable in the restricted shell.
 - INV-001 remains IN_PROGRESS because product-specific unit conversions need the Product/base-unit relation planned under INV-002; do not model variable pack sizes as global unit conversions. No roadmap task count change. No commit created because existing uncommitted work spans prior UI, schema, migration, docs and generated files.
 
 # 2026-11-02 — Product schema and catalog API start
+
 - Continued the next dependency-ready Phase 5 work. Added Product and ProductUnitConversion Prisma models and additive migration `20261102113000_products_and_unit_conversions`; this migration is created but not applied. It uses organization-composite foreign keys, organization-unique normalized SKU/barcode, Decimal cost/price, and positive per-product base-unit conversion quantities.
 - Added organization-scoped product list/create and product conversion-create API routes with catalog capability authorization, DTO validation, active same-tenant category/unit checks, and same-transaction audit events. Product UI, update/archive lifecycle, conversion listing, and full integration are still incomplete. INV-001 and INV-002 remain IN_PROGRESS; completed count remains 12/47.
 - Verified `npx prisma validate`, `npm run db:generate --workspace=@inventory/api`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build`, and `git diff --check` passed. Automated tests were not run per the attached acceleration instruction. The local API/session flow could not be smoke-tested; Chrome’s catalog route returned to login when API session refresh was unavailable. Do not claim end-to-end functionality.
 - No commit created because the worktree contains mixed pre-existing changes. Exact next steps are in `docs/progress/next-session.md`.
 
 # 2026-11-02 — Catalog lifecycle and inventory schema progression
+
 - Verified starting state from the previous checkpoint; committed HEAD was `bb3ed64` and worktree was clean. Docker status is now inaccessible, PostgreSQL `localhost:5433` has no response, and API readiness on port 4000 is refused. Did not apply migrations or alter data.
 - Completed the remaining catalog implementation surface for INV-001/002/003: product conversion list/details, product update/archive, normalized SKU/barcode uniqueness, money/currency DTO support, tenant-scoped searchable pagination, product list/detail/create/edit/archive screens, conversion UI, and tenant/path validation. Base-unit changes are blocked while conversions exist.
 - Began INV-005 with additive stock movement, idempotency, and outbox schema/migration. Tenant-composite references scope warehouse/product/reversal/actor membership; DB trigger enforces movement append-only behavior. Began INV-006 with additive inventory balance projection schema/migration and nonnegative/available constraints. Posting/reconciliation API remains unimplemented.
@@ -184,6 +187,7 @@
 - `npm test` passed 35, failed 0, skipped 1 (sandbox API-listener test required elevated rerun). PostgreSQL integration suite passed 10/10 but does not cover products/inventory posting. Prisma validate/generate, typecheck, lint, formatting, production build and `git diff --check` passed after final UI change. Migration status current. API restarted after build; readiness returned 200 and unauthenticated adjustments GET returned 401.
 - Authenticated adjustment DB workflow, ledger trigger mutation, inventory concurrency/idempotency integration, and browser UI remain unverified. No task marked complete, no commit/push. Generated web `tsconfig.tsbuildinfo` was restored. Working tree contains only source/migration/test/docs changes for this work.
 - Exact next: add safe isolated PostgreSQL test coverage for INV-006 and INV-007 (do not leave immutable test ledger data in user DB), verify product flows and authenticated browser workflow; finish INV-007 before advancing to transfers/reservations and then purchasing per roadmap dependencies. Handoff is in `docs/progress/next-session.md`.
+
 # 2026-11-06 — INV-005/006 database verification and movement history
 
 - Resumed from `d865079` on `develop`; worktree was clean and matched `origin/develop` at session start. Read attachment, required progress/roadmap files and inventory semantics. Confirmed INV-007 and catalog work already existed; did not rebuild them.
@@ -212,3 +216,12 @@
 - Isolated `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs`: 7 reported tests passed, 0 failed in the generated schema; includes PO draft update/state transitions, tenant denial, receipt partial/full/replay/over-receive/concurrency, receipt outbox rollback, inventory effects, costs and audit/outbox consistency.
 - Final full `npm test`: 40 passed, 0 failed, 2 opt-in PostgreSQL suites skipped. `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build`, `npm run db:validate --workspace=@inventory/api`, `npx prisma migrate status --config prisma.config.ts` (11/11 current), and `git diff --check` passed.
 - Procurement task completion count remains 14/47. PROCUREMENT-001/002/003 and INV-003 remain IN_PROGRESS pending authenticated browser/permission acceptance. Exact next steps are in `docs/progress/next-session.md`.
+
+# 2026-11-07 — Stockroom shared shell and dashboard UX pass
+
+- Audited App Router pages and found the workspace shell only rendered on `/`, while other authenticated routes had inconsistent top-level layouts. Sidebar links included nonfunctional hash placeholders and Overview was always marked active. Product and supplier editors took priority over their directories, and the dashboard showed generic setup placeholders despite available read APIs.
+- Applied a shared authenticated application frame across the existing routes; added route-aware navigation/breadcrumbs, a mobile drawer, collapsible desktop sidebar, role-filtered links, account controls and organization switching through the existing authenticated selection endpoint.
+- Reworked dashboard into a data-backed operational summary using product/warehouse/balance/movement/PO APIs, with no fabricated low-stock or valuation figures. Added first-run onboarding actions and empty/error states. Changed product and supplier forms to open after explicit user action.
+- Added `docs/design/ux-audit.md`. No backend, API contract or schema changes.
+- Verified: web typecheck passed; repository lint passed; formatting check passed; web production build passed. Chrome opened `/products` and showed the shared shell, selected workspace, active route, directory header and empty state. No visual screenshot, responsive device run, console inspection or authenticated write action was recorded.
+- No roadmap task status change; progress remains 14/47. Keep unfinished procurement/product verification in progress. Next session should do authenticated responsive workflow acceptance, then start INV-008.

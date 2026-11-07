@@ -12,6 +12,16 @@ Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. `86789
 - Added `/purchase-orders` register/create page and `/purchase-orders/[purchaseOrderId]` detail/edit/submit/cancel/receive/history UI, retry-stable receipt key, pagination/search/status filtering, selectable product units, and integer-scaled browser totals. Added navigation and responsive styling.
 - Added DTO and isolated PostgreSQL coverage for PO draft/edit/submit/cancel, tenant denial, partial/full receipts, idempotent replay, over-receiving, concurrent competing receives, rollback on receipt-outbox failure, stock movements/balances/cost, and audit/outbox.
 
+## UI/UX redesign pass — 2026-11-07
+
+- Added a shared authenticated shell at the root layout, covering the existing authenticated pages. Navigation is grouped around working inventory, purchasing and management routes; it has route-aware active state, breadcrumbs, keyboard-visible focus, mobile drawer, collapsible desktop sidebar, role-filtered links and a real organization switcher using the existing select-organization API.
+- Replaced placeholder dashboard cards with live products, warehouses, inventory balances, movements and purchase-order data. Added a guided first-run checklist and honest empty/error states. Low-stock and valuation metrics remain omitted because the application has no threshold/report endpoint to support those figures.
+- Product and supplier directories are now the first view. Their create/edit forms appear only when the user chooses the relevant action.
+- Added `docs/design/ux-audit.md` to record findings and deferred improvements.
+- Browser check: Chrome loaded `/products` with the shared shell, current organization, route navigation, product-directory header and empty state. No screenshot captured. Authenticated create/edit actions, mobile device rendering and assistive-technology review remain pending.
+- Checks after changes: `npm run typecheck --workspace=@inventory/web`, `npm run lint`, `npm run format:check` and `npm run build --workspace=@inventory/web` all passed. `git diff --check` passed before documentation changes; rerun before committing.
+- Roadmap remains **14/47**; this UX work does not change task completion statuses.
+
 ## Verification and limits
 
 - Local database migration deploy succeeded; Prisma reports 11/11 migrations current.
@@ -25,6 +35,7 @@ Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. `86789
 
 ## Exact next steps
 
-1. Use an existing authenticated owner/buyer Chrome session to test supplier create/search/detail/audit/edit/archive, product create/edit/search/conversion, PO draft edit/submit/cancel, partial/full receiving, history and warehouse balances. Do not create or remove accounts to manufacture a result.
-2. Keep task count at 14/47 and PROCUREMENT-001/002/003 and INV-003 IN_PROGRESS until authenticated UI/permission acceptance is complete.
-3. After procurement acceptance, inspect dependencies and proceed with dependency-ready INV-008 transfers. Reservation lifecycle remains SALES-002 after SALES-001, INV-006 and ARCH-001.
+1. In Chrome, verify responsive layout at desktop/tablet/mobile sizes and exercise organization switching plus the product/supplier create/edit/archive interactions with an existing authorized account. Do not create or remove accounts to manufacture results.
+2. Exercise stock counts and PO draft/submit/cancel/partial/full receipt interactions in the authenticated UI, verifying warehouse balances and no browser console errors.
+3. Keep task count at 14/47 and PROCUREMENT-001/002/003 and INV-003 IN_PROGRESS until API, tenant/permission and authenticated workflow acceptance is complete.
+4. After these acceptance checks, implement dependency-ready INV-008 transfers. Reservation lifecycle remains SALES-002 after SALES-001, INV-006 and ARCH-001.

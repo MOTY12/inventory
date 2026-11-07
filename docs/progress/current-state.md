@@ -40,3 +40,12 @@
 3. Keep PROCUREMENT-001/002/003 and INV-003 IN_PROGRESS until remaining authenticated API/browser and permission checks pass.
 4. Use the existing local commits; do not push without authorization.
 5. After P002/P003 acceptance, continue with dependency-ready INV-008 warehouse transfers. Reservation lifecycle belongs to SALES-002 after SALES-001, INV-006 and ARCH-001.
+
+## UI/UX redesign checkpoint — 2026-11-07
+
+- Added a root authenticated application frame so dashboard, products, suppliers, inventory, locations, catalog, organizations and purchasing pages share navigation and organization context. The frame uses route-aware breadcrumbs and selection, a mobile navigation drawer, collapsible desktop navigation and role-filtered working links.
+- Organization selection calls the existing `/organizations/:organizationId/select` endpoint and adopts its new access token; no backend or database changes were made.
+- Replaced the placeholder dashboard with live product count, warehouse count, tracked balance count, open PO count, recent movements, purchase orders, and contextual empty/onboarding states. Low-stock and valuation metrics are omitted because there are no threshold/reporting APIs to support them reliably.
+- Product and supplier editors now open only after an explicit action, so the directories remain the default view. Added the UX findings and deferred work in `docs/design/ux-audit.md`.
+- Verification on this pass: web typecheck, repository lint, formatting check and web production build passed. Chrome at `/products` showed the shared shell, active organization, working route navigation, product directory and empty state. No screenshots were captured; no authenticated create/edit workflows or mobile device check was performed.
+- Roadmap remains **14/47**. No task status changed; supplier, product and procurement acceptance still requires authenticated workflow and permission checks. Continue with responsive/browser review, then the dependency-ready INV-008 transfer task after required acceptance work.

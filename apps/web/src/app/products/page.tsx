@@ -34,6 +34,7 @@ function ProductManager() {
   const [categories, setCategories] = useState<Choice[]>([]);
   const [units, setUnits] = useState<Choice[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -103,6 +104,7 @@ function ProductManager() {
 
   function clearForm() {
     setEditing(null);
+    setFormOpen(false);
     setName("");
     setSku("");
     setBarcode("");
@@ -119,6 +121,7 @@ function ProductManager() {
 
   function editProduct(product: Product) {
     setEditing(product.id);
+    setFormOpen(true);
     setName(product.name);
     setSku(product.sku);
     setBarcode(product.barcode ?? "");
@@ -205,9 +208,16 @@ function ProductManager() {
             this workspace.
           </p>
         </div>
-        <Link className="catalog-secondary-link" href="/">
-          Dashboard
-        </Link>
+        <button
+          className="button button-primary"
+          onClick={() => {
+            clearForm();
+            setFormOpen(true);
+          }}
+          type="button"
+        >
+          ＋ Add product
+        </button>
       </header>
       {notice && (
         <p className="catalog-notice" role="status">
@@ -219,7 +229,7 @@ function ProductManager() {
           {error}
         </p>
       )}
-      {canWrite && (
+      {canWrite && (formOpen || editing) && (
         <form className="product-editor" onSubmit={save}>
           <div className="catalog-panel-heading">
             <div>

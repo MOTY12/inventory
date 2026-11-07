@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { SessionProvider } from "../features/auth/session-provider";
+import { ApplicationFrame } from "../components/workspace-shell";
 
 export const metadata: Metadata = {
   title: "Stockroom | Inventory workspace",
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <SessionProvider>{children}</SessionProvider>
+        <SessionProvider>
+          <ApplicationFrame>{children}</ApplicationFrame>
+        </SessionProvider>
       </body>
     </html>
   );

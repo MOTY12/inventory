@@ -46,6 +46,7 @@ function SuppliersPage() {
   const { organization, authenticatedRequest } = useSession();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [auditHistory, setAuditHistory] = useState<{
     supplierId: string;
@@ -122,10 +123,12 @@ function SuppliersPage() {
     setName("");
     setValues({});
     setEditing(null);
+    setFormOpen(false);
   }
 
   function edit(supplier: Supplier) {
     setEditing(supplier.id);
+    setFormOpen(true);
     setName(supplier.name);
     setValues(
       Object.fromEntries(fields.map(([key]) => [key, supplier[key] ?? ""])),
@@ -199,9 +202,18 @@ function SuppliersPage() {
             workspace.
           </p>
         </div>
-        <Link className="catalog-secondary-link" href="/products">
-          Products
-        </Link>
+        {canWrite && (
+          <button
+            className="button button-primary"
+            onClick={() => {
+              clearForm();
+              setFormOpen(true);
+            }}
+            type="button"
+          >
+            ＋ Add supplier
+          </button>
+        )}
       </header>
       {notice && (
         <p className="catalog-notice" role="status">
@@ -222,7 +234,7 @@ function SuppliersPage() {
         </section>
       ) : (
         <>
-          {canWrite && (
+          {canWrite && (formOpen || editing) && (
             <form className="product-editor" onSubmit={save}>
               <div className="catalog-panel-heading">
                 <div>
