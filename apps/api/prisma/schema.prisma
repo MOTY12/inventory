@@ -70,6 +70,14 @@ enum StockAdjustmentStatus {
   POSTED
 }
 
+enum PurchaseOrderStatus {
+  DRAFT
+  SUBMITTED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
 model User {
   id                  String                   @id @default(uuid()) @db.Uuid
   email               String                   @unique @db.VarChar(320)
@@ -110,6 +118,8 @@ model Organization {
   outboxEvents       OutboxEvent[]
   stockAdjustments   StockAdjustment[]
   suppliers          Supplier[]
+  purchaseOrders     PurchaseOrder[]
+  purchaseOrderSequence PurchaseOrderSequence?
 
   @@map("organizations")
 }
@@ -127,6 +137,8 @@ model Membership {
   warehouseGrants  MembershipWarehouseGrant[]
   stockMovements   StockMovement[]
   stockAdjustments StockAdjustment[]
+  purchaseOrders   PurchaseOrder[]
+  goodsReceipts    GoodsReceipt[]
 
   @@unique([organizationId, userId])
   @@index([userId, status])
@@ -149,6 +161,7 @@ model Warehouse {
   stockMovements    StockMovement[]
   inventoryBalances InventoryBalance[]
   stockAdjustments  StockAdjustment[]
+  purchaseOrders    PurchaseOrder[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -205,6 +218,7 @@ model Unit {
   organization    Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   baseForProducts Product[]               @relation("ProductBaseUnit")
   conversions     ProductUnitConversion[]
+  purchaseOrderLines PurchaseOrderLine[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -239,6 +253,7 @@ model Product {
   stockMovements    StockMovement[]
   inventoryBalances InventoryBalance[]
   stockAdjustments  StockAdjustment[]
+  purchaseOrderLines PurchaseOrderLine[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, skuNormalized])
@@ -285,6 +300,7 @@ model StockMovement {
   reversalOf      StockMovement?    @relation("MovementReversal", fields: [organizationId, reversalOfId], references: [organizationId, id], onDelete: Restrict)
   reversals       StockMovement[]   @relation("MovementReversal")
   adjustment      StockAdjustment?  @relation("AdjustmentMovement")
+  goodsReceiptLine GoodsReceiptLine? @relation("ReceiptMovement")
 
   @@unique([organizationId, id])
   @@index([organizationId, productId, occurredAt, id])
@@ -362,12 +378,116 @@ model Supplier {
   createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
   organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  purchaseOrders PurchaseOrder[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, nameNormalized])
   @@index([organizationId, status, name])
   @@index([organizationId, email])
   @@map("suppliers")
+}
+
+model PurchaseOrderSequence {
+  organizationId String       @id @map("organization_id") @db.Uuid
+  nextNumber     BigInt       @default(1) @map("next_number")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("purchase_order_sequences")
+}
+
+model PurchaseOrder {
+  id                 String              @id @default(uuid()) @db.Uuid
+  organizationId     String              @map("organization_id") @db.Uuid
+  supplierId         String              @map("supplier_id") @db.Uuid
+  warehouseId        String              @map("warehouse_id") @db.Uuid
+  number             String              @db.VarChar(40)
+  status             PurchaseOrderStatus @default(DRAFT)
+  orderDate          DateTime            @default(now()) @map("order_date") @db.Date
+  expectedDeliveryAt DateTime?           @map("expected_delivery_at") @db.Date
+  currency           String              @db.Char(3)
+  subtotal           Decimal             @default(0) @db.Decimal(20, 4)
+  createdByUserId    String              @map("created_by_user_id") @db.Uuid
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  submittedAt        DateTime?           @map("submitted_at") @db.Timestamptz(3)
+  cancelledAt        DateTime?           @map("cancelled_at") @db.Timestamptz(3)
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  supplier           Supplier            @relation(fields: [organizationId, supplierId], references: [organizationId, id], onDelete: Restrict)
+  warehouse          Warehouse           @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Restrict)
+  createdBy          Membership          @relation(fields: [organizationId, createdByUserId], references: [organizationId, userId], onDelete: Restrict)
+  lines              PurchaseOrderLine[]
+  receipts           GoodsReceipt[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, number])
+  @@index([organizationId, status, orderDate, id])
+  @@index([organizationId, supplierId, orderDate])
+  @@index([organizationId, warehouseId, status])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderLine {
+  id                   String             @id @default(uuid()) @db.Uuid
+  organizationId       String             @map("organization_id") @db.Uuid
+  purchaseOrderId      String             @map("purchase_order_id") @db.Uuid
+  productId            String             @map("product_id") @db.Uuid
+  unitId               String             @map("unit_id") @db.Uuid
+  orderedQuantity      Decimal            @map("ordered_quantity") @db.Decimal(20, 6)
+  receivedQuantity     Decimal            @default(0) @map("received_quantity") @db.Decimal(20, 6)
+  receivedBaseQuantity Decimal            @default(0) @map("received_base_quantity") @db.Decimal(20, 6)
+  baseQuantity         Decimal            @map("base_quantity") @db.Decimal(20, 6)
+  unitCost             Decimal            @map("unit_cost") @db.Decimal(20, 4)
+  baseUnitCost         Decimal            @map("base_unit_cost") @db.Decimal(20, 4)
+  lineTotal            Decimal            @map("line_total") @db.Decimal(20, 4)
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  purchaseOrder        PurchaseOrder      @relation(fields: [organizationId, purchaseOrderId], references: [organizationId, id], onDelete: Cascade)
+  product              Product            @relation(fields: [organizationId, productId], references: [organizationId, id], onDelete: Restrict)
+  unit                 Unit               @relation(fields: [organizationId, unitId], references: [organizationId, id], onDelete: Restrict)
+  receiptLines         GoodsReceiptLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, purchaseOrderId, productId, unitId])
+  @@index([organizationId, purchaseOrderId])
+  @@map("purchase_order_lines")
+}
+
+model GoodsReceipt {
+  id               String             @id @default(uuid()) @db.Uuid
+  organizationId   String             @map("organization_id") @db.Uuid
+  purchaseOrderId  String             @map("purchase_order_id") @db.Uuid
+  idempotencyKey   String             @map("idempotency_key") @db.VarChar(160)
+  payloadHash      String             @map("payload_hash") @db.Char(64)
+  receivedAt       DateTime           @default(now()) @map("received_at") @db.Timestamptz(3)
+  receivedByUserId String             @map("received_by_user_id") @db.Uuid
+  note             String?            @db.VarChar(500)
+  purchaseOrder    PurchaseOrder      @relation(fields: [organizationId, purchaseOrderId], references: [organizationId, id], onDelete: Restrict)
+  receivedBy       Membership         @relation(fields: [organizationId, receivedByUserId], references: [organizationId, userId], onDelete: Restrict)
+  lines            GoodsReceiptLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, purchaseOrderId, receivedAt])
+  @@map("goods_receipts")
+}
+
+model GoodsReceiptLine {
+  id                  String            @id @default(uuid()) @db.Uuid
+  organizationId      String            @map("organization_id") @db.Uuid
+  receiptId           String            @map("receipt_id") @db.Uuid
+  purchaseOrderLineId String            @map("purchase_order_line_id") @db.Uuid
+  quantity            Decimal           @db.Decimal(20, 6)
+  baseQuantity        Decimal           @map("base_quantity") @db.Decimal(20, 6)
+  stockMovementId     String?           @map("stock_movement_id") @db.Uuid
+  receipt             GoodsReceipt      @relation(fields: [organizationId, receiptId], references: [organizationId, id], onDelete: Restrict)
+  purchaseOrderLine   PurchaseOrderLine @relation(fields: [organizationId, purchaseOrderLineId], references: [organizationId, id], onDelete: Restrict)
+  stockMovement       StockMovement?    @relation("ReceiptMovement", fields: [organizationId, stockMovementId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, stockMovementId])
+  @@index([organizationId, receiptId])
+  @@index([organizationId, purchaseOrderLineId])
+  @@map("goods_receipt_lines")
 }
 
 model IdempotencyRecord {

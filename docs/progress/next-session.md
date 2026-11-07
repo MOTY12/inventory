@@ -1,8 +1,8 @@
 # Next session handoff
 
-## Checkpoint — 2026-11-06 (Africa/Lagos)
+## Checkpoint — 2026-11-07 (Africa/Lagos)
 
-Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. Latest pre-session commit `4dd56d0`; supplier feature commit `2185c43`. Procurement 002/003 implementation and docs are currently uncommitted. No push. Completed roadmap count remains **14/47**. Do not mark procurement tasks complete yet.
+Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. Current HEAD is `86789bd` (`update the supplier`) and the local `origin/develop` ref points to it; this execution did not push. Inspection found that the commit contains the procurement implementation/migration but omitted corresponding Prisma model declarations. Those declarations have been restored locally; commit the focused reconciliation after review. Completed roadmap count remains **14/47**. Do not mark procurement tasks complete yet.
 
 ## Delivered this session
 
@@ -16,17 +16,17 @@ Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. Latest
 
 - Local database migration deploy succeeded; Prisma reports 11/11 migrations current.
 - Latest isolated `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs`: **7 reported tests passed, 0 failed**. It uses a generated schema, asserts the current schema before fixture writes, and drops only that schema.
-- Full `npm test` last passed **40, failed 0, skipped 2** before final added integration assertions. Rerun.
-- Latest `npm run typecheck` passed. Rerun lint, formatting, production build and all tests after final changes.
+- Final full `npm test`: **40 passed, 0 failed, 2 skipped**.
+- Final isolated PostgreSQL suite after restoring Prisma declarations: **7 reported tests passed, 0 failed**; it asserts the generated schema before fixture writes and drops only that schema.
+- Final typecheck, lint, format check, production build, Prisma validation, migration status (11/11 current) and `git diff --check` passed.
 - Earlier full run failed to bind its temporary API listener inside the sandbox; rerunning `npm test` with escalation passed. Isolated DB tests likewise require local DB permission.
 - No authenticated browser session is available in Chrome (Stockroom tab at `/login`). Supplier, product and purchasing browser acceptance is still unverified. Keep PROCUREMENT-001/002/003 and INV-003 `IN_PROGRESS`.
 - Preserve previously discovered generated test fixtures in `inventory_dev.public`: 12 tenant fixture organizations/memberships, 9 branches, 5 warehouses, 15 units, 20 products, 25 movements and 104 audit events. No cleanup occurred. Do not modify these records without explicit approval.
 
 ## Exact next steps
 
-1. Run final `npm test`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build`, `npm run db:validate --workspace=@inventory/api`, `npx prisma migrate status --config prisma.config.ts`, and `git diff --check`.
-2. Review purchase-order migration and final diff for unrelated changes. Confirm no existing public-schema fixture rows were touched.
-3. Use an existing authenticated owner/buyer Chrome session to test supplier create/search/detail/audit/edit/archive, product create/edit/search/conversion, PO draft edit/submit/cancel, partial/full receiving, history, and warehouse balances. Do not create or remove accounts to manufacture a result.
-4. Keep task count at 14/47 until the task acceptance criteria, including authenticated UI/permission checks, are complete. Update all status/docs if any check fails.
-5. Commit one coherent procurement milestone after verification; do not push.
-6. After PROCUREMENT-002/003 acceptance, inspect the dependency graph and proceed with dependency-ready INV-008 transfers. Reservation lifecycle remains SALES-002 after SALES-001, INV-006 and ARCH-001.
+1. Inspect `git diff -- apps/api/prisma/schema.prisma` and confirm it is only the Prisma model reconciliation needed by the migration and services.
+2. Commit that focused schema fix locally; do not push.
+3. Use an existing authenticated owner/buyer Chrome session to test supplier create/search/detail/audit/edit/archive, product create/edit/search/conversion, PO draft edit/submit/cancel, partial/full receiving, history and warehouse balances. Do not create or remove accounts to manufacture a result.
+4. Keep task count at 14/47 and PROCUREMENT-001/002/003 and INV-003 IN_PROGRESS until authenticated UI/permission acceptance is complete.
+5. After procurement acceptance, inspect dependencies and proceed with dependency-ready INV-008 transfers. Reservation lifecycle remains SALES-002 after SALES-001, INV-006 and ARCH-001.
