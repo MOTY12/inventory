@@ -12,6 +12,7 @@ import { InventoryPostingService } from "../dist/inventory/inventory-posting.ser
 import { InventoryReadService } from "../dist/inventory/inventory-read.service.js";
 import { StockAdjustmentsService } from "../dist/inventory/adjustments.service.js";
 import { SuppliersService } from "../dist/procurement/suppliers.service.js";
+import { PurchaseOrdersService } from "../dist/procurement/purchase-orders.service.js";
 
 const enabled = process.env.RUN_POSTGRES_INTEGRATION === "1";
 
@@ -60,6 +61,7 @@ test(
       const read = new InventoryReadService(prisma);
       const adjustments = new StockAdjustmentsService(prisma, inventory);
       const suppliers = new SuppliersService(prisma);
+      const purchaseOrders = new PurchaseOrdersService(prisma, inventory);
       const contextA = ownerA.context;
       const contextB = ownerB.context;
       const branch = await locations.createBranch(contextA, ownerA.userId, {
@@ -265,10 +267,11 @@ test(
             "ARCHIVED",
           );
           const history = await suppliers.auditHistory(contextA, supplier.id);
-          assert.deepEqual(
-            history.map((event) => event.action).sort(),
-            ["ARCHIVED", "CREATED", "UPDATED"],
-          );
+          assert.deepEqual(history.map((event) => event.action).sort(), [
+            "ARCHIVED",
+            "CREATED",
+            "UPDATED",
+          ]);
           await assert.rejects(
             suppliers.update(contextA, ownerA.userId, supplier.id, {
               name: "Changed",
@@ -285,6 +288,425 @@ test(
           name: "Stock item",
           sku: `STOCK-${randomUUID()}`,
           baseUnitId: unit.id,
+        },
+      );
+      await t.test(
+        "purchase order lifecycle, partial and full receiving, idempotency and stock posting",
+        async () => {
+          const receivingProduct = await catalog.createProduct(
+            contextA,
+            ownerA.userId,
+            {
+              name: "Receiving integration item",
+              sku: `RECEIVE-${randomUUID()}`,
+              baseUnitId: unit.id,
+            },
+          );
+          const supplier = await suppliers.create(contextA, ownerA.userId, {
+            name: `Receiving supplier ${randomUUID()}`,
+          });
+          let order = await purchaseOrders.create(contextA, ownerA.userId, {
+            supplierId: supplier.id,
+            warehouseId: warehouse.id,
+            currency: "NGN",
+            lines: [
+              {
+                productId: receivingProduct.id,
+                unitId: unit.id,
+                quantity: "10",
+                unitCost: "2.5000",
+              },
+            ],
+          });
+          assert.equal(order.status, "DRAFT");
+          assert.match(order.number, /^PO-\d{6}$/);
+          assert.equal(order.subtotal.toString(), "25");
+          await assert.rejects(
+            purchaseOrders.get(contextB, ownerB.userId, order.id),
+            (error) => error.getStatus() === 404,
+          );
+          await purchaseOrders.update(contextA, ownerA.userId, order.id, {
+            supplierId: supplier.id,
+            warehouseId: warehouse.id,
+            currency: "NGN",
+            lines: [
+              {
+                productId: receivingProduct.id,
+                unitId: unit.id,
+                quantity: "10",
+                unitCost: "2.7500",
+              },
+            ],
+          });
+          order = await purchaseOrders.get(contextA, ownerA.userId, order.id);
+          assert.equal(order.subtotal.toString(), "27.5");
+          await purchaseOrders.submit(contextA, ownerA.userId, order.id);
+          await assert.rejects(
+            purchaseOrders.update(contextA, ownerA.userId, order.id, {
+              supplierId: supplier.id,
+              warehouseId: warehouse.id,
+              currency: "NGN",
+              lines: [
+                {
+                  productId: receivingProduct.id,
+                  unitId: unit.id,
+                  quantity: "11",
+                  unitCost: "2.5000",
+                },
+              ],
+            }),
+            (error) => error.getStatus() === 409,
+          );
+          const receiptInput = {
+            lines: [{ purchaseOrderLineId: order.lines[0].id, quantity: "4" }],
+          };
+          const firstReceipt = await purchaseOrders.receive(
+            contextA,
+            ownerA.userId,
+            order.id,
+            "receive-part-one",
+            receiptInput,
+          );
+          const replay = await purchaseOrders.receive(
+            contextA,
+            ownerA.userId,
+            order.id,
+            "receive-part-one",
+            receiptInput,
+          );
+          assert.equal(firstReceipt.id, replay.id);
+          assert.equal(
+            await prisma.stockMovement.count({
+              where: {
+                organizationId: contextA.organizationId,
+                documentId: firstReceipt.id,
+              },
+            }),
+            1,
+          );
+          await assert.rejects(
+            purchaseOrders.receive(
+              contextA,
+              ownerA.userId,
+              order.id,
+              "receive-too-much",
+              {
+                lines: [
+                  { purchaseOrderLineId: order.lines[0].id, quantity: "7" },
+                ],
+              },
+            ),
+            (error) => error.getStatus() === 409,
+          );
+          const midBalance = await prisma.inventoryBalance.findUniqueOrThrow({
+            where: {
+              organizationId_warehouseId_productId: {
+                organizationId: contextA.organizationId,
+                warehouseId: warehouse.id,
+                productId: receivingProduct.id,
+              },
+            },
+          });
+          assert.equal(midBalance.onHand.toString(), "4");
+          assert.equal(midBalance.averageCost.toString(), "2.75");
+          const secondReceipt = await purchaseOrders.receive(
+            contextA,
+            ownerA.userId,
+            order.id,
+            "receive-part-two",
+            {
+              lines: [
+                { purchaseOrderLineId: order.lines[0].id, quantity: "6" },
+              ],
+            },
+          );
+          assert.equal(secondReceipt.lines.length, 1);
+          assert.equal(
+            (await purchaseOrders.get(contextA, ownerA.userId, order.id))
+              .status,
+            "RECEIVED",
+          );
+          assert.equal(
+            (await purchaseOrders.receipts(contextA, ownerA.userId, order.id))
+              .length,
+            2,
+          );
+          const orderAudit = await prisma.auditEvent.findMany({
+            where: {
+              organizationId: contextA.organizationId,
+              entityType: "PURCHASE_ORDER",
+              entityId: order.id,
+            },
+            select: { action: true },
+          });
+          assert.deepEqual(
+            new Set(orderAudit.map((event) => event.action)),
+            new Set([
+              "CREATED",
+              "UPDATED",
+              "SUBMITTED",
+              "PARTIALLY_RECEIVED",
+              "RECEIVED",
+            ]),
+          );
+          assert.equal(
+            (
+              await prisma.inventoryBalance.findUniqueOrThrow({
+                where: {
+                  organizationId_warehouseId_productId: {
+                    organizationId: contextA.organizationId,
+                    warehouseId: warehouse.id,
+                    productId: receivingProduct.id,
+                  },
+                },
+              })
+            ).onHand.toString(),
+            "10",
+          );
+          assert.equal(
+            await prisma.outboxEvent.count({
+              where: {
+                organizationId: contextA.organizationId,
+                eventType: "procurement.goods-receipt.posted",
+              },
+            }),
+            2,
+          );
+          const concurrentProduct = await catalog.createProduct(
+            contextA,
+            ownerA.userId,
+            {
+              name: "Concurrent receiving item",
+              sku: `CONCURRENT-RECEIVE-${randomUUID()}`,
+              baseUnitId: unit.id,
+            },
+          );
+          const concurrentOrder = await purchaseOrders.create(
+            contextA,
+            ownerA.userId,
+            {
+              supplierId: supplier.id,
+              warehouseId: warehouse.id,
+              currency: "NGN",
+              lines: [
+                {
+                  productId: concurrentProduct.id,
+                  unitId: unit.id,
+                  quantity: "5",
+                  unitCost: "4",
+                },
+              ],
+            },
+          );
+          await purchaseOrders.submit(
+            contextA,
+            ownerA.userId,
+            concurrentOrder.id,
+          );
+          const concurrentResults = await Promise.allSettled([
+            purchaseOrders.receive(
+              contextA,
+              ownerA.userId,
+              concurrentOrder.id,
+              "concurrent-a",
+              {
+                lines: [
+                  {
+                    purchaseOrderLineId: concurrentOrder.lines[0].id,
+                    quantity: "4",
+                  },
+                ],
+              },
+            ),
+            purchaseOrders.receive(
+              contextA,
+              ownerA.userId,
+              concurrentOrder.id,
+              "concurrent-b",
+              {
+                lines: [
+                  {
+                    purchaseOrderLineId: concurrentOrder.lines[0].id,
+                    quantity: "4",
+                  },
+                ],
+              },
+            ),
+          ]);
+          assert.equal(
+            concurrentResults.filter((result) => result.status === "fulfilled")
+              .length,
+            1,
+          );
+          assert.equal(
+            concurrentResults.filter((result) => result.status === "rejected")
+              .length,
+            1,
+          );
+          assert.notEqual(concurrentOrder.number, order.number);
+          assert.equal(
+            (
+              await prisma.inventoryBalance.findUniqueOrThrow({
+                where: {
+                  organizationId_warehouseId_productId: {
+                    organizationId: contextA.organizationId,
+                    warehouseId: warehouse.id,
+                    productId: concurrentProduct.id,
+                  },
+                },
+              })
+            ).onHand.toString(),
+            "4",
+          );
+          const rollbackProduct = await catalog.createProduct(
+            contextA,
+            ownerA.userId,
+            {
+              name: "Receipt rollback item",
+              sku: `RECEIPT-ROLLBACK-${randomUUID()}`,
+              baseUnitId: unit.id,
+            },
+          );
+          const rollbackOrder = await purchaseOrders.create(
+            contextA,
+            ownerA.userId,
+            {
+              supplierId: supplier.id,
+              warehouseId: warehouse.id,
+              currency: "NGN",
+              lines: [
+                {
+                  productId: rollbackProduct.id,
+                  unitId: unit.id,
+                  quantity: "2",
+                  unitCost: "1",
+                },
+              ],
+            },
+          );
+          await purchaseOrders.submit(
+            contextA,
+            ownerA.userId,
+            rollbackOrder.id,
+          );
+          const originalTransaction = prisma.$transaction.bind(prisma);
+          prisma.$transaction = (callback, ...args) =>
+            originalTransaction(
+              (tx) =>
+                callback(
+                  new Proxy(tx, {
+                    get(target, property, receiver) {
+                      const value = Reflect.get(target, property, receiver);
+                      if (property === "outboxEvent")
+                        return new Proxy(value, {
+                          get(delegate, method, modelReceiver) {
+                            if (method === "create")
+                              return async ({ data }) => {
+                                if (
+                                  data.eventType ===
+                                  "procurement.goods-receipt.posted"
+                                )
+                                  throw new Error(
+                                    "injected receipt outbox failure",
+                                  );
+                                return delegate.create({ data });
+                              };
+                            const result = Reflect.get(
+                              delegate,
+                              method,
+                              modelReceiver,
+                            );
+                            return typeof result === "function"
+                              ? result.bind(delegate)
+                              : result;
+                          },
+                        });
+                      return typeof value === "function"
+                        ? value.bind(target)
+                        : value;
+                    },
+                  }),
+                ),
+              ...args,
+            );
+          try {
+            await assert.rejects(
+              purchaseOrders.receive(
+                contextA,
+                ownerA.userId,
+                rollbackOrder.id,
+                "receipt-rollback",
+                {
+                  lines: [
+                    {
+                      purchaseOrderLineId: rollbackOrder.lines[0].id,
+                      quantity: "1",
+                    },
+                  ],
+                },
+              ),
+            );
+          } finally {
+            prisma.$transaction = originalTransaction;
+          }
+          assert.equal(
+            await prisma.goodsReceipt.count({
+              where: {
+                organizationId: contextA.organizationId,
+                purchaseOrderId: rollbackOrder.id,
+              },
+            }),
+            0,
+          );
+          assert.equal(
+            await prisma.stockMovement.count({
+              where: {
+                organizationId: contextA.organizationId,
+                productId: rollbackProduct.id,
+              },
+            }),
+            0,
+          );
+          assert.equal(
+            await prisma.inventoryBalance.count({
+              where: {
+                organizationId: contextA.organizationId,
+                productId: rollbackProduct.id,
+              },
+            }),
+            0,
+          );
+          const cancelDraft = await purchaseOrders.create(
+            contextA,
+            ownerA.userId,
+            {
+              supplierId: supplier.id,
+              warehouseId: warehouse.id,
+              currency: "NGN",
+              lines: [
+                {
+                  productId: receivingProduct.id,
+                  unitId: unit.id,
+                  quantity: "1",
+                  unitCost: "3",
+                },
+              ],
+            },
+          );
+          assert.equal(
+            (
+              await purchaseOrders.cancel(
+                contextA,
+                ownerA.userId,
+                cancelDraft.id,
+              )
+            ).status,
+            "CANCELLED",
+          );
+          await assert.rejects(
+            purchaseOrders.submit(contextA, ownerA.userId, cancelDraft.id),
+            (error) => error.getStatus() === 409,
+          );
         },
       );
       await t.test(

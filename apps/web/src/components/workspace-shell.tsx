@@ -10,6 +10,7 @@ const navigation = [
   { href: "/products", label: "Products", icon: "◫" },
   { href: "/inventory", label: "Inventory counts", icon: "▦" },
   { href: "/suppliers", label: "Suppliers", icon: "⇣" },
+  { href: "/purchase-orders", label: "Purchase orders", icon: "▣" },
   { href: "#sales", label: "Sales", icon: "⇡" },
   { href: "#reports", label: "Reports", icon: "▤" },
 ];

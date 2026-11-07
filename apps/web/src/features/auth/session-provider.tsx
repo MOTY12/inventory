@@ -35,6 +35,7 @@ type SessionContextValue = {
     path: string,
     body?: unknown,
     method?: "GET" | "POST" | "PATCH" | "PUT",
+    headers?: Record<string, string>,
   ) => Promise<T>;
   adoptAccessToken: (token: string) => Promise<void>;
 };
@@ -57,6 +58,7 @@ async function request<T>(
   accessToken?: string,
   csrfOverride?: string | null,
   method?: "GET" | "POST" | "PATCH" | "PUT",
+  extraHeaders?: Record<string, string>,
 ): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     method: method ?? (body === undefined ? "GET" : "POST"),
@@ -64,6 +66,7 @@ async function request<T>(
     headers: {
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...extraHeaders,
       ...(path === "/auth/refresh" || path === "/auth/logout"
         ? { "X-CSRF-Token": csrfOverride ?? csrfToken() }
         : {}),
@@ -159,9 +162,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       path: string,
       body?: unknown,
       method?: "GET" | "POST" | "PATCH" | "PUT",
+      headers?: Record<string, string>,
     ) => {
       if (!accessToken.current) throw new Error("Sign in to continue.");
-      return request<T>(path, body, accessToken.current, undefined, method);
+      return request<T>(
+        path,
+        body,
+        accessToken.current,
+        undefined,
+        method,
+        headers,
+      );
     },
     [],
   );

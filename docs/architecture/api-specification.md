@@ -28,6 +28,10 @@ Base `/api/v1`; JSON; bearer access token; request ID; critical POST/PATCH comma
 - `GET/POST /purchase-orders`; `GET/PATCH /purchase-orders/:id`; submit/cancel transitions.
 - `POST /purchase-orders/:id/receipts` with receipt lines; `GET /purchase-orders/:id/receipts`.
 
+Purchase order routes are organization-scoped and additionally filtered by the member's active warehouse grants. Draft order lines use decimal quantity/cost strings and a selected product unit with a configured product conversion. Totals are stored as PostgreSQL Decimal values. Organization purchase order numbers are allocated atomically as `PO-000001` style identifiers. Drafts can be edited; submit and cancel transitions are audited. Submission does not post stock.
+
+Goods receipt creation requires an `Idempotency-Key` header. Receipt line quantities are expressed in the purchase order line unit and converted to the product base unit. The PO row is locked while outstanding quantities are checked. Receipt lines, PO received quantities/status, inventory ledger movements/balances, audit events and outbox events commit in one transaction. Excess quantities and mismatched idempotency replays are rejected. The purchase order is marked `PARTIALLY_RECEIVED` or `RECEIVED` as quantities are posted. No approval, tax or landed-cost policy is introduced.
+
 ## Sales and finance records
 - `GET/POST /sales-orders`; confirm/cancel; `POST /sales-orders/:id/fulfillments` (partial lines).
 - `POST /sales-orders/:id/invoices`; `POST /invoices/:id/payments` or record payment + allocations.

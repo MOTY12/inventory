@@ -1719,3 +1719,90 @@ p {
     grid-template-columns: 1fr;
   }
 }
+.po-line-list {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0;
+}
+.po-line {
+  display: grid;
+  grid-template-columns:
+    minmax(190px, 2fr) minmax(150px, 1fr) repeat(2, minmax(120px, 1fr))
+    auto;
+  align-items: end;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line, #e1e8e2);
+  border-radius: 14px;
+  background: #fbfcfb;
+}
+.po-total,
+.po-actions,
+.po-receive-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0;
+}
+.po-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+.po-summary > div,
+.receipt-card > div {
+  display: grid;
+  gap: 7px;
+}
+.receipt-list {
+  display: grid;
+  gap: 12px;
+}
+.receipt-card {
+  padding: 18px;
+  border: 1px solid var(--line, #e1e8e2);
+  border-radius: 14px;
+}
+.receipt-card > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.receipt-card ul {
+  margin: 14px 0 0;
+  color: var(--muted, #637166);
+}
+.po-receive-action {
+  justify-content: flex-start;
+}
+.po-receive-action p {
+  margin: 0;
+  color: var(--muted, #637166);
+}
+.po-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  color: var(--muted, #637166);
+}
+.po-pagination > div {
+  display: flex;
+  gap: 8px;
+}
+@media (max-width: 760px) {
+  .po-line,
+  .po-summary {
+    grid-template-columns: 1fr;
+  }
+  .receipt-card > div {
+    flex-direction: column;
+  }
+  .po-actions,
+  .po-receive-action {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

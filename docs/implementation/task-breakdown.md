@@ -1,6 +1,6 @@
 # Numbered task breakdown
 
-Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001 through FOUNDATION-009, ARCH-001, INV-005, and INV-006 are COMPLETED; PROD-002, ARCH-002, INV-001, INV-002, INV-003, INV-007, and PROCUREMENT-001 are IN_PROGRESS; remaining tasks are NOT_STARTED. FOUNDATION-006/007/008/009 have automated PostgreSQL concurrency, tenant-isolation and scope coverage as recorded in progress documentation. Completed count: 14/47.
+Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001 through FOUNDATION-009, ARCH-001, INV-005, and INV-006 are COMPLETED; PROD-002, ARCH-002, INV-001, INV-002, INV-003, INV-007, and PROCUREMENT-001 through PROCUREMENT-003 are IN_PROGRESS; remaining tasks are NOT_STARTED. FOUNDATION-006/007/008/009 have automated PostgreSQL concurrency, tenant-isolation and scope coverage as recorded in progress documentation. Completed count: 14/47.
 
 ## Phase 0–2: research, product, architecture
 
@@ -114,11 +114,11 @@ Description: Supplier CRUD/search/contact/terms. Priority: P0. Dependencies: FOU
 
 ### PROCUREMENT-002: Purchase order lifecycle
 **Files/modules affected:** apps/api/src/procurement/, apps/web/src/features/procurement/, Prisma procurement schema.
-Description: Draft/submit/cancel with line prices, expected date and destination. Priority: P0. Dependencies: PROCUREMENT-001, INV-003. Deliverables: PO model/API/UI. Acceptance: valid state transitions, totals are Decimal and no stock posts before receipt. Tests: state/permission/tenant tests. Status: NOT_STARTED.
+Description: Draft/submit/cancel with line prices, expected date and destination. Priority: P0. Dependencies: PROCUREMENT-001, INV-003. Deliverables: PO model/API/UI. Acceptance: valid state transitions, totals are Decimal and no stock posts before receipt. Tests: state/permission/tenant tests. Status: IN_PROGRESS. Added additive tenant-composite PO/line schema, atomic organization-scoped PO numbering, Decimal totals and unit-cost conversion snapshots, warehouse-scoped CRUD/search/pagination, draft update, submit/cancel transitions, audit history, DTO validation, and responsive list/create/detail/edit UI. Isolated PostgreSQL integration verifies draft editing, unique sequence progression, tenant denial, submission, cancellation and no stock posting before receipt. Authenticated browser workflow and additional role/warehouse denial UI checks remain pending.
 
 ### PROCUREMENT-003: Goods receiving and partial deliveries
 **Files/modules affected:** apps/api/src/procurement/, apps/web/src/features/procurement/, Prisma procurement schema.
-Description: Post one or more receipts, quantities/date/UoM, update outstanding PO line. Priority: P0. Dependencies: PROCUREMENT-002, INV-006. Deliverables: receipt API/UI. Acceptance: duplicate receive idempotent; cannot over-receive unless approved policy; movement atomic with receipt status. Tests: partial, duplicate, concurrency, rollback. Status: NOT_STARTED.
+Description: Post one or more receipts, quantities/date/UoM, update outstanding PO line. Priority: P0. Dependencies: PROCUREMENT-002, INV-006. Deliverables: receipt API/UI. Acceptance: duplicate receive idempotent; cannot over-receive unless approved policy; movement atomic with receipt status. Tests: partial, duplicate, concurrency, rollback. Status: IN_PROGRESS. Added receipt document/line schema with tenant-composite FKs, quantity checks and idempotency; PO-locked over-receive checks; transaction-composable inventory posting; partial/full status updates; ledger/balance/cost/audit/outbox posting; receipt history and receive UI with retry-stable idempotency key. Isolated PostgreSQL integration verifies partial/full receive, duplicate replay, excess rejection, competing concurrent receives, outbox-failure rollback, cost/balance movements and audit state. Authenticated browser and live API workflow remain unverified.
 
 ### PROCUREMENT-004: Supplier payment records
 **Files/modules affected:** apps/api/src/procurement/, apps/web/src/features/procurement/, Prisma procurement schema.
