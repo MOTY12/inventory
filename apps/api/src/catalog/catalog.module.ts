@@ -9,5 +9,6 @@ import { CatalogService } from "./catalog.service";
   imports: [AuthModule],
   controllers: [CatalogController],
   providers: [CatalogService, OrganizationContextGuard, RoleCapabilityGuard],
+  exports: [CatalogService],
 })
 export class CatalogModule {}

@@ -60,18 +60,24 @@ async function request<T>(
   method?: "GET" | "POST" | "PATCH" | "PUT",
   extraHeaders?: Record<string, string>,
 ): Promise<T> {
+  const isFormData =
+    typeof FormData !== "undefined" && body instanceof FormData;
   const response = await fetch(`${API_URL}${path}`, {
     method: method ?? (body === undefined ? "GET" : "POST"),
     credentials: "include",
     headers: {
-      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      ...(body === undefined || isFormData
+        ? {}
+        : { "Content-Type": "application/json" }),
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...extraHeaders,
       ...(path === "/auth/refresh" || path === "/auth/logout"
         ? { "X-CSRF-Token": csrfOverride ?? csrfToken() }
         : {}),
     },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    ...(body === undefined
+      ? {}
+      : { body: isFormData ? (body as FormData) : JSON.stringify(body) }),
   });
   const result = (await response.json().catch(() => ({}))) as {
     error?: { message?: string };

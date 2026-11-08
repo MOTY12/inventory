@@ -10,6 +10,7 @@ import { CatalogModule } from "./catalog/catalog.module";
 import { InventoryModule } from "./inventory/inventory.module";
 import { ProcurementModule } from "./procurement/procurement.module";
 import { SalesModule } from "./sales/sales.module";
+import { ImportsModule } from "./imports/imports.module";
 
 @ApiTags("system")
 @Controller()
@@ -34,6 +35,7 @@ class AppController {
     InventoryModule,
     ProcurementModule,
     SalesModule,
+    ImportsModule,
   ],
   controllers: [AppController, HealthController],
 })

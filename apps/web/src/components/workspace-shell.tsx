@@ -16,6 +16,7 @@ const groups = [
     label: "INVENTORY",
     links: [
       { href: "/products", label: "Products", icon: "products" },
+      { href: "/imports", label: "Import data", icon: "catalog" },
       { href: "/inventory", label: "Stock counts", icon: "counts" },
       { href: "/transfers", label: "Transfers", icon: "purchasing" },
       { href: "/locations", label: "Branches & warehouses", icon: "locations" },
@@ -51,6 +52,7 @@ const groups = [
 const names: Record<string, string> = {
   "": "Overview",
   products: "Products",
+  imports: "Import data",
   inventory: "Stock counts",
   transfers: "Warehouse transfers",
   locations: "Branches & warehouses",

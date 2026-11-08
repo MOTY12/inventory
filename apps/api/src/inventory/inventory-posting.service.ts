@@ -303,6 +303,92 @@ export class InventoryPostingService {
     };
   }
 
+  async postOpeningBalanceIfUninitialized(
+    tx: Prisma.TransactionClient,
+    context: OrganizationContext,
+    actorUserId: string,
+    idempotencyKey: string,
+    input: {
+      batchId: string;
+      lineId: string;
+      warehouseId: string;
+      productId: string;
+      quantity: string;
+      unitCost: string;
+      currency: string;
+    },
+  ) {
+    await tx.inventoryBalance.upsert({
+      where: {
+        organizationId_warehouseId_productId: {
+          organizationId: context.organizationId,
+          warehouseId: input.warehouseId,
+          productId: input.productId,
+        },
+      },
+      create: {
+        organizationId: context.organizationId,
+        warehouseId: input.warehouseId,
+        productId: input.productId,
+      },
+      update: {},
+    });
+    const locked = await tx.$queryRaw<
+      {
+        on_hand: Prisma.Decimal;
+        reserved: Prisma.Decimal;
+        in_transit: Prisma.Decimal;
+        average_cost: Prisma.Decimal | null;
+      }[]
+    >(Prisma.sql`
+      SELECT on_hand,reserved,in_transit,average_cost
+      FROM inventory_balances
+      WHERE organization_id=${context.organizationId}::uuid
+        AND warehouse_id=${input.warehouseId}::uuid
+        AND product_id=${input.productId}::uuid
+      FOR UPDATE
+    `);
+    const balance = locked[0];
+    if (!balance)
+      throw new ConflictException("Could not lock the opening balance row");
+    const priorMovement = await tx.stockMovement.findFirst({
+      where: {
+        organizationId: context.organizationId,
+        warehouseId: input.warehouseId,
+        productId: input.productId,
+      },
+      select: { id: true },
+    });
+    if (
+      priorMovement ||
+      !balance.on_hand.isZero() ||
+      !balance.reserved.isZero() ||
+      !balance.in_transit.isZero() ||
+      balance.average_cost !== null
+    )
+      throw new ConflictException(
+        "Opening stock is allowed only before this product has inventory history at the warehouse",
+      );
+
+    return this.postWarehouseMovement(
+      context,
+      actorUserId,
+      idempotencyKey,
+      {
+        warehouseId: input.warehouseId,
+        productId: input.productId,
+        documentType: "OPENING_BALANCE_IMPORT",
+        documentId: input.batchId,
+        documentLineId: input.lineId,
+        movementType: "OPENING_BALANCE",
+        quantityDelta: input.quantity,
+        costPerBaseUnit: input.unitCost,
+        costCurrency: input.currency,
+      },
+      tx,
+    );
+  }
+
   private async transferMovementEvents(
     tx: Prisma.TransactionClient,
     context: OrganizationContext,

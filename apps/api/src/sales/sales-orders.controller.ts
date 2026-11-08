@@ -23,6 +23,7 @@ import {
 } from "../organizations/organization-context.guard";
 import {
   CreateSalesFulfillmentDto,
+  CreateSalesPickDto,
   CreateSalesOrderDto,
   SalesOrderListQueryDto,
   UpdateSalesOrderDto,
@@ -87,6 +88,15 @@ export class SalesOrdersController {
     return this.orders.fulfillments(request.organization!, id);
   }
 
+  @Get(":salesOrderId/picks")
+  @RequireCapabilities("sales:read")
+  picks(
+    @Param("salesOrderId", ParseUUIDPipe) id: string,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.orders.picks(request.organization!, id);
+  }
+
   @Patch(":salesOrderId")
   @RequireCapabilities("sales:write")
   update(
@@ -126,6 +136,23 @@ export class SalesOrdersController {
     @Req() request: OrganizationRequest,
   ) {
     return this.orders.fulfill(
+      request.organization!,
+      request.auth!.sub,
+      id,
+      key,
+      body,
+    );
+  }
+
+  @Post(":salesOrderId/picks")
+  @RequireCapabilities("sales:write")
+  pick(
+    @Param("salesOrderId", ParseUUIDPipe) id: string,
+    @Headers("idempotency-key") key: string,
+    @Body() body: CreateSalesPickDto,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.orders.pick(
       request.organization!,
       request.auth!.sub,
       id,

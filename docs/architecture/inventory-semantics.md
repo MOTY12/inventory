@@ -8,7 +8,8 @@
 - `reserved`: the quantity allocated to confirmed, unfulfilled sales-order lines.
 - `available`: `on_hand - reserved`; it may not be negative under the provisional strict policy.
 - `in_transit`: quantity dispatched from a source warehouse but not yet accepted into a destination warehouse. It is not available to sell at either warehouse.
-- All quantities are represented in the product's base unit. Unit conversion and rounding must be validated before a command starts.
+- Inventory quantities and movements are represented in the product's base unit. Sales document ordered/picked/fulfilled totals use the line's selected unit and are converted exactly before any ledger posting; UI does not add quantities expressed in different units.
+- For sales picking, `picked` is cumulative confirmed quantity, including the portion already fulfilled. The line invariant is `0 <= fulfilled <= picked <= ordered`; picking is permission and reservation checked, and fulfillment cannot exceed the cumulative picked total.
 
 ## State flow
 
@@ -62,8 +63,12 @@ The diagram describes quantity flows; a command either commits its complete set 
 | Reversal is requested twice                                                   | Only one compensating quantity is posted; subsequent duplicate is idempotent or rejected as already reversed. |
 | Adjustment count is below existing reservations                               | Rejected; reserved allocations cannot be silently invalidated.                                                |
 
-These scenarios are acceptance cases for future PostgreSQL integration and concurrency tests. This document does not claim those tests have already been implemented or run.
+These scenarios describe the implementation contract. Coverage and the exact verification run for each milestone are recorded in `docs/progress/current-state.md` and `docs/progress/next-session.md`.
 
 ## Sales reservation and fulfillment verification (2026-11-08)
 
-The isolated PostgreSQL integration suite now executes the competing confirmation, insufficient availability, idempotent confirmation, cancellation release/replay, tenant denial, partial/full fulfillment, fulfillment retry and fulfillment race scenarios. The executed suite verifies reservation reconciliation and final on-hand/reserved projections. Generic inventory posting rollback is covered by an injected outbox failure; a failure injected specifically through the sales fulfillment transaction remains a pending SALES-003 verification case. The current implementation has no separate pick record/stage, so the `picked` quantity invariant is not yet represented and SALES-003 remains IN_PROGRESS.
+The isolated PostgreSQL integration suite covers competing confirmation, insufficient availability, idempotent confirmation, cancellation release/replay, tenant denial, partial/multiple picking, over-pick rejection, fulfillment-before-pick rejection, partial/full fulfillment, pick/fulfillment retry and races, warehouse grants, pick/fulfillment outbox rollback, and final reservation/ledger reconciliation. SALES-003 implementation and database acceptance passed; authenticated browser acceptance is still unavailable, so the task remains IN_PROGRESS.
+
+## CSV and opening balance import contract (2026-11-08)
+
+Product import is create-only: an existing organization SKU/barcode or duplicate in the same file is a row error; commit requires every row to be valid and creates the entire batch atomically. Preview has no product or inventory side effects and expires after 24 hours. Opening balance import uses a conservative initialization policy: each product/warehouse pair must have no prior movement history and a zero/no balance projection. It posts an immutable `OPENING_BALANCE` movement through `InventoryPostingService`, including source batch/line references, audit, outbox and idempotency in one transaction. It never overwrites live stock. This is provisional operational behavior rather than an owner-validated accounting rule. Isolated PostgreSQL coverage includes preview/no-side-effect, replay, invalid row rejection and injected outbox rollback for both product and opening-stock commits.

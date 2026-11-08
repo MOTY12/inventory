@@ -105,6 +105,20 @@ enum SalesOrderStatus {
   CANCELLED
 }
 
+enum SalesPickStatus {
+  CONFIRMED
+}
+
+enum ImportBatchKind {
+  PRODUCTS
+  OPENING_BALANCES
+}
+
+enum ImportBatchStatus {
+  PREVIEWED
+  COMMITTED
+}
+
 enum InventoryReservationStatus {
   ACTIVE
   RELEASED
@@ -170,6 +184,9 @@ model Organization {
   reservationHistory         InventoryReservationHistory[]
   salesFulfillments          SalesFulfillment[]
   salesFulfillmentLines      SalesFulfillmentLine[]
+  salesPicks                 SalesPick[]
+  salesPickLines             SalesPickLine[]
+  importBatches              ImportBatch[]
 
   @@map("organizations")
 }
@@ -197,6 +214,8 @@ model Membership {
   salesOrderStatusChanges    SalesOrderStatusHistory[]
   reservationHistory         InventoryReservationHistory[]
   postedSalesFulfillments    SalesFulfillment[]
+  confirmedSalesPicks        SalesPick[]
+  createdImportBatches       ImportBatch[]
 
   @@unique([organizationId, userId])
   @@index([userId, status])
@@ -225,6 +244,7 @@ model Warehouse {
   salesOrders           SalesOrder[]
   inventoryReservations InventoryReservation[]
   salesFulfillments     SalesFulfillment[]
+  salesPicks            SalesPick[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -322,6 +342,7 @@ model Product {
   salesOrderLines       SalesOrderLine[]
   inventoryReservations InventoryReservation[]
   salesFulfillmentLines SalesFulfillmentLine[]
+  salesPickLines        SalesPickLine[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, skuNormalized])
@@ -647,6 +668,7 @@ model SalesOrder {
   statusHistory         SalesOrderStatusHistory[]
   reservations          InventoryReservation[]
   fulfillments          SalesFulfillment[]
+  picks                 SalesPick[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, number])
@@ -670,6 +692,7 @@ model SalesOrderLine {
   unitPrice         Decimal                @map("unit_price") @db.Decimal(20, 4)
   lineTotal         Decimal                @map("line_total") @db.Decimal(20, 4)
   fulfilledQuantity Decimal                @default(0) @map("fulfilled_quantity") @db.Decimal(20, 6)
+  pickedQuantity    Decimal                @default(0) @map("picked_quantity") @db.Decimal(20, 6)
   createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
   organization      Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   salesOrder        SalesOrder             @relation(fields: [organizationId, salesOrderId], references: [organizationId, id], onDelete: Cascade)
@@ -677,6 +700,7 @@ model SalesOrderLine {
   unit              Unit                   @relation(fields: [organizationId, unitId], references: [organizationId, id], onDelete: Restrict)
   reservation       InventoryReservation?
   fulfillmentLines  SalesFulfillmentLine[]
+  pickLines         SalesPickLine[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, salesOrderId, productId])
@@ -704,6 +728,7 @@ model InventoryReservation {
   product           Product                       @relation(fields: [organizationId, productId], references: [organizationId, id], onDelete: Restrict)
   history           InventoryReservationHistory[]
   fulfillmentLines  SalesFulfillmentLine[]
+  pickLines         SalesPickLine[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, salesOrderLineId])
@@ -744,6 +769,72 @@ model SalesOrderStatusHistory {
 
   @@index([organizationId, salesOrderId, occurredAt])
   @@map("sales_order_status_history")
+}
+
+model SalesPick {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  salesOrderId   String          @map("sales_order_id") @db.Uuid
+  warehouseId    String          @map("warehouse_id") @db.Uuid
+  status         SalesPickStatus @default(CONFIRMED)
+  idempotencyKey String          @map("idempotency_key") @db.VarChar(160)
+  note           String?         @db.VarChar(500)
+  pickedByUserId String          @map("picked_by_user_id") @db.Uuid
+  pickedAt       DateTime        @default(now()) @map("picked_at") @db.Timestamptz(3)
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  salesOrder     SalesOrder      @relation(fields: [organizationId, salesOrderId], references: [organizationId, id], onDelete: Restrict)
+  warehouse      Warehouse       @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Restrict)
+  pickedBy       Membership      @relation(fields: [organizationId, pickedByUserId], references: [organizationId, userId], onDelete: Restrict)
+  lines          SalesPickLine[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, salesOrderId, pickedAt])
+  @@map("sales_picks")
+}
+
+model SalesPickLine {
+  id               String               @id @default(uuid()) @db.Uuid
+  organizationId   String               @map("organization_id") @db.Uuid
+  salesPickId      String               @map("sales_pick_id") @db.Uuid
+  salesOrderLineId String               @map("sales_order_line_id") @db.Uuid
+  reservationId    String               @map("reservation_id") @db.Uuid
+  productId        String               @map("product_id") @db.Uuid
+  quantity         Decimal              @db.Decimal(20, 6)
+  baseQuantity     Decimal              @map("base_quantity") @db.Decimal(20, 6)
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  organization     Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  salesPick        SalesPick            @relation(fields: [organizationId, salesPickId], references: [organizationId, id], onDelete: Cascade)
+  salesOrderLine   SalesOrderLine       @relation(fields: [organizationId, salesOrderLineId], references: [organizationId, id], onDelete: Restrict)
+  reservation      InventoryReservation @relation(fields: [organizationId, reservationId], references: [organizationId, id], onDelete: Restrict)
+  product          Product              @relation(fields: [organizationId, productId], references: [organizationId, id], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, salesOrderLineId, createdAt])
+  @@map("sales_pick_lines")
+}
+
+model ImportBatch {
+  id              String            @id @default(uuid()) @db.Uuid
+  organizationId  String            @map("organization_id") @db.Uuid
+  kind            ImportBatchKind
+  status          ImportBatchStatus @default(PREVIEWED)
+  fileName        String            @map("file_name") @db.VarChar(255)
+  sourceHash      String            @map("source_hash") @db.Char(64)
+  mapping         Json
+  previewRows     Json              @map("preview_rows")
+  summary         Json
+  createdByUserId String            @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt       DateTime          @map("expires_at") @db.Timestamptz(3)
+  committedAt     DateTime?         @map("committed_at") @db.Timestamptz(3)
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdBy       Membership        @relation(fields: [organizationId, createdByUserId], references: [organizationId, userId], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, kind, createdAt])
+  @@index([organizationId, status, expiresAt])
+  @@map("import_batches")
 }
 
 model SalesFulfillment {

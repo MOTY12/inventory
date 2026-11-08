@@ -19,6 +19,7 @@ import { PrismaService } from "../database/prisma.service";
 import type { OrganizationContext } from "../organizations/organization-context.guard";
 import { InventoryPostingService } from "../inventory/inventory-posting.service";
 import {
+  CreateSalesPickDto,
   CreateSalesFulfillmentDto,
   CreateSalesOrderDto,
   SalesOrderListQueryDto,
@@ -606,6 +607,19 @@ export class SalesOrdersService {
             throw new ConflictException(
               "Only draft or unfulfilled confirmed orders can be cancelled",
             );
+          const outstandingPick = await tx.$queryRaw<
+            { id: string }[]
+          >(Prisma.sql`
+            SELECT id FROM sales_order_lines
+            WHERE organization_id=${ctx.organizationId}::uuid
+              AND sales_order_id=${id}::uuid
+              AND picked_quantity > fulfilled_quantity
+            LIMIT 1
+          `);
+          if (outstandingPick.length)
+            throw new ConflictException(
+              "Picked quantities must be fulfilled before the order can be cancelled",
+            );
           const reservations = await tx.inventoryReservation.findMany({
             where: {
               organizationId: ctx.organizationId,
@@ -699,6 +713,237 @@ export class SalesOrdersService {
       },
       orderBy: { postedAt: "asc" },
     });
+  }
+
+  async picks(ctx: OrganizationContext, id: string) {
+    await this.get(ctx, id);
+    return this.prisma.salesPick.findMany({
+      where: { organizationId: ctx.organizationId, salesOrderId: id },
+      include: {
+        pickedBy: { include: { user: { select: { email: true } } } },
+        lines: {
+          include: {
+            salesOrderLine: {
+              select: { productName: true, sku: true, unitCode: true },
+            },
+          },
+        },
+      },
+      orderBy: { pickedAt: "asc" },
+    });
+  }
+
+  async pick(
+    ctx: OrganizationContext,
+    actor: string,
+    orderId: string,
+    key: string,
+    input: CreateSalesPickDto,
+    attempt = 0,
+  ): Promise<unknown> {
+    this.requireKey(key);
+    if (input.lines.length > 100)
+      throw new ConflictException("A pick cannot contain more than 100 lines");
+    if (
+      new Set(input.lines.map((line) => line.salesOrderLineId)).size !==
+      input.lines.length
+    )
+      throw new ConflictException(
+        "A sales order line may appear only once per pick",
+      );
+    const payloadHash = hash({ command: "pick", orderId, input });
+    try {
+      await this.prisma.$transaction(
+        async (tx) => {
+          const prior = await tx.idempotencyRecord.findUnique({
+            where: {
+              organizationId_key: { organizationId: ctx.organizationId, key },
+            },
+          });
+          if (prior) {
+            if (prior.payloadHash !== payloadHash)
+              throw new ConflictException(
+                "Idempotency key was already used with a different payload",
+              );
+            if (prior.status !== IdempotencyStatus.COMPLETED || !prior.resultId)
+              throw new ConflictException(
+                "A command with this key is still in progress",
+              );
+            const existing = await tx.salesPick.findFirst({
+              where: {
+                organizationId: ctx.organizationId,
+                salesOrderId: orderId,
+                id: prior.resultId,
+              },
+              include: { lines: true },
+            });
+            if (!existing)
+              throw new ConflictException("Stored pick result is unavailable");
+            return;
+          }
+          await tx.idempotencyRecord.create({
+            data: { organizationId: ctx.organizationId, key, payloadHash },
+          });
+          const locked = await tx.$queryRaw<
+            { status: SalesOrderStatus; warehouse_id: string }[]
+          >(Prisma.sql`
+            SELECT status,warehouse_id FROM sales_orders
+            WHERE id=${orderId}::uuid AND organization_id=${ctx.organizationId}::uuid FOR UPDATE
+          `);
+          const order = locked[0];
+          if (!order) throw new NotFoundException("Sales order not found");
+          await this.requireWarehouse(ctx, tx, order.warehouse_id);
+          if (
+            order.status !== SalesOrderStatus.CONFIRMED &&
+            order.status !== SalesOrderStatus.PARTIALLY_FULFILLED
+          )
+            throw new ConflictException("Only confirmed orders can be picked");
+          const lineIds = input.lines.map((line) => line.salesOrderLineId);
+          const orderLines = await tx.salesOrderLine.findMany({
+            where: {
+              organizationId: ctx.organizationId,
+              salesOrderId: orderId,
+              id: { in: lineIds },
+            },
+            include: {
+              unit: { select: { precision: true } },
+              reservation: true,
+            },
+            orderBy: { productId: "asc" },
+          });
+          if (orderLines.length !== input.lines.length)
+            throw new NotFoundException(
+              "One or more sales order lines were not found",
+            );
+          const byId = new Map(orderLines.map((line) => [line.id, line]));
+          const prepared = input.lines
+            .map((item) => {
+              const line = byId.get(item.salesOrderLineId)!;
+              const quantity = new Prisma.Decimal(item.quantity);
+              if (
+                quantity.lte(0) ||
+                quantity.decimalPlaces() > line.unit.precision
+              )
+                throw new ConflictException(
+                  `Pick quantity for ${line.sku} must be positive and match ${line.unitCode} precision`,
+                );
+              if (line.pickedQuantity.plus(quantity).gt(line.orderedQuantity))
+                throw new ConflictException(
+                  `Pick quantity exceeds the outstanding order quantity for ${line.sku}`,
+                );
+              if (
+                !line.reservation ||
+                line.reservation.status !== InventoryReservationStatus.ACTIVE
+              )
+                throw new ConflictException(
+                  `An active reservation for ${line.sku} is unavailable`,
+                );
+              const ratio = line.baseQuantity.div(line.orderedQuantity);
+              const baseQuantity = quantity.mul(ratio);
+              if (baseQuantity.decimalPlaces() > 6)
+                throw new ConflictException(
+                  `Converted pick quantity for ${line.sku} exceeds base-unit precision`,
+                );
+              const reservationRemaining = line.reservation.quantity
+                .minus(line.reservation.fulfilledQuantity)
+                .minus(line.reservation.releasedQuantity);
+              const alreadyPickedBase = line.pickedQuantity
+                .minus(line.fulfilledQuantity)
+                .mul(ratio);
+              if (alreadyPickedBase.plus(baseQuantity).gt(reservationRemaining))
+                throw new ConflictException(
+                  `Pick quantity exceeds the remaining reservation for ${line.sku}`,
+                );
+              return { line, quantity, baseQuantity };
+            })
+            .sort((a, b) => a.line.productId.localeCompare(b.line.productId));
+
+          const pick = await tx.salesPick.create({
+            data: {
+              organizationId: ctx.organizationId,
+              salesOrderId: orderId,
+              warehouseId: order.warehouse_id,
+              idempotencyKey: key,
+              note: input.note?.trim() || null,
+              pickedByUserId: actor,
+            },
+          });
+          for (const item of prepared) {
+            await tx.salesPickLine.create({
+              data: {
+                organizationId: ctx.organizationId,
+                salesPickId: pick.id,
+                salesOrderLineId: item.line.id,
+                reservationId: item.line.reservation!.id,
+                productId: item.line.productId,
+                quantity: item.quantity,
+                baseQuantity: item.baseQuantity,
+              },
+            });
+            await tx.salesOrderLine.update({
+              where: { id: item.line.id },
+              data: {
+                pickedQuantity: item.line.pickedQuantity.plus(item.quantity),
+              },
+            });
+          }
+          await this.event(tx, ctx, actor, orderId, "PICK_CONFIRMED", {
+            pickId: pick.id,
+            lineCount: prepared.length,
+          });
+          await tx.idempotencyRecord.update({
+            where: {
+              organizationId_key: { organizationId: ctx.organizationId, key },
+            },
+            data: {
+              status: IdempotencyStatus.COMPLETED,
+              resultType: "SALES_PICK",
+              resultId: pick.id,
+              response: { salesPickId: pick.id },
+              completedAt: new Date(),
+            },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (isSerialization(error) && attempt < 2)
+        return this.pick(ctx, actor, orderId, key, input, attempt + 1);
+      if (isUnique(error)) {
+        const prior = await this.prisma.idempotencyRecord.findUnique({
+          where: {
+            organizationId_key: { organizationId: ctx.organizationId, key },
+          },
+        });
+        if (prior?.payloadHash !== payloadHash)
+          throw new ConflictException(
+            "Idempotency key was already used with a different payload",
+          );
+        if (prior?.status === IdempotencyStatus.COMPLETED && prior.resultId) {
+          const existing = await this.prisma.salesPick.findFirst({
+            where: {
+              organizationId: ctx.organizationId,
+              salesOrderId: orderId,
+              id: prior.resultId,
+            },
+            include: { lines: true },
+          });
+          if (existing) return existing;
+        }
+        throw new ConflictException("Idempotency key was already used");
+      }
+      throw error;
+    }
+    const result = await this.prisma.salesPick.findFirst({
+      where: {
+        organizationId: ctx.organizationId,
+        salesOrderId: orderId,
+        idempotencyKey: key,
+      },
+      include: { lines: true },
+    });
+    if (!result) throw new ConflictException("Pick result could not be loaded");
+    return result;
   }
 
   async fulfill(
@@ -806,6 +1051,10 @@ export class SalesOrdersService {
               )
                 throw new ConflictException(
                   `Fulfillment exceeds the outstanding quantity for ${line.sku}`,
+                );
+              if (line.fulfilledQuantity.plus(quantity).gt(line.pickedQuantity))
+                throw new ConflictException(
+                  `Fulfillment exceeds the confirmed picked quantity for ${line.sku}`,
                 );
               if (
                 !line.reservation ||

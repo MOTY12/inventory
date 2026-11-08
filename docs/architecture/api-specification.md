@@ -13,6 +13,8 @@ Base `/api/v1`; JSON; bearer access token; request ID; critical POST/PATCH comma
 
 - `GET/POST /products`, `GET/PATCH /products/:id`, `POST /products/import/preview`, `/products/import/commit`.
 - `GET/POST /categories`, `/units`, `/suppliers`, `/customers`.
+- `GET /organizations/current/imports/template?kind=PRODUCTS|OPENING_BALANCES`; `GET /organizations/current/imports`, `GET /:batchId`, and `GET /:batchId/audit`.
+- `POST /organizations/current/imports/products/preview`, `POST /products/:batchId/commit`, `POST /opening-balances/preview`, and `POST /opening-balances/:batchId/commit` (all under the imports base path). Preview accepts multipart CSV plus JSON column mapping and makes no catalog/stock changes. Commit requires `Idempotency-Key`; an invalid/expired preview is rejected atomically.
 - Search fields SKU/name/barcode; duplicate SKU returns 409; archive referenced products instead of deletion.
 
 ## Procurement directory
@@ -44,8 +46,8 @@ Goods receipt creation requires an `Idempotency-Key` header. Receipt line quanti
 
 ## Sales and finance records
 
-- `/organizations/current/sales/orders`: `GET/POST`; `GET/PATCH /:salesOrderId`; `POST /:salesOrderId/confirm`; `POST /:salesOrderId/cancel`; `GET /:salesOrderId/audit`; `GET/POST /:salesOrderId/fulfillments`.
-- Creating a draft, confirming/canceling, and posting fulfillment require `Idempotency-Key`. Draft lines capture product/unit/price snapshots and Decimal totals. Confirmation locks balances in stable order and reserves through `InventoryPostingService`; it does not reduce on-hand. Cancellation releases outstanding reservations once. Fulfillment posts immutable stock outflow and consumes reservation quantities in the same transaction as fulfillment, order progress, audit and outbox. Fulfillment may be partial and is replay-safe.
+- `/organizations/current/sales/orders`: `GET/POST`; `GET/PATCH /:salesOrderId`; `POST /:salesOrderId/confirm`; `POST /:salesOrderId/cancel`; `GET /:salesOrderId/audit`; `GET/POST /:salesOrderId/picks`; `GET/POST /:salesOrderId/fulfillments`.
+- Creating a draft, confirming/canceling, picking and posting fulfillment require `Idempotency-Key`. Draft lines capture product/unit/price snapshots and Decimal totals. Confirmation locks balances in stable order and reserves through `InventoryPostingService`; it does not reduce on-hand. Cancellation releases outstanding reservations once and is rejected when physical picked quantity remains unfulfilled. Picking may be partial and repeated; cumulative picked quantity is in the order line's selected unit, and must satisfy `fulfilled <= picked <= ordered`. Fulfillment posts immutable stock outflow and consumes reservation quantities in the same transaction as fulfillment, order progress, audit and outbox.
 - Sales order reads/writes derive organization and warehouse access from authenticated membership context; client-supplied organization IDs do not establish tenant scope.
 - `POST /sales-orders/:id/invoices`; `POST /invoices/:id/payments` or record payment + allocations. These routes are planned, not implemented; invoice/tax/accounting rules remain unapproved.
 - Returns/refunds in Phase 2.

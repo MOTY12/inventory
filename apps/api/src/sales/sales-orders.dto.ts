@@ -65,3 +65,16 @@ export class CreateSalesFulfillmentDto {
   @MaxLength(500)
   note?: string;
 }
+
+export class CreateSalesPickDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => SalesFulfillmentLineInputDto)
+  lines!: SalesFulfillmentLineInputDto[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+}

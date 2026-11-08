@@ -16,6 +16,7 @@ import { PurchaseOrdersService } from "../dist/procurement/purchase-orders.servi
 import { StockTransfersService } from "../dist/inventory/transfers.service.js";
 import { CustomersService } from "../dist/sales/customers.service.js";
 import { SalesOrdersService } from "../dist/sales/sales-orders.service.js";
+import { ImportsService } from "../dist/imports/imports.service.js";
 
 const enabled = process.env.RUN_POSTGRES_INTEGRATION === "1";
 
@@ -68,6 +69,7 @@ test(
       const transfers = new StockTransfersService(prisma, inventory);
       const customers = new CustomersService(prisma);
       const salesOrders = new SalesOrdersService(prisma, inventory);
+      const imports = new ImportsService(prisma, catalog, inventory);
       const contextA = ownerA.context;
       const contextB = ownerB.context;
       const branch = await locations.createBranch(contextA, ownerA.userId, {
@@ -212,6 +214,314 @@ test(
             product.id,
           );
           assert.equal(archived.status, "ARCHIVED");
+        },
+      );
+
+      await t.test(
+        "CSV product preview and commit are tenant-scoped and idempotent; opening balances post once",
+        async () => {
+          const sku = `CSV-${randomUUID()}`;
+          const csv = Buffer.from(
+            `SKU,Product Name,Base Unit,Cost,Cost Currency\n${sku},CSV Import Product,PCS,42.5000,NGN\n`,
+          );
+          const preview = await imports.preview(
+            contextA,
+            ownerA.userId,
+            "PRODUCTS",
+            {
+              originalname: "products.csv",
+              mimetype: "text/csv",
+              buffer: csv,
+              size: csv.length,
+            },
+          );
+          assert.equal(preview.summary.validRows, 1);
+          assert.equal(
+            await prisma.product.count({
+              where: {
+                organizationId: contextA.organizationId,
+                skuNormalized: sku.toLocaleUpperCase("en-US"),
+              },
+            }),
+            0,
+          );
+          await assert.rejects(
+            imports.get(contextB, preview.id),
+            (error) => error.getStatus() === 404,
+          );
+          const committed = await imports.commit(
+            contextA,
+            ownerA.userId,
+            preview.id,
+            `csv-product-${preview.id}`,
+            "PRODUCTS",
+          );
+          assert.equal(committed.status, "COMMITTED");
+          assert.equal(
+            (await imports.auditHistory(contextA, preview.id))[0]?.action,
+            "COMMITTED",
+          );
+          assert.equal(
+            await prisma.product.count({
+              where: {
+                organizationId: contextA.organizationId,
+                skuNormalized: sku.toLocaleUpperCase("en-US"),
+              },
+            }),
+            1,
+          );
+          await imports.commit(
+            contextA,
+            ownerA.userId,
+            preview.id,
+            `csv-product-${preview.id}`,
+            "PRODUCTS",
+          );
+          assert.equal(
+            await prisma.product.count({
+              where: {
+                organizationId: contextA.organizationId,
+                skuNormalized: sku.toLocaleUpperCase("en-US"),
+              },
+            }),
+            1,
+          );
+
+          const imported = await prisma.product.findFirstOrThrow({
+            where: {
+              organizationId: contextA.organizationId,
+              skuNormalized: sku.toLocaleUpperCase("en-US"),
+            },
+          });
+          const openingCsv = Buffer.from(
+            `SKU,Warehouse Code,Opening Quantity,Opening Unit Cost,Cost Currency,Source Reference\n${sku},IT-01,12,42.5000,NGN,initial count\n`,
+          );
+          const openingPreview = await imports.preview(
+            contextA,
+            ownerA.userId,
+            "OPENING_BALANCES",
+            {
+              originalname: "opening.csv",
+              mimetype: "text/csv",
+              buffer: openingCsv,
+              size: openingCsv.length,
+            },
+          );
+          assert.equal(openingPreview.summary.validRows, 1);
+          assert.equal(
+            await prisma.stockMovement.count({
+              where: {
+                organizationId: contextA.organizationId,
+                productId: imported.id,
+              },
+            }),
+            0,
+          );
+          const openingCommitted = await imports.commit(
+            contextA,
+            ownerA.userId,
+            openingPreview.id,
+            `csv-opening-${openingPreview.id}`,
+            "OPENING_BALANCES",
+          );
+          assert.equal(openingCommitted.status, "COMMITTED");
+          const movement = await prisma.stockMovement.findFirstOrThrow({
+            where: {
+              organizationId: contextA.organizationId,
+              productId: imported.id,
+            },
+          });
+          assert.equal(movement.movementType, "OPENING_BALANCE");
+          assert.equal(movement.quantityDelta.toString(), "12");
+          await imports.commit(
+            contextA,
+            ownerA.userId,
+            openingPreview.id,
+            `csv-opening-${openingPreview.id}`,
+            "OPENING_BALANCES",
+          );
+          assert.equal(
+            await prisma.stockMovement.count({
+              where: {
+                organizationId: contextA.organizationId,
+                productId: imported.id,
+              },
+            }),
+            1,
+          );
+
+          const shouldNotImportSku = `CSV-NOT-PARTIAL-${randomUUID()}`;
+          const duplicateCsv = Buffer.from(
+            `SKU,Product Name,Base Unit\n${sku},Duplicate CSV Product,PCS\n${shouldNotImportSku},Valid row must stay atomic,PCS\n`,
+          );
+          const invalid = await imports.preview(
+            contextA,
+            ownerA.userId,
+            "PRODUCTS",
+            {
+              originalname: "duplicate.csv",
+              mimetype: "text/csv",
+              buffer: duplicateCsv,
+              size: duplicateCsv.length,
+            },
+          );
+          assert.equal(invalid.summary.validRows, 1);
+          assert.equal(invalid.summary.invalidRows, 1);
+          await assert.rejects(
+            imports.commit(
+              contextA,
+              ownerA.userId,
+              invalid.id,
+              `csv-invalid-${invalid.id}`,
+              "PRODUCTS",
+            ),
+            (error) => error.getStatus() === 409,
+          );
+          assert.equal(
+            await prisma.product.count({
+              where: {
+                organizationId: contextA.organizationId,
+                skuNormalized: sku.toLocaleUpperCase("en-US"),
+              },
+            }),
+            1,
+          );
+          assert.equal(
+            await prisma.product.count({
+              where: {
+                organizationId: contextA.organizationId,
+                skuNormalized: shouldNotImportSku.toLocaleUpperCase("en-US"),
+              },
+            }),
+            0,
+          );
+
+          await admin.query(
+            `CREATE FUNCTION "${schema}".fail_import_outbox() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.event_type IN ('imports.batch.committed', 'inventory.movement.posted') THEN RAISE EXCEPTION 'injected import outbox failure'; END IF; RETURN NEW; END; $$`,
+          );
+          await admin.query(
+            `CREATE TRIGGER fail_import_outbox BEFORE INSERT ON "${schema}".outbox_events FOR EACH ROW EXECUTE FUNCTION "${schema}".fail_import_outbox()`,
+          );
+          try {
+            const rollbackSku = `CSV-ROLLBACK-${randomUUID()}`;
+            const rollbackCsv = Buffer.from(
+              `SKU,Product Name,Base Unit\n${rollbackSku},Rollback Product,PCS\n`,
+            );
+            const rollbackPreview = await imports.preview(
+              contextA,
+              ownerA.userId,
+              "PRODUCTS",
+              {
+                originalname: "rollback.csv",
+                mimetype: "text/csv",
+                buffer: rollbackCsv,
+                size: rollbackCsv.length,
+              },
+            );
+            const rollbackKey = `csv-rollback-${rollbackPreview.id}`;
+            await assert.rejects(
+              imports.commit(
+                contextA,
+                ownerA.userId,
+                rollbackPreview.id,
+                rollbackKey,
+                "PRODUCTS",
+              ),
+              /injected import outbox failure/,
+            );
+            assert.equal(
+              await prisma.product.count({
+                where: {
+                  organizationId: contextA.organizationId,
+                  skuNormalized: rollbackSku.toLocaleUpperCase("en-US"),
+                },
+              }),
+              0,
+            );
+            assert.equal(
+              (
+                await prisma.importBatch.findUniqueOrThrow({
+                  where: { id: rollbackPreview.id },
+                })
+              ).status,
+              "PREVIEWED",
+            );
+            assert.equal(
+              await prisma.idempotencyRecord.count({
+                where: {
+                  organizationId: contextA.organizationId,
+                  key: rollbackKey,
+                },
+              }),
+              0,
+            );
+
+            const openingProduct = await catalog.createProduct(
+              contextA,
+              ownerA.userId,
+              {
+                name: "Rollback opening item",
+                sku: `OPEN-ROLLBACK-${randomUUID()}`,
+                baseUnitId: unit.id,
+              },
+            );
+            const openingRollbackCsv = Buffer.from(
+              `SKU,Warehouse Code,Opening Quantity,Opening Unit Cost,Cost Currency\n${openingProduct.sku},IT-01,7,10.00,NGN\n`,
+            );
+            const openingRollbackPreview = await imports.preview(
+              contextA,
+              ownerA.userId,
+              "OPENING_BALANCES",
+              {
+                originalname: "opening-rollback.csv",
+                mimetype: "text/csv",
+                buffer: openingRollbackCsv,
+                size: openingRollbackCsv.length,
+              },
+            );
+            assert.equal(openingRollbackPreview.summary.validRows, 1);
+            await assert.rejects(
+              imports.commit(
+                contextA,
+                ownerA.userId,
+                openingRollbackPreview.id,
+                `opening-rollback-${openingRollbackPreview.id}`,
+                "OPENING_BALANCES",
+              ),
+              /injected import outbox failure/,
+            );
+            assert.equal(
+              await prisma.stockMovement.count({
+                where: {
+                  organizationId: contextA.organizationId,
+                  productId: openingProduct.id,
+                },
+              }),
+              0,
+            );
+            assert.equal(
+              await prisma.inventoryBalance.count({
+                where: {
+                  organizationId: contextA.organizationId,
+                  productId: openingProduct.id,
+                },
+              }),
+              0,
+            );
+            assert.equal(
+              (
+                await prisma.importBatch.findUniqueOrThrow({
+                  where: { id: openingRollbackPreview.id },
+                })
+              ).status,
+              "PREVIEWED",
+            );
+          } finally {
+            await admin.query(
+              `DROP TRIGGER fail_import_outbox ON "${schema}".outbox_events`,
+            );
+            await admin.query(`DROP FUNCTION "${schema}".fail_import_outbox()`);
+          }
         },
       );
 
@@ -538,9 +848,411 @@ test(
           );
           const winner = competing[winnerIndex];
           const salesLineId = winner.lines[0].id;
+          const cancellationRaceOrder = await makeOrder("1");
+          await salesOrders.confirm(
+            contextA,
+            ownerA.userId,
+            cancellationRaceOrder.id,
+            `sales-confirm-${cancellationRaceOrder.id}`,
+          );
+          const pickCancelRace = await Promise.allSettled([
+            salesOrders.pick(
+              contextA,
+              ownerA.userId,
+              cancellationRaceOrder.id,
+              "sales-pick-cancel-race",
+              {
+                lines: [
+                  {
+                    salesOrderLineId: cancellationRaceOrder.lines[0].id,
+                    quantity: "1",
+                  },
+                ],
+              },
+            ),
+            salesOrders.cancel(
+              contextA,
+              ownerA.userId,
+              cancellationRaceOrder.id,
+              "sales-cancel-pick-race",
+            ),
+          ]);
+          assert.equal(
+            pickCancelRace.filter((result) => result.status === "fulfilled")
+              .length,
+            1,
+          );
+          const pickedCancellationRace =
+            pickCancelRace[0].status === "fulfilled";
+          if (pickedCancellationRace) {
+            await salesOrders.fulfill(
+              contextA,
+              ownerA.userId,
+              cancellationRaceOrder.id,
+              "sales-fulfill-cancel-race",
+              {
+                lines: [
+                  {
+                    salesOrderLineId: cancellationRaceOrder.lines[0].id,
+                    quantity: "1",
+                  },
+                ],
+              },
+            );
+          }
+          const pickerUserId = randomUUID();
+          const pickerEmail = `sales-picker-${pickerUserId}@example.test`;
+          await prisma.user.create({
+            data: {
+              id: pickerUserId,
+              email: pickerEmail,
+              emailNormalized: pickerEmail,
+              passwordHash: "integration-only",
+              status: "ACTIVE",
+              emailVerifiedAt: new Date(),
+            },
+          });
+          const pickerMembership = await prisma.membership.create({
+            data: {
+              organizationId: contextA.organizationId,
+              userId: pickerUserId,
+              role: "WAREHOUSE_CLERK",
+            },
+          });
+          const ungrantedPicker = {
+            organizationId: contextA.organizationId,
+            membershipId: pickerMembership.id,
+            userId: pickerUserId,
+            role: "WAREHOUSE_CLERK",
+          };
+          await assert.rejects(
+            salesOrders.pick(
+              ungrantedPicker,
+              pickerUserId,
+              winner.id,
+              "sales-pick-ungranted",
+              {
+                lines: [{ salesOrderLineId: salesLineId, quantity: "1" }],
+              },
+            ),
+            (error) => error.getStatus() === 404,
+          );
+          await assert.rejects(
+            salesOrders.pick(
+              contextA,
+              ownerA.userId,
+              winner.id,
+              "pick-too-many",
+              {
+                lines: [{ salesOrderLineId: salesLineId, quantity: "5" }],
+              },
+            ),
+            (error) => error.getStatus() === 409,
+          );
+          const pickCommands = [
+            { key: "sales-pick-race-a", quantity: "3" },
+            { key: "sales-pick-race-b", quantity: "2" },
+          ];
+          const pickRaces = await Promise.allSettled(
+            pickCommands.map(({ key, quantity }) =>
+              salesOrders.pick(contextA, ownerA.userId, winner.id, key, {
+                lines: [{ salesOrderLineId: salesLineId, quantity }],
+              }),
+            ),
+          );
+          assert.equal(
+            pickRaces.filter((result) => result.status === "fulfilled").length,
+            1,
+          );
+          const pickedIndex = pickRaces.findIndex(
+            (result) => result.status === "fulfilled",
+          );
+          const acceptedPick = await salesOrders.pick(
+            contextA,
+            ownerA.userId,
+            winner.id,
+            pickCommands[pickedIndex].key,
+            {
+              lines: [
+                {
+                  salesOrderLineId: salesLineId,
+                  quantity: pickCommands[pickedIndex].quantity,
+                },
+              ],
+            },
+          );
+          const replayedPick = await salesOrders.pick(
+            contextA,
+            ownerA.userId,
+            winner.id,
+            pickCommands[pickedIndex].key,
+            {
+              lines: [
+                {
+                  salesOrderLineId: salesLineId,
+                  quantity: pickCommands[pickedIndex].quantity,
+                },
+              ],
+            },
+          );
+          assert.equal(acceptedPick.id, replayedPick.id);
+          await assert.rejects(
+            salesOrders.picks(contextB, winner.id),
+            (error) => error.getStatus() === 404,
+          );
+          const initiallyPicked = Number(pickCommands[pickedIndex].quantity);
+          const remainingToPick = String(4 - initiallyPicked);
+          const pickRollbackOrder = await makeOrder("2");
+          await salesOrders.confirm(
+            contextA,
+            ownerA.userId,
+            pickRollbackOrder.id,
+            `sales-confirm-${pickRollbackOrder.id}`,
+          );
+          const rollbackPickKey = `pick-outbox-${randomUUID()}`;
+          const originalTransaction = prisma.$transaction.bind(prisma);
+          prisma.$transaction = (callback, ...args) =>
+            originalTransaction(
+              (tx) =>
+                callback(
+                  new Proxy(tx, {
+                    get(target, property, receiver) {
+                      const value = Reflect.get(target, property, receiver);
+                      if (property === "outboxEvent")
+                        return new Proxy(value, {
+                          get(delegate, method, modelReceiver) {
+                            if (method === "create")
+                              return async () => {
+                                throw new Error("injected pick outbox failure");
+                              };
+                            const result = Reflect.get(
+                              delegate,
+                              method,
+                              modelReceiver,
+                            );
+                            return typeof result === "function"
+                              ? result.bind(delegate)
+                              : result;
+                          },
+                        });
+                      return typeof value === "function"
+                        ? value.bind(target)
+                        : value;
+                    },
+                  }),
+                ),
+              ...args,
+            );
+          try {
+            await assert.rejects(
+              salesOrders.pick(
+                contextA,
+                ownerA.userId,
+                pickRollbackOrder.id,
+                rollbackPickKey,
+                {
+                  lines: [
+                    {
+                      salesOrderLineId: pickRollbackOrder.lines[0].id,
+                      quantity: "1",
+                    },
+                  ],
+                },
+              ),
+              /injected pick outbox failure/,
+            );
+          } finally {
+            prisma.$transaction = originalTransaction;
+          }
+          assert.equal(
+            (
+              await salesOrders.get(contextA, pickRollbackOrder.id)
+            ).lines[0].pickedQuantity.toString(),
+            "0",
+          );
+          assert.equal(
+            await prisma.salesPick.count({
+              where: {
+                organizationId: contextA.organizationId,
+                salesOrderId: pickRollbackOrder.id,
+              },
+            }),
+            0,
+          );
+          assert.equal(
+            await prisma.idempotencyRecord.findUnique({
+              where: {
+                organizationId_key: {
+                  organizationId: contextA.organizationId,
+                  key: rollbackPickKey,
+                },
+              },
+            }),
+            null,
+          );
+          await salesOrders.cancel(
+            contextA,
+            ownerA.userId,
+            pickRollbackOrder.id,
+            `sales-cancel-${pickRollbackOrder.id}`,
+          );
+          await assert.rejects(
+            salesOrders.cancel(
+              contextA,
+              ownerA.userId,
+              winner.id,
+              "sales-cancel-picked",
+            ),
+            (error) => error.getStatus() === 409,
+          );
+          await salesOrders.pick(
+            contextA,
+            ownerA.userId,
+            winner.id,
+            "sales-pick-top-up",
+            {
+              lines: [
+                { salesOrderLineId: salesLineId, quantity: remainingToPick },
+              ],
+            },
+          );
+          const pickedOrder = await salesOrders.get(contextA, winner.id);
+          assert.equal(pickedOrder.lines[0].pickedQuantity.toString(), "4");
           const partialInput = {
             lines: [{ salesOrderLineId: salesLineId, quantity: "2" }],
           };
+          const beforeFulfillmentFailure =
+            await prisma.inventoryBalance.findUniqueOrThrow({
+              where: {
+                organizationId_warehouseId_productId: {
+                  organizationId: contextA.organizationId,
+                  warehouseId: warehouse.id,
+                  productId: salesProduct.id,
+                },
+              },
+            });
+          const movementsBeforeFulfillmentFailure =
+            await prisma.stockMovement.count({
+              where: {
+                organizationId: contextA.organizationId,
+                productId: salesProduct.id,
+              },
+            });
+          const fulfillmentRollbackKey = `fulfill-outbox-${randomUUID()}`;
+          const originalFulfillmentTransaction =
+            prisma.$transaction.bind(prisma);
+          prisma.$transaction = (callback, ...args) =>
+            originalFulfillmentTransaction(
+              (tx) =>
+                callback(
+                  new Proxy(tx, {
+                    get(target, property, receiver) {
+                      const value = Reflect.get(target, property, receiver);
+                      if (property === "outboxEvent")
+                        return new Proxy(value, {
+                          get(delegate, method, modelReceiver) {
+                            if (method === "create")
+                              return async () => {
+                                throw new Error(
+                                  "injected fulfillment outbox failure",
+                                );
+                              };
+                            const result = Reflect.get(
+                              delegate,
+                              method,
+                              modelReceiver,
+                            );
+                            return typeof result === "function"
+                              ? result.bind(delegate)
+                              : result;
+                          },
+                        });
+                      return typeof value === "function"
+                        ? value.bind(target)
+                        : value;
+                    },
+                  }),
+                ),
+              ...args,
+            );
+          try {
+            await assert.rejects(
+              salesOrders.fulfill(
+                contextA,
+                ownerA.userId,
+                winner.id,
+                fulfillmentRollbackKey,
+                { lines: [{ salesOrderLineId: salesLineId, quantity: "1" }] },
+              ),
+              /injected fulfillment outbox failure/,
+            );
+          } finally {
+            prisma.$transaction = originalFulfillmentTransaction;
+          }
+          const afterFulfillmentFailure =
+            await prisma.inventoryBalance.findUniqueOrThrow({
+              where: {
+                organizationId_warehouseId_productId: {
+                  organizationId: contextA.organizationId,
+                  warehouseId: warehouse.id,
+                  productId: salesProduct.id,
+                },
+              },
+            });
+          assert.equal(
+            afterFulfillmentFailure.onHand.toString(),
+            beforeFulfillmentFailure.onHand.toString(),
+          );
+          assert.equal(
+            afterFulfillmentFailure.reserved.toString(),
+            beforeFulfillmentFailure.reserved.toString(),
+          );
+          assert.equal(
+            await prisma.stockMovement.count({
+              where: {
+                organizationId: contextA.organizationId,
+                productId: salesProduct.id,
+              },
+            }),
+            movementsBeforeFulfillmentFailure,
+          );
+          assert.equal(
+            await prisma.salesFulfillment.count({
+              where: {
+                organizationId: contextA.organizationId,
+                salesOrderId: winner.id,
+              },
+            }),
+            0,
+          );
+          assert.equal(
+            await prisma.idempotencyRecord.findUnique({
+              where: {
+                organizationId_key: {
+                  organizationId: contextA.organizationId,
+                  key: fulfillmentRollbackKey,
+                },
+              },
+            }),
+            null,
+          );
+          await assert.rejects(
+            salesOrders.fulfill(
+              contextA,
+              ownerA.userId,
+              pickRollbackOrder.id,
+              "fulfill-not-picked",
+              {
+                lines: [
+                  {
+                    salesOrderLineId: pickRollbackOrder.lines[0].id,
+                    quantity: "1",
+                  },
+                ],
+              },
+            ),
+            (error) => error.getStatus() === 409,
+          );
           const partialFulfillment = await salesOrders.fulfill(
             contextA,
             ownerA.userId,
@@ -590,6 +1302,7 @@ test(
             fulfilledOrder.lines[0].fulfilledQuantity.toString(),
             "4",
           );
+          assert.equal(fulfilledOrder.lines[0].pickedQuantity.toString(), "4");
           assert.equal(fulfilledOrder.lines[0].reservation.status, "CONSUMED");
           const fulfilledBalance =
             await prisma.inventoryBalance.findUniqueOrThrow({
@@ -601,7 +1314,10 @@ test(
                 },
               },
             });
-          assert.equal(fulfilledBalance.onHand.toString(), "3");
+          assert.equal(
+            fulfilledBalance.onHand.toString(),
+            pickedCancellationRace ? "2" : "3",
+          );
           assert.equal(fulfilledBalance.reserved.toString(), "0");
           assert.equal(
             (

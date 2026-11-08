@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { CatalogStatus } from "../generated/prisma/enums";
+import { Prisma } from "../generated/prisma/client";
 import { PrismaService } from "../database/prisma.service";
 import type { OrganizationContext } from "../organizations/organization-context.guard";
 import {
@@ -15,6 +16,20 @@ import {
   UpdateProductDto,
 } from "./catalog.dto";
 import { ProductType } from "../generated/prisma/enums";
+
+export type CatalogImportedProduct = {
+  name: string;
+  sku: string;
+  barcode: string | null;
+  description: string | null;
+  categoryId: string | null;
+  baseUnitId: string;
+  defaultCost: string | null;
+  costCurrency: string | null;
+  defaultSalePrice: string | null;
+  saleCurrency: string | null;
+  status: CatalogStatus;
+};
 
 @Injectable()
 export class CatalogService {
@@ -325,6 +340,85 @@ export class CatalogService {
         throw new ConflictException("SKU or barcode already exists");
       throw error;
     }
+  }
+
+  async createProductsFromImport(
+    tx: Prisma.TransactionClient,
+    context: OrganizationContext,
+    actorUserId: string,
+    rows: CatalogImportedProduct[],
+  ) {
+    const created = [];
+    for (const row of rows) {
+      validateMoneyPair(
+        row.defaultCost ?? undefined,
+        row.costCurrency ?? undefined,
+        "Cost",
+      );
+      validateMoneyPair(
+        row.defaultSalePrice ?? undefined,
+        row.saleCurrency ?? undefined,
+        "Sale price",
+      );
+      const unit = await tx.unit.findFirst({
+        where: {
+          id: row.baseUnitId,
+          organizationId: context.organizationId,
+          status: CatalogStatus.ACTIVE,
+        },
+        select: { id: true },
+      });
+      if (!unit)
+        throw new NotFoundException(
+          "An imported base unit is no longer active",
+        );
+      if (row.categoryId) {
+        const category = await tx.category.findFirst({
+          where: {
+            id: row.categoryId,
+            organizationId: context.organizationId,
+            status: CatalogStatus.ACTIVE,
+          },
+          select: { id: true },
+        });
+        if (!category)
+          throw new NotFoundException(
+            "An imported category is no longer active",
+          );
+      }
+      const product = await tx.product.create({
+        data: {
+          organizationId: context.organizationId,
+          name: row.name,
+          sku: row.sku,
+          skuNormalized: row.sku.toLocaleUpperCase("en-US"),
+          barcode: row.barcode,
+          barcodeNormalized: row.barcode?.toLocaleUpperCase("en-US") ?? null,
+          description: row.description,
+          type: ProductType.STOCKED,
+          trackInventory: true,
+          categoryId: row.categoryId,
+          baseUnitId: row.baseUnitId,
+          defaultCost: row.defaultCost,
+          costCurrency: row.costCurrency,
+          defaultSalePrice: row.defaultSalePrice,
+          saleCurrency: row.saleCurrency,
+          status: row.status,
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          organizationId: context.organizationId,
+          actorUserId,
+          entityType: "PRODUCT",
+          entityId: product.id,
+          action: "CREATED_FROM_IMPORT",
+          metadata: { sku: product.sku, name: product.name },
+        },
+      });
+      created.push(product);
+    }
+    return created;
   }
 
   async addProductConversion(

@@ -1,34 +1,38 @@
-# Next session handoff
+# Next session checkpoint
 
-## Checkpoint — 2026-11-08 (Africa/Lagos)
+**Updated:** 2026-11-08 (Africa/Lagos)
 
-Repository: `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. `HEAD` and `origin/develop` are `5938d93` (`feat: add sales order`). The commit contains the implementation milestone. Follow-up edits remain uncommitted in sales UI/API/schema and progress docs; preserve and inspect them before editing. No commit or push was made. Roadmap progress is **15/47**: SALES-002 COMPLETED; SALES-003 IN_PROGRESS.
+## Current repository state
 
-## Implemented and verified
+- Repository: `/Users/newuser/Documents/GitHub/inventory`, branch `develop`.
+- Starting commit this execution: `b1e7ed9` (`Update the sales record`). Changes are uncommitted and cover the SALES-003 picking workflow, INV-004 imports, tests, API contract notes and progress docs. Preserve them; do not reset or clean.
+- Completed roadmap count: **15/47**. SALES-003 and INV-004 remain IN_PROGRESS pending authenticated browser acceptance. `docs/implementation/task-breakdown.md` is the status source of truth.
+- Local additive migrations: `20261108160000_sales_picking` and `20261108180000_product_imports` are applied; `npx prisma migrate status --config prisma.config.ts` reports all 18 current. No data reset/deletion occurred.
 
-- SALES-002: order and reservation schema/API/UI; draft/edit/list/detail, Decimal totals, tenant/warehouse scope, confirmation reservations, idempotent cancellation release, reservation reconciliation. Database acceptance for oversell races, replay, insufficient stock, tenant denial and cancellation passed.
-- SALES-003: partial/full fulfillment docs/API/UI; atomic immutable ledger posting via `InventoryPostingService`, reservation consumption, audit/outbox, idempotency and concurrency handling. Integration covers partial/full fulfillment, replay, overfulfillment denial, fulfillment races, balance reconciliation and tenant scope.
-- Additive migrations `20261108120000_sales_orders_reservations` and `20261108140000_sales_fulfillment` are applied locally. `npx prisma migrate status --config prisma.config.ts` reports 16 migrations found and current. No reset/deletion; synthetic rows in `inventory_dev.public` were untouched.
-- Checks passed: Prisma validation, typecheck, lint, formatting, production build, full `npm test` (**40 pass, 0 fail, 2 opt-in suites skipped**), isolated PostgreSQL suite (**10 pass, 0 fail, 0 skipped**), and `git diff --check` before the last documentation edits. Rerun whitespace check at resume.
+## Completed implementation in this execution
 
-## Remaining work / limitations
+- SALES-003 persisted picks, cumulative picked quantities, concurrency/idempotency enforcement, authorization and fulfillment bound to picked quantity; sales order detail UI now supports pick and fulfill history/actions.
+- INV-004 includes CSV templates, upload and column mapping, parsing limits, validation/duplicate detection, preview-only batches, explicit commit, batch history, create-only product imports, and opening balance posting through the immutable inventory posting service. Product/opening commits are atomic and idempotent. Opening balance imports reject product/warehouse pairs with existing movement or balance history.
+- New files include `apps/api/src/imports/`, `apps/web/src/app/imports/page.tsx`, and additive Prisma migrations listed above. Other edited files are visible in `git status --short`; inspect diff before proceeding.
 
-- SALES-003 still has no separate picking stage/document or persisted picked quantity; therefore `shipped <= picked <= ordered` is not satisfied. It also lacks a sales-fulfillment-specific injected rollback test. Keep IN_PROGRESS.
-- Browser automation is disabled in current Codex Work settings; authenticated UI workflow was not tested. No browser pass is claimed.
-- SALES-004 remains gated: invoice/tax/payment/accounting policy has not been approved (PROD-002/DEC-007). Do not implement financial policy by assumption.
-- Fixed the roadmap cycle by making SALES-003 depend only on SALES-002; INV-010 barcode enhancement already depends on SALES-003 and follows it.
+## Checks actually run
 
-## Exact next actions
+- Final `npm run typecheck`, `npm run lint`, `npm run format:check`, `npx prisma validate --config prisma.config.ts`, `npm run build`, and `git diff --check`: passed.
+- `npm test`: passed, **40 pass / 0 fail / 2 skipped**. Requires local network permission because existing HTTP API contract test binds a temporary port. An initial sandbox-only attempt failed with `listen EPERM`; escalated rerun passed.
+- `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs`: passed, **11 pass / 0 fail / 0 skipped**, including current import rollback cases, in an isolated schema that the suite dropped.
+- Full production build passed after final code changes; Next route output includes `/imports`.
+- Chrome is installed, but CUA/browser discovery reports “Local browser use is disabled in Work settings.” No authenticated browser pass is claimed.
+- Local migrate deploy applied the imports migration; final read-only migration status verified 18/18 current.
 
-1. Inspect `git status --short` and the diff; keep user changes and only touch the intended sales work.
-2. Implement the SALES-003 pick document/stage and quantity constraints in a new additive migration; keep every reference organization-scoped and use the existing posting service for final stock outflow.
-3. Add isolated PostgreSQL cases for `picked <= reserved/ordered`, `fulfilled <= picked`, partial pick/fulfillment, retry, tenant/warehouse scope and injected rollback; run them without touching `inventory_dev.public`.
-4. Run Prisma validation and migration status, `npm test`, isolated integration suite, typecheck, lint, format, production build, and `git diff --check`; record exact outputs.
-5. Complete browser checks for SALES-002/003 and previously pending SALES-001, INV-008, purchasing and adjustments if browser control becomes available. Do not infer browser success from builds or API integration tests.
-6. Only then update SALES-003 status if all criteria are met. Do not start SALES-004 until its financial-policy decisions are approved. No push without authorization.
+## Next exact steps
 
-## Current modified areas
+1. If browser control becomes available, exercise authenticated sales picking/partial fulfillment and product/opening-balance CSV import end to end. Current browser-disabled setting is the blocker.
+2. Keep SALES-003 and INV-004 IN_PROGRESS until browser acceptance passes. The roadmap count stays 15/47.
+3. After they pass, inspect the actual dependencies and status of PROCUREMENT-002; start INV-009 (reorder thresholds/alerts) only if all prerequisites are met. Do not start SALES-004 until invoice/tax/payment/accounting decisions are approved.
+4. No commit or push was made. Continue preserving this worktree; no destructive Git/database commands.
 
-- Sales backend: `apps/api/prisma/schema.prisma`, `apps/api/src/sales/sales-orders.service.ts`.
-- Sales UI: `apps/web/src/app/sales-orders/page.tsx`, `apps/web/src/app/sales-orders/[salesOrderId]/page.tsx`.
-- Progress/architecture: this file, `current-state.md`, `session-log.md`, `completed-tasks.md`, `docs/implementation/task-breakdown.md`, `docs/implementation/master-plan.md`, `docs/architecture/api-specification.md`, `docs/architecture/inventory-semantics.md`, `docs/implementation/testing-strategy.md`.
+## Outstanding decisions and blockers
+
+- Browser automation is disabled by Work settings; user must enable it or allow a supported browser test environment.
+- Opening-balance imports are create-only and restricted to an uninitialized product/warehouse pair. This is a conservative provisional behavior and is documented as not a validated business requirement.
+- Invoice/tax/payment/accounting policy remains open and gates SALES-004.

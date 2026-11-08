@@ -26,6 +26,7 @@ type Order = {
     baseQuantity: string;
     unitPrice: string;
     lineTotal: string;
+    pickedQuantity: string;
     fulfilledQuantity: string;
     product: { baseUnit: { code: string } };
     reservation: null | {
@@ -58,6 +59,17 @@ type Fulfillment = {
     salesOrderLine: { productName: string; sku: string; unitCode: string };
   }[];
 };
+type Pick = {
+  id: string;
+  pickedAt: string;
+  note: string | null;
+  pickedBy: { user: { email: string } };
+  lines: {
+    id: string;
+    quantity: string;
+    salesOrderLine: { productName: string; sku: string; unitCode: string };
+  }[];
+};
 const endpoint = "/organizations/current/sales/orders";
 function quantityUnits(value: string) {
   const [whole, fraction = ""] = value.split(".");
@@ -81,10 +93,15 @@ export default function SalesOrderDetailPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [audit, setAudit] = useState<Audit[]>([]);
   const [fulfillments, setFulfillments] = useState<Fulfillment[]>([]);
+  const [picks, setPicks] = useState<Pick[]>([]);
+  const [pickQuantities, setPickQuantities] = useState<Record<string, string>>(
+    {},
+  );
   const [fulfillmentQuantities, setFulfillmentQuantities] = useState<
     Record<string, string>
   >({});
   const fulfillmentKey = useRef("");
+  const pickKey = useRef("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -92,18 +109,26 @@ export default function SalesOrderDetailPage() {
   const canWrite = ["OWNER", "ADMIN", "MANAGER", "SALES"].includes(
     organization?.role ?? "",
   );
+  const hasOutstandingPick =
+    order?.lines.some(
+      (line) =>
+        quantityUnits(line.pickedQuantity) >
+        quantityUnits(line.fulfilledQuantity),
+    ) ?? false;
   const load = useCallback(async () => {
     if (!organization || !id) return;
     setLoading(true);
     try {
-      const [result, events, posted] = await Promise.all([
+      const [result, events, posted, confirmedPicks] = await Promise.all([
         authenticatedRequest<Order>(`${endpoint}/${id}`),
         authenticatedRequest<Audit[]>(`${endpoint}/${id}/audit`),
         authenticatedRequest<Fulfillment[]>(`${endpoint}/${id}/fulfillments`),
+        authenticatedRequest<Pick[]>(`${endpoint}/${id}/picks`),
       ]);
       setOrder(result);
       setAudit(events);
       setFulfillments(posted);
+      setPicks(confirmedPicks);
       setError("");
     } catch (cause) {
       setError(
@@ -200,6 +225,46 @@ export default function SalesOrderDetailPage() {
     }
   }
 
+  async function confirmPick() {
+    if (!order) return;
+    const lines = Object.entries(pickQuantities)
+      .filter(
+        ([, quantity]) =>
+          /^\d+(\.\d{1,6})?$/.test(quantity) &&
+          quantityUnits(quantity) > BigInt(0),
+      )
+      .map(([salesOrderLineId, quantity]) => ({ salesOrderLineId, quantity }));
+    if (!lines.length) {
+      setError("Enter a quantity to pick for at least one order line.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setNotice("");
+    if (!pickKey.current)
+      pickKey.current = `sales-pick-${order.id}-${crypto.randomUUID()}`;
+    try {
+      await authenticatedRequest(
+        `${endpoint}/${order.id}/picks`,
+        { lines },
+        "POST",
+        { "Idempotency-Key": pickKey.current },
+      );
+      pickKey.current = "";
+      setPickQuantities({});
+      setNotice("Picked quantities confirmed and are ready for fulfillment.");
+      await load();
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Picking could not be confirmed.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="page-content">
       <header className="page-heading">
@@ -229,15 +294,17 @@ export default function SalesOrderDetailPage() {
               Confirm and reserve
             </button>
           )}
-          {["DRAFT", "CONFIRMED"].includes(order?.status ?? "") && canWrite && (
-            <button
-              className="button button-secondary"
-              disabled={busy}
-              onClick={() => void transition("cancel")}
-            >
-              Cancel order
-            </button>
-          )}
+          {["DRAFT", "CONFIRMED"].includes(order?.status ?? "") &&
+            canWrite &&
+            !hasOutstandingPick && (
+              <button
+                className="button button-secondary"
+                disabled={busy}
+                onClick={() => void transition("cancel")}
+              >
+                Cancel order
+              </button>
+            )}
         </div>
       </header>
       {error && (
@@ -294,6 +361,12 @@ export default function SalesOrderDetailPage() {
               confirmed.
             </p>
           )}
+          {order.status === "CONFIRMED" && (
+            <p className="info-banner">
+              Order confirmed. Pick items from the reserved stock before posting
+              fulfillment; picking itself does not change on-hand inventory.
+            </p>
+          )}
           {["CONFIRMED", "PARTIALLY_FULFILLED"].includes(order.status) && (
             <p className="info-banner">
               Remaining quantities stay reserved until fulfilled or the order is
@@ -304,7 +377,10 @@ export default function SalesOrderDetailPage() {
             <div className="panel-heading">
               <div>
                 <h2>Order lines</h2>
-                <p>Reserved, fulfilled, and outstanding quantities.</p>
+                <p>
+                  Picked quantity is cumulative; fulfilled quantity cannot
+                  exceed it.
+                </p>
               </div>
             </div>
             <div className="product-table-wrap">
@@ -314,10 +390,15 @@ export default function SalesOrderDetailPage() {
                     <th>Product</th>
                     <th>Ordered</th>
                     <th>Reserved</th>
+                    <th>Picked</th>
                     <th>Fulfilled</th>
                     <th>Outstanding</th>
                     <th>Price</th>
                     <th>Line total</th>
+                    {canWrite &&
+                      ["CONFIRMED", "PARTIALLY_FULFILLED"].includes(
+                        order.status,
+                      ) && <th>Pick now</th>}
                     {canWrite &&
                       ["CONFIRMED", "PARTIALLY_FULFILLED"].includes(
                         order.status,
@@ -328,6 +409,12 @@ export default function SalesOrderDetailPage() {
                   {order.lines.map((line) => {
                     const outstanding =
                       quantityUnits(line.orderedQuantity) -
+                      quantityUnits(line.fulfilledQuantity);
+                    const unpicked =
+                      quantityUnits(line.orderedQuantity) -
+                      quantityUnits(line.pickedQuantity);
+                    const pickedNotFulfilled =
+                      quantityUnits(line.pickedQuantity) -
                       quantityUnits(line.fulfilledQuantity);
                     const remaining = line.reservation
                       ? quantityUnits(line.reservation.quantity) -
@@ -350,6 +437,12 @@ export default function SalesOrderDetailPage() {
                           )}
                         </td>
                         <td>
+                          {line.pickedQuantity} {line.unitCode}
+                          <small>
+                            {quantityText(pickedNotFulfilled)} ready to fulfill
+                          </small>
+                        </td>
+                        <td>
                           {line.fulfilledQuantity} {line.unitCode}
                         </td>
                         <td>
@@ -366,9 +459,34 @@ export default function SalesOrderDetailPage() {
                             order.status,
                           ) && (
                             <td>
-                              {outstanding > BigInt(0) ? (
+                              {unpicked > BigInt(0) ? (
+                                <input
+                                  aria-label={`Pick ${line.productName}`}
+                                  min="0"
+                                  step="any"
+                                  type="number"
+                                  value={pickQuantities[line.id] ?? ""}
+                                  onChange={(event) =>
+                                    setPickQuantities((current) => ({
+                                      ...current,
+                                      [line.id]: event.target.value,
+                                    }))
+                                  }
+                                />
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                          )}
+                        {canWrite &&
+                          ["CONFIRMED", "PARTIALLY_FULFILLED"].includes(
+                            order.status,
+                          ) && (
+                            <td>
+                              {pickedNotFulfilled > BigInt(0) ? (
                                 <input
                                   aria-label={`Fulfill ${line.productName}`}
+                                  max={quantityText(pickedNotFulfilled)}
                                   min="0"
                                   step="any"
                                   type="number"
@@ -397,8 +515,8 @@ export default function SalesOrderDetailPage() {
                         ["CONFIRMED", "PARTIALLY_FULFILLED"].includes(
                           order.status,
                         )
-                          ? 7
-                          : 6
+                          ? 9
+                          : 7
                       }
                     >
                       Total
@@ -418,8 +536,18 @@ export default function SalesOrderDetailPage() {
             ["CONFIRMED", "PARTIALLY_FULFILLED"].includes(order.status) && (
               <div className="order-actions">
                 <p>
-                  Posting fulfillment deducts stock and consumes the matching
-                  reserved quantity in one transaction.
+                  Step 1: confirm picked quantities from the active reservation.
+                </p>
+                <button
+                  className="button button-secondary"
+                  disabled={busy}
+                  onClick={() => void confirmPick()}
+                >
+                  Confirm selected pick
+                </button>
+                <p>
+                  Step 2: fulfillment can only post picked quantities. Posting
+                  deducts stock and consumes the reservation atomically.
                 </p>
                 <button
                   className="button button-primary"
@@ -465,6 +593,34 @@ export default function SalesOrderDetailPage() {
               )}
             </section>
           </div>
+          <section className="panel">
+            <h2>Picking history</h2>
+            {picks.length ? (
+              <div className="receipt-list">
+                {picks.map((pick) => (
+                  <article className="receipt-card" key={pick.id}>
+                    <div>
+                      <strong>
+                        {new Date(pick.pickedAt).toLocaleString()}
+                      </strong>
+                      <span>{pick.pickedBy.user.email}</span>
+                    </div>
+                    {pick.note && <p>{pick.note}</p>}
+                    <ul>
+                      {pick.lines.map((line) => (
+                        <li key={line.id}>
+                          {line.salesOrderLine.productName} · {line.quantity}{" "}
+                          {line.salesOrderLine.unitCode}
+                        </li>
+                      ))}
+                    </ul>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="panel-message">No picking operations recorded.</p>
+            )}
+          </section>
           <section className="panel">
             <h2>Fulfillment history</h2>
             {fulfillments.length ? (
