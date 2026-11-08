@@ -27,6 +27,7 @@ type Order = {
     unitPrice: string;
     lineTotal: string;
     fulfilledQuantity: string;
+    product: { baseUnit: { code: string } };
     reservation: null | {
       quantity: string;
       fulfilledQuantity: string;
@@ -58,6 +59,20 @@ type Fulfillment = {
   }[];
 };
 const endpoint = "/organizations/current/sales/orders";
+function quantityUnits(value: string) {
+  const [whole, fraction = ""] = value.split(".");
+  return (
+    BigInt(whole || "0") * BigInt(1_000_000) +
+    BigInt((fraction + "000000").slice(0, 6))
+  );
+}
+function quantityText(value: bigint) {
+  const whole = value / BigInt(1_000_000);
+  const fraction = String(value % BigInt(1_000_000))
+    .padStart(6, "0")
+    .replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : String(whole);
+}
 
 export default function SalesOrderDetailPage() {
   const params = useParams<{ salesOrderId: string }>();
@@ -146,7 +161,11 @@ export default function SalesOrderDetailPage() {
   async function fulfillSelected() {
     if (!order) return;
     const lines = Object.entries(fulfillmentQuantities)
-      .filter(([, quantity]) => quantity.trim() && Number(quantity) > 0)
+      .filter(
+        ([, quantity]) =>
+          /^\d+(\.\d{1,6})?$/.test(quantity) &&
+          quantityUnits(quantity) > BigInt(0),
+      )
       .map(([salesOrderLineId, quantity]) => ({ salesOrderLineId, quantity }));
     if (!lines.length) {
       setError("Enter a quantity for at least one outstanding line.");
@@ -262,11 +281,7 @@ export default function SalesOrderDetailPage() {
             <article className="metric-card">
               <span>Order total</span>
               <strong>
-                {order.currency}{" "}
-                {Number(order.total).toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 4,
-                })}
+                {order.currency} {order.total}
               </strong>
               <small>
                 Order date {new Date(order.orderDate).toLocaleDateString()}
@@ -311,19 +326,14 @@ export default function SalesOrderDetailPage() {
                 </thead>
                 <tbody>
                   {order.lines.map((line) => {
-                    const outstanding = Math.max(
-                      0,
-                      Number(line.orderedQuantity) -
-                        Number(line.fulfilledQuantity),
-                    );
+                    const outstanding =
+                      quantityUnits(line.orderedQuantity) -
+                      quantityUnits(line.fulfilledQuantity);
                     const remaining = line.reservation
-                      ? Math.max(
-                          0,
-                          Number(line.reservation.quantity) -
-                            Number(line.reservation.fulfilledQuantity) -
-                            Number(line.reservation.releasedQuantity),
-                        )
-                      : 0;
+                      ? quantityUnits(line.reservation.quantity) -
+                        quantityUnits(line.reservation.fulfilledQuantity) -
+                        quantityUnits(line.reservation.releasedQuantity)
+                      : BigInt(0);
                     return (
                       <tr key={line.id}>
                         <td>
@@ -334,7 +344,7 @@ export default function SalesOrderDetailPage() {
                           {line.orderedQuantity} {line.unitCode}
                         </td>
                         <td>
-                          {remaining} {line.unitCode}{" "}
+                          {quantityText(remaining)} {line.product.baseUnit.code}{" "}
                           {line.reservation && (
                             <small>{line.reservation.status}</small>
                           )}
@@ -343,7 +353,7 @@ export default function SalesOrderDetailPage() {
                           {line.fulfilledQuantity} {line.unitCode}
                         </td>
                         <td>
-                          {outstanding} {line.unitCode}
+                          {quantityText(outstanding)} {line.unitCode}
                         </td>
                         <td>
                           {order.currency} {line.unitPrice}
@@ -356,7 +366,7 @@ export default function SalesOrderDetailPage() {
                             order.status,
                           ) && (
                             <td>
-                              {outstanding > 0 ? (
+                              {outstanding > BigInt(0) ? (
                                 <input
                                   aria-label={`Fulfill ${line.productName}`}
                                   min="0"

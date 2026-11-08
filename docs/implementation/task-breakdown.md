@@ -1,6 +1,6 @@
 # Numbered task breakdown
 
-Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001 through FOUNDATION-009, ARCH-001, INV-005, and INV-006 are COMPLETED; PROD-002, ARCH-002, INV-001, INV-002, INV-003, INV-007, and PROCUREMENT-001 through PROCUREMENT-003 are IN_PROGRESS; remaining tasks are NOT_STARTED. FOUNDATION-006/007/008/009 have automated PostgreSQL concurrency, tenant-isolation and scope coverage as recorded in progress documentation. Completed count: 14/47.
+Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001 through FOUNDATION-009, ARCH-001, INV-005, INV-006, and SALES-002 are COMPLETED; PROD-002, ARCH-002, INV-001, INV-002, INV-003, INV-007, SALES-003, and PROCUREMENT-001 through PROCUREMENT-003 are IN_PROGRESS; remaining tasks are NOT_STARTED. FOUNDATION-006/007/008/009 and SALES-002 have automated PostgreSQL concurrency, tenant-isolation and scope coverage as recorded in progress documentation. Completed count: 15/47.
 
 ## Phase 0–2: research, product, architecture
 
@@ -104,7 +104,7 @@ Description: Per-warehouse thresholds, projected quantity and low-stock queue/em
 
 ### INV-010: Barcode-compatible workflows
 **Files/modules affected:** apps/web/src/components/barcode/, apps/web/src/features/receiving/, apps/web/src/features/fulfillment/.
-Description: Scanner keyboard input, barcode lookup and camera API feasibility for mobile web. Priority: P1. Dependencies: INV-003, PROCUREMENT-003, SALES-003. Deliverables: scan component/spec. Acceptance: same scanned product can be added repeatedly and quantity increments; keyboard operation works. Tests: component/browser workflow tests. Status: NOT_STARTED.
+Description: Scanner keyboard input, barcode lookup and camera API feasibility for mobile web. Priority: P1. Dependencies: INV-003, PROCUREMENT-003, SALES-003. Deliverables: scan component/spec. Acceptance: same scanned product can be added repeatedly and quantity increments; keyboard operation works. Tests: component/browser workflow tests. Status: NOT_STARTED. Note: SALES-003 no longer lists INV-010 as a prerequisite because INV-010 itself depends on SALES-003; barcode support is an enhancement after core fulfillment, so the previous graph contained a cycle.
 
 ## Phase 7: procurement
 
@@ -132,11 +132,11 @@ Description: Customer records, addresses and terms. Priority: P0. Dependencies: 
 
 ### SALES-002: Sales order and reservation lifecycle
 **Files/modules affected:** apps/api/src/sales/, apps/web/src/features/sales/, Prisma sales schema.
-Description: Draft/confirm/cancel, lines, pricing snapshots and inventory reservations. Priority: P0. Dependencies: SALES-001, INV-006, ARCH-001. Deliverables: API/model/UI. Acceptance: policy prevents oversell under race; cancellation releases reservation once. Tests: two simultaneous last-unit orders, state transitions, tenant scope. Status: NOT_STARTED.
+Description: Draft/confirm/cancel, lines, pricing snapshots and inventory reservations. Priority: P0. Dependencies: SALES-001, INV-006, ARCH-001. Deliverables: API/model/UI. Acceptance: policy prevents oversell under race; cancellation releases reservation once. Tests: two simultaneous last-unit orders, state transitions, tenant scope. Status: COMPLETED (2026-11-08). Added tenant-composite order/line/numbering/reservation/history schema and additive migration `20261108120000_sales_orders_reservations`; migration applied locally without reset or deletion. Implemented draft create/edit, tenant/warehouse-scoped list/search/filter/pagination/detail/audit, exact Decimal totals and unit conversion snapshots, idempotent confirm/cancel, reservation reconciliation, and responsive register/create/edit/detail workflows. Confirmation locks inventory in stable order and uses `InventoryPostingService` reservation deltas; on-hand remains unchanged. Isolated PostgreSQL tests verify exact totals, tenant denial, insufficient stock, idempotent confirmation, cancellation release/replay, competing last-stock confirmations and reconciliation. Browser interaction was unavailable, so the UI is build/typecheck verified rather than manually browser verified; this limitation is not an unmet SALES-002 backend acceptance criterion.
 
 ### SALES-003: Pick and partial fulfillment
 **Files/modules affected:** apps/api/src/sales/, apps/web/src/features/sales/, Prisma sales schema.
-Description: Pick/fulfill quantities; preserve backorder; commit stock outflow. Priority: P0. Dependencies: SALES-002, INV-010. Deliverables: fulfillment records and workflow. Acceptance: shipped <= picked <= ordered; movements exactly once. Tests: partial, retry, rollback, authorization. Status: NOT_STARTED.
+Description: Pick/fulfill quantities; preserve backorder; commit stock outflow. Priority: P0. Dependencies: SALES-002. Deliverables: fulfillment records and workflow. Acceptance: shipped <= picked <= ordered; movements exactly once. Tests: partial, retry, rollback, authorization. Status: IN_PROGRESS (2026-11-08). Added tenant-composite fulfillment documents/lines and additive migration `20261108140000_sales_fulfillment`; applied locally without reset/deletion. API/UI support partial and full fulfillment, reservation consumption, immutable stock movements through `InventoryPostingService`, audit/outbox, history and idempotent retries. Isolated PostgreSQL tests verify partial/full fulfillment, replay, over-fulfillment rejection, competing fulfillments, reservation/balance reconciliation and tenant scope. Remaining: a distinct pick stage/quantity is not implemented (fulfillment currently posts directly from confirmed reservation), dedicated fulfillment transaction rollback injection and authenticated browser workflow are unverified. Do not claim the `shipped <= picked <= ordered` acceptance criterion complete.
 
 ### SALES-004: Invoice and payment records
 **Files/modules affected:** apps/api/src/sales/, apps/web/src/features/sales/, Prisma sales schema.

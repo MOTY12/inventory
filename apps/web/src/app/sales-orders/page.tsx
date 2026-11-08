@@ -17,6 +17,13 @@ type Row = {
 };
 type Page<T> = { data: T[]; total: number; page: number; page_size: number };
 const endpoint = "/organizations/current/sales/orders";
+function quantityUnits(value: string) {
+  const [whole, fraction = ""] = value.split(".");
+  return (
+    BigInt(whole || "0") * BigInt(1_000_000) +
+    BigInt((fraction + "000000").slice(0, 6))
+  );
+}
 
 export default function SalesOrdersPage() {
   const { organization, authenticatedRequest } = useSession();
@@ -138,14 +145,11 @@ export default function SalesOrdersPage() {
               </thead>
               <tbody>
                 {rows.map((row) => {
-                  const ordered = row.lines.reduce(
-                    (sum, line) => sum + Number(line.orderedQuantity),
-                    0,
-                  );
-                  const fulfilled = row.lines.reduce(
-                    (sum, line) => sum + Number(line.fulfilledQuantity),
-                    0,
-                  );
+                  const fulfilledLines = row.lines.filter(
+                    (line) =>
+                      quantityUnits(line.fulfilledQuantity) >=
+                      quantityUnits(line.orderedQuantity),
+                  ).length;
                   return (
                     <tr key={row.id}>
                       <td>
@@ -157,14 +161,10 @@ export default function SalesOrdersPage() {
                       <td>{row.warehouse.name}</td>
                       <td>{new Date(row.orderDate).toLocaleDateString()}</td>
                       <td>
-                        {row.currency}{" "}
-                        {Number(row.total).toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 4,
-                        })}
+                        {row.currency} {row.total}
                       </td>
                       <td>
-                        {fulfilled} / {ordered}
+                        {fulfilledLines} / {row.lines.length} lines
                       </td>
                       <td>
                         <span className="status-badge">

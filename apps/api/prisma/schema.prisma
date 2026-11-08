@@ -760,8 +760,6 @@ model SalesFulfillment {
   warehouse      Warehouse              @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Restrict)
   postedBy       Membership             @relation(fields: [organizationId, postedByUserId], references: [organizationId, userId], onDelete: Restrict)
   lines          SalesFulfillmentLine[]
-  warehouse      Warehouse?             @relation(fields: [warehouseId], references: [id])
-  warehouseId    String?                @db.Uuid
 
   @@unique([organizationId, id])
   @@unique([organizationId, idempotencyKey])

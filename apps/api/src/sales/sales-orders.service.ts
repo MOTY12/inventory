@@ -777,7 +777,6 @@ export class SalesOrdersService {
             where: {
               organizationId: ctx.organizationId,
               salesOrderId: orderId,
-              warehouseId: order.warehouse_id,
               id: { in: lineIds },
             },
             include: {
@@ -842,6 +841,7 @@ export class SalesOrdersService {
             data: {
               organizationId: ctx.organizationId,
               salesOrderId: orderId,
+              warehouseId: order.warehouse_id,
               idempotencyKey: key,
               note: input.note?.trim() || null,
               postedByUserId: actor,

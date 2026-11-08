@@ -63,3 +63,7 @@ The diagram describes quantity flows; a command either commits its complete set 
 | Adjustment count is below existing reservations                               | Rejected; reserved allocations cannot be silently invalidated.                                                |
 
 These scenarios are acceptance cases for future PostgreSQL integration and concurrency tests. This document does not claim those tests have already been implemented or run.
+
+## Sales reservation and fulfillment verification (2026-11-08)
+
+The isolated PostgreSQL integration suite now executes the competing confirmation, insufficient availability, idempotent confirmation, cancellation release/replay, tenant denial, partial/full fulfillment, fulfillment retry and fulfillment race scenarios. The executed suite verifies reservation reconciliation and final on-hand/reserved projections. Generic inventory posting rollback is covered by an injected outbox failure; a failure injected specifically through the sales fulfillment transaction remains a pending SALES-003 verification case. The current implementation has no separate pick record/stage, so the `picked` quantity invariant is not yet represented and SALES-003 remains IN_PROGRESS.

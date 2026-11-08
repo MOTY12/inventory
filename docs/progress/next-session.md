@@ -2,30 +2,33 @@
 
 ## Checkpoint — 2026-11-08 (Africa/Lagos)
 
-Repository: `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. Current HEAD and `origin/develop` are `ce93cc2` (`Update the prompt`), authored by MOTY during this execution; starting HEAD was `3a8796a`. The commit contains the first transfer implementation. Remaining changes are uncommitted; inspect `git status --short` and the diff before continuing. This agent did not commit or push. Completed roadmap count remains **14/47**. INV-008 and SALES-001 are both `IN_PROGRESS`.
+Repository: `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. `HEAD` and `origin/develop` are `5938d93` (`feat: add sales order`). The commit contains the implementation milestone. Follow-up edits remain uncommitted in sales UI/API/schema and progress docs; preserve and inspect them before editing. No commit or push was made. Roadmap progress is **15/47**: SALES-002 COMPLETED; SALES-003 IN_PROGRESS.
 
-## Delivered
+## Implemented and verified
 
-- INV-008: tenant-composite transfer schema and additive migration `20261107130000_stock_transfers`, applied to local `inventory_dev`; transfer APIs/services for draft, list/search/status/warehouse filtering/pagination, detail/history, submit, cancel before dispatch, idempotent dispatch and partial/full idempotent receipt. InventoryPostingService owns both transfer movement and balance effects, cost snapshot, audit and outbox. `/transfers` and `/transfers/[transferId]` UI added.
-- SALES-001: customer type/status and full contact/address model with organization-scoped email uniqueness; additive migration `20261108090000_customer_directory`, applied locally. Tenant-scoped create/list/search/detail/update/archive/audit API and `/customers` plus `/customers/[customerId]` UI added.
-- All three migrations are additive, including `20261108100000_stock_transfer_constraints` with positive-quantity, distinct-warehouse and cost-pair checks. Migration deploy succeeded; the latest integration suite passed against this migration. Confirm `npx prisma migrate status --config prisma.config.ts` reports 14 current.
-- Latest isolated `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs`: **9 passed, 0 failed** in a random generated schema. Transfer coverage includes competing dispatches, competing receipts, rollback, replay, tenant and warehouse scope. Customer coverage includes CRUD, normalized email uniqueness, archive, audit and tenant scope.
-- Final checks: full `npm test` **40 passed, 0 failed, 2 opt-in PostgreSQL suites skipped**; `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build`, and `npx prisma validate --config prisma.config.ts` passed. Isolated PostgreSQL suite: **9 passed, 0 failed**. Migration status: 13 found and current. Rerun `git diff --check` after final documentation edits.
+- SALES-002: order and reservation schema/API/UI; draft/edit/list/detail, Decimal totals, tenant/warehouse scope, confirmation reservations, idempotent cancellation release, reservation reconciliation. Database acceptance for oversell races, replay, insufficient stock, tenant denial and cancellation passed.
+- SALES-003: partial/full fulfillment docs/API/UI; atomic immutable ledger posting via `InventoryPostingService`, reservation consumption, audit/outbox, idempotency and concurrency handling. Integration covers partial/full fulfillment, replay, overfulfillment denial, fulfillment races, balance reconciliation and tenant scope.
+- Additive migrations `20261108120000_sales_orders_reservations` and `20261108140000_sales_fulfillment` are applied locally. `npx prisma migrate status --config prisma.config.ts` reports 16 migrations found and current. No reset/deletion; synthetic rows in `inventory_dev.public` were untouched.
+- Checks passed: Prisma validation, typecheck, lint, formatting, production build, full `npm test` (**40 pass, 0 fail, 2 opt-in suites skipped**), isolated PostgreSQL suite (**10 pass, 0 fail, 0 skipped**), and `git diff --check` before the last documentation edits. Rerun whitespace check at resume.
 
-## Limitations
+## Remaining work / limitations
 
-- Browser automation is disabled in Codex Work settings. Authenticated transfer and customer workflows remain unverified; do not mark either task complete or increase 14/47 based on service tests alone.
-- INV-008 transition is DRAFT → SUBMITTED → IN_TRANSIT → PARTIALLY_RECEIVED → RECEIVED, cancellation only before dispatch. No approval stage is documented. Costing uses the provisional weighted-average policy.
-- SALES-002 has not started. Its reservation point is confirmation per the existing provisional architecture decision; do not release or consume inventory outside the ledger/posting transaction design.
-- Existing generated test fixture data in `inventory_dev.public` remains preserved; integration runs use isolated schemas and remove only those schemas.
+- SALES-003 still has no separate picking stage/document or persisted picked quantity; therefore `shipped <= picked <= ordered` is not satisfied. It also lacks a sales-fulfillment-specific injected rollback test. Keep IN_PROGRESS.
+- Browser automation is disabled in current Codex Work settings; authenticated UI workflow was not tested. No browser pass is claimed.
+- SALES-004 remains gated: invoice/tax/payment/accounting policy has not been approved (PROD-002/DEC-007). Do not implement financial policy by assumption.
+- Fixed the roadmap cycle by making SALES-003 depend only on SALES-002; INV-010 barcode enhancement already depends on SALES-003 and follows it.
 
-## Exact next steps
+## Exact next actions
 
-1. Migration status is confirmed: all 14 migrations current. Run `git diff --check` and inspect `git status --short` and the remaining diff; generated `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo` are clean.
-2. Preserve all existing data and do not reset the database.
-3. Keep INV-008 and SALES-001 IN_PROGRESS while browser verification is unavailable. Do not increase roadmap count.
-4. Continue with SALES-002 after customer acceptance gate review, preserving strict tenant/warehouse scope and inventory reservation semantics. Record any materially different policy requirement before implementing it.
+1. Inspect `git status --short` and the diff; keep user changes and only touch the intended sales work.
+2. Implement the SALES-003 pick document/stage and quantity constraints in a new additive migration; keep every reference organization-scoped and use the existing posting service for final stock outflow.
+3. Add isolated PostgreSQL cases for `picked <= reserved/ordered`, `fulfilled <= picked`, partial pick/fulfillment, retry, tenant/warehouse scope and injected rollback; run them without touching `inventory_dev.public`.
+4. Run Prisma validation and migration status, `npm test`, isolated integration suite, typecheck, lint, format, production build, and `git diff --check`; record exact outputs.
+5. Complete browser checks for SALES-002/003 and previously pending SALES-001, INV-008, purchasing and adjustments if browser control becomes available. Do not infer browser success from builds or API integration tests.
+6. Only then update SALES-003 status if all criteria are met. Do not start SALES-004 until its financial-policy decisions are approved. No push without authorization.
 
-## Escalation note
+## Current modified areas
 
-Sandbox denies local API listener and PostgreSQL socket access. Full tests, isolated DB tests and Prisma migration status/deploy require escalated local execution. Do not run destructive DB commands.
+- Sales backend: `apps/api/prisma/schema.prisma`, `apps/api/src/sales/sales-orders.service.ts`.
+- Sales UI: `apps/web/src/app/sales-orders/page.tsx`, `apps/web/src/app/sales-orders/[salesOrderId]/page.tsx`.
+- Progress/architecture: this file, `current-state.md`, `session-log.md`, `completed-tasks.md`, `docs/implementation/task-breakdown.md`, `docs/implementation/master-plan.md`, `docs/architecture/api-specification.md`, `docs/architecture/inventory-semantics.md`, `docs/implementation/testing-strategy.md`.

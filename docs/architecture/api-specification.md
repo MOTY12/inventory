@@ -44,8 +44,10 @@ Goods receipt creation requires an `Idempotency-Key` header. Receipt line quanti
 
 ## Sales and finance records
 
-- `GET/POST /sales-orders`; confirm/cancel; `POST /sales-orders/:id/fulfillments` (partial lines).
-- `POST /sales-orders/:id/invoices`; `POST /invoices/:id/payments` or record payment + allocations.
+- `/organizations/current/sales/orders`: `GET/POST`; `GET/PATCH /:salesOrderId`; `POST /:salesOrderId/confirm`; `POST /:salesOrderId/cancel`; `GET /:salesOrderId/audit`; `GET/POST /:salesOrderId/fulfillments`.
+- Creating a draft, confirming/canceling, and posting fulfillment require `Idempotency-Key`. Draft lines capture product/unit/price snapshots and Decimal totals. Confirmation locks balances in stable order and reserves through `InventoryPostingService`; it does not reduce on-hand. Cancellation releases outstanding reservations once. Fulfillment posts immutable stock outflow and consumes reservation quantities in the same transaction as fulfillment, order progress, audit and outbox. Fulfillment may be partial and is replay-safe.
+- Sales order reads/writes derive organization and warehouse access from authenticated membership context; client-supplied organization IDs do not establish tenant scope.
+- `POST /sales-orders/:id/invoices`; `POST /invoices/:id/payments` or record payment + allocations. These routes are planned, not implemented; invoice/tax/accounting rules remain unapproved.
 - Returns/refunds in Phase 2.
 
 ## Reporting and operations
