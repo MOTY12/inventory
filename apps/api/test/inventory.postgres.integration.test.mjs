@@ -15,6 +15,7 @@ import { SuppliersService } from "../dist/procurement/suppliers.service.js";
 import { PurchaseOrdersService } from "../dist/procurement/purchase-orders.service.js";
 import { StockTransfersService } from "../dist/inventory/transfers.service.js";
 import { CustomersService } from "../dist/sales/customers.service.js";
+import { SalesOrdersService } from "../dist/sales/sales-orders.service.js";
 
 const enabled = process.env.RUN_POSTGRES_INTEGRATION === "1";
 
@@ -66,6 +67,7 @@ test(
       const purchaseOrders = new PurchaseOrdersService(prisma, inventory);
       const transfers = new StockTransfersService(prisma, inventory);
       const customers = new CustomersService(prisma);
+      const salesOrders = new SalesOrdersService(prisma, inventory);
       const contextA = ownerA.context;
       const contextB = ownerB.context;
       const branch = await locations.createBranch(contextA, ownerA.userId, {
@@ -357,6 +359,300 @@ test(
           name: "Stock item",
           sku: `STOCK-${randomUUID()}`,
           baseUnitId: unit.id,
+        },
+      );
+      await t.test(
+        "sales order drafts, atomic reservations, cancellation release, idempotency, races and tenant scope",
+        async () => {
+          const salesProduct = await catalog.createProduct(
+            contextA,
+            ownerA.userId,
+            {
+              name: "Sales reservation item",
+              sku: `SALE-${randomUUID()}`,
+              baseUnitId: unit.id,
+            },
+          );
+          const customer = await customers.create(contextA, ownerA.userId, {
+            name: `Sales customer ${randomUUID()}`,
+          });
+          await inventory.postWarehouseMovement(
+            contextA,
+            ownerA.userId,
+            `sales-opening-${randomUUID()}`,
+            {
+              warehouseId: warehouse.id,
+              productId: salesProduct.id,
+              documentType: "OPENING_BALANCE",
+              documentId: randomUUID(),
+              movementType: "OPENING_BALANCE",
+              quantityDelta: "7",
+              costPerBaseUnit: "1.2500",
+              costCurrency: "NGN",
+            },
+          );
+          const makeOrder = (quantity) =>
+            salesOrders.create(
+              contextA,
+              ownerA.userId,
+              {
+                customerId: customer.id,
+                warehouseId: warehouse.id,
+                currency: "NGN",
+                lines: [
+                  { productId: salesProduct.id, quantity, unitPrice: "2.5000" },
+                ],
+              },
+              `sales-create-${randomUUID()}`,
+            );
+
+          const first = await makeOrder("5");
+          assert.equal(first.status, "DRAFT");
+          assert.match(first.number, /^SO-\d{6}$/);
+          assert.equal(first.total.toString(), "12.5");
+          await assert.rejects(
+            salesOrders.get(contextB, first.id),
+            (error) => error.getStatus() === 404,
+          );
+          await salesOrders.confirm(
+            contextA,
+            ownerA.userId,
+            first.id,
+            "sales-confirm-first",
+          );
+          const reserved = await prisma.inventoryBalance.findUniqueOrThrow({
+            where: {
+              organizationId_warehouseId_productId: {
+                organizationId: contextA.organizationId,
+                warehouseId: warehouse.id,
+                productId: salesProduct.id,
+              },
+            },
+          });
+          assert.equal(reserved.onHand.toString(), "7");
+          assert.equal(reserved.reserved.toString(), "5");
+          assert.equal(
+            reserved.onHand.minus(reserved.reserved).toString(),
+            "2",
+          );
+          const replayedConfirm = await salesOrders.confirm(
+            contextA,
+            ownerA.userId,
+            first.id,
+            "sales-confirm-first",
+          );
+          assert.equal(replayedConfirm.status, "CONFIRMED");
+          await assert.rejects(
+            salesOrders.confirm(
+              contextA,
+              ownerA.userId,
+              first.id,
+              "sales-confirm-first-different",
+            ),
+            (error) => error.getStatus() === 409,
+          );
+          const conflicting = await makeOrder("3");
+          await assert.rejects(
+            salesOrders.confirm(
+              contextA,
+              ownerA.userId,
+              conflicting.id,
+              "sales-confirm-conflicting",
+            ),
+            (error) => error.getStatus() === 409,
+          );
+          assert.equal(
+            (await salesOrders.get(contextA, conflicting.id)).status,
+            "DRAFT",
+          );
+          await salesOrders.cancel(
+            contextA,
+            ownerA.userId,
+            first.id,
+            "sales-cancel-first",
+          );
+          await salesOrders.cancel(
+            contextA,
+            ownerA.userId,
+            first.id,
+            "sales-cancel-first",
+          );
+          const released = await prisma.inventoryBalance.findUniqueOrThrow({
+            where: {
+              organizationId_warehouseId_productId: {
+                organizationId: contextA.organizationId,
+                warehouseId: warehouse.id,
+                productId: salesProduct.id,
+              },
+            },
+          });
+          assert.equal(released.reserved.toString(), "0");
+          assert.equal(
+            (
+              await salesOrders.reconcileReservations(
+                contextA,
+                warehouse.id,
+                salesProduct.id,
+              )
+            ).reconciled,
+            true,
+          );
+          const competing = await Promise.all([makeOrder("4"), makeOrder("4")]);
+          const results = await Promise.allSettled(
+            competing.map((order) =>
+              salesOrders.confirm(
+                contextA,
+                ownerA.userId,
+                order.id,
+                `sales-race-${order.id}`,
+              ),
+            ),
+          );
+          assert.equal(
+            results.filter((result) => result.status === "fulfilled").length,
+            1,
+          );
+          const finalBalance = await prisma.inventoryBalance.findUniqueOrThrow({
+            where: {
+              organizationId_warehouseId_productId: {
+                organizationId: contextA.organizationId,
+                warehouseId: warehouse.id,
+                productId: salesProduct.id,
+              },
+            },
+          });
+          assert.equal(finalBalance.onHand.toString(), "7");
+          assert.equal(finalBalance.reserved.toString(), "4");
+          assert.equal(
+            (
+              await salesOrders.reconcileReservations(
+                contextA,
+                warehouse.id,
+                salesProduct.id,
+              )
+            ).reconciled,
+            true,
+          );
+          const winnerIndex = results.findIndex(
+            (result) => result.status === "fulfilled",
+          );
+          const winner = competing[winnerIndex];
+          const salesLineId = winner.lines[0].id;
+          const partialInput = {
+            lines: [{ salesOrderLineId: salesLineId, quantity: "2" }],
+          };
+          const partialFulfillment = await salesOrders.fulfill(
+            contextA,
+            ownerA.userId,
+            winner.id,
+            "sales-fulfill-partial",
+            partialInput,
+          );
+          const replayedFulfillment = await salesOrders.fulfill(
+            contextA,
+            ownerA.userId,
+            winner.id,
+            "sales-fulfill-partial",
+            partialInput,
+          );
+          assert.equal(partialFulfillment.id, replayedFulfillment.id);
+          assert.equal(
+            (await salesOrders.get(contextA, winner.id)).status,
+            "PARTIALLY_FULFILLED",
+          );
+          await assert.rejects(
+            salesOrders.fulfill(
+              contextA,
+              ownerA.userId,
+              winner.id,
+              "sales-fulfill-over",
+              {
+                lines: [{ salesOrderLineId: salesLineId, quantity: "3" }],
+              },
+            ),
+            (error) => error.getStatus() === 409,
+          );
+          const fulfillmentRaces = await Promise.allSettled(
+            ["sales-fulfill-race-a", "sales-fulfill-race-b"].map((key) =>
+              salesOrders.fulfill(contextA, ownerA.userId, winner.id, key, {
+                lines: [{ salesOrderLineId: salesLineId, quantity: "2" }],
+              }),
+            ),
+          );
+          assert.equal(
+            fulfillmentRaces.filter((result) => result.status === "fulfilled")
+              .length,
+            1,
+          );
+          const fulfilledOrder = await salesOrders.get(contextA, winner.id);
+          assert.equal(fulfilledOrder.status, "FULFILLED");
+          assert.equal(
+            fulfilledOrder.lines[0].fulfilledQuantity.toString(),
+            "4",
+          );
+          assert.equal(fulfilledOrder.lines[0].reservation.status, "CONSUMED");
+          const fulfilledBalance =
+            await prisma.inventoryBalance.findUniqueOrThrow({
+              where: {
+                organizationId_warehouseId_productId: {
+                  organizationId: contextA.organizationId,
+                  warehouseId: warehouse.id,
+                  productId: salesProduct.id,
+                },
+              },
+            });
+          assert.equal(fulfilledBalance.onHand.toString(), "3");
+          assert.equal(fulfilledBalance.reserved.toString(), "0");
+          assert.equal(
+            (
+              await salesOrders.reconcileReservations(
+                contextA,
+                warehouse.id,
+                salesProduct.id,
+              )
+            ).reconciled,
+            true,
+          );
+          assert.equal(
+            (await salesOrders.fulfillments(contextA, winner.id)).length,
+            2,
+          );
+          await assert.rejects(
+            salesOrders.create(
+              contextA,
+              ownerA.userId,
+              {
+                customerId: (
+                  await customers.create(contextB, ownerB.userId, {
+                    name: `Foreign ${randomUUID()}`,
+                  })
+                ).id,
+                warehouseId: warehouse.id,
+                currency: "NGN",
+                lines: [
+                  { productId: salesProduct.id, quantity: "1", unitPrice: "1" },
+                ],
+              },
+              `sales-foreign-${randomUUID()}`,
+            ),
+            (error) => error.getStatus() === 404,
+          );
+          await assert.rejects(
+            salesOrders.create(
+              { ...contextA, role: "SALES", userId: ownerB.userId },
+              ownerB.userId,
+              {
+                customerId: customer.id,
+                warehouseId: warehouse.id,
+                currency: "NGN",
+                lines: [
+                  { productId: salesProduct.id, quantity: "1", unitPrice: "1" },
+                ],
+              },
+              `sales-scope-${randomUUID()}`,
+            ),
+            (error) => error.getStatus() === 404,
+          );
         },
       );
       await t.test(

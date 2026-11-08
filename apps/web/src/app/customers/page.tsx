@@ -61,9 +61,9 @@ export default function CustomersPage() {
     setBusy(true);
     setError("");
     try {
-      await authenticatedRequest(api, {
-        method: "POST",
-        body: JSON.stringify({
+      await authenticatedRequest(
+        api,
+        {
           name,
           type,
           contactName: contactName || undefined,
@@ -76,8 +76,9 @@ export default function CustomersPage() {
           shippingCity: shippingCity || undefined,
           shippingCountryCode: "NG",
           notes: notes || undefined,
-        }),
-      });
+        },
+        "POST",
+      );
       setOpen(false);
       setName("");
       setContactName("");

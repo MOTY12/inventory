@@ -87,26 +87,29 @@ export default function TransfersPage() {
   }
   async function create() {
     await run(async () => {
-      await authenticatedRequest(api, {
-        method: "POST",
-        body: JSON.stringify({
+      await authenticatedRequest(
+        api,
+        {
           sourceWarehouseId: source,
           destinationWarehouseId: destination,
           note: "",
           lines,
-        }),
-      });
+        },
+        "POST",
+      );
       setOpen(false);
     });
   }
   async function command(id: string, kind: "submit" | "cancel" | "dispatch") {
     await run(() =>
-      authenticatedRequest(`${api}/${id}/${kind}`, {
-        method: "POST",
-        ...(kind === "dispatch"
-          ? { headers: { "Idempotency-Key": `transfer-dispatch-${id}` } }
-          : {}),
-      }),
+      authenticatedRequest(
+        `${api}/${id}/${kind}`,
+        undefined,
+        "POST",
+        kind === "dispatch"
+          ? { "Idempotency-Key": `transfer-dispatch-${id}` }
+          : undefined,
+      ),
     );
   }
   async function receive(row: Row) {
@@ -137,15 +140,14 @@ export default function TransfersPage() {
     );
     if (!value) return;
     await run(() =>
-      authenticatedRequest(`${api}/${row.id}/receipts`, {
-        method: "POST",
-        headers: {
-          "Idempotency-Key": `transfer-receipt-${row.id}-${Date.now()}`,
-        },
-        body: JSON.stringify({
+      authenticatedRequest(
+        `${api}/${row.id}/receipts`,
+        {
           lines: [{ transferLineId: line.id, quantity: value }],
-        }),
-      }),
+        },
+        "POST",
+        { "Idempotency-Key": `transfer-receipt-${row.id}-${Date.now()}` },
+      ),
     );
   }
   return (

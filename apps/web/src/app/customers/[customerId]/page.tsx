@@ -135,9 +135,9 @@ export default function CustomerDetailPage() {
     if (!row) return;
     setBusy(true);
     try {
-      await authenticatedRequest(`${api}/${row.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
+      await authenticatedRequest(
+        `${api}/${row.id}`,
+        {
           name,
           type,
           contactName,
@@ -145,8 +145,9 @@ export default function CustomerDetailPage() {
           phone,
           ...addresses,
           notes,
-        }),
-      });
+        },
+        "PATCH",
+      );
       setNotice("Customer updated.");
       await load();
     } catch (e) {
@@ -161,9 +162,11 @@ export default function CustomerDetailPage() {
     if (!row) return;
     setBusy(true);
     try {
-      await authenticatedRequest(`${api}/${row.id}/archive`, {
-        method: "PATCH",
-      });
+      await authenticatedRequest(
+        `${api}/${row.id}/archive`,
+        undefined,
+        "PATCH",
+      );
       setNotice("Customer archived.");
       await load();
     } catch (e) {

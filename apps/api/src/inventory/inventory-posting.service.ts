@@ -264,6 +264,45 @@ export class InventoryPostingService {
     return rows[0];
   }
 
+  async applyReservationDelta(
+    tx: Prisma.TransactionClient,
+    context: OrganizationContext,
+    warehouseId: string,
+    productId: string,
+    delta: Prisma.Decimal,
+  ) {
+    if (delta.isZero())
+      throw new ConflictException("Reservation quantity must be non-zero");
+    const balance = await this.lockTransferBalance(
+      tx,
+      context,
+      warehouseId,
+      productId,
+    );
+    const nextReserved = balance.reserved.plus(delta);
+    if (nextReserved.isNegative() || nextReserved.greaterThan(balance.on_hand))
+      throw new ConflictException(
+        delta.isPositive()
+          ? "Insufficient available stock to reserve"
+          : "Reservation release exceeds the active reserved balance",
+      );
+    await tx.inventoryBalance.update({
+      where: {
+        organizationId_warehouseId_productId: {
+          organizationId: context.organizationId,
+          warehouseId,
+          productId,
+        },
+      },
+      data: { reserved: nextReserved, version: { increment: 1 } },
+    });
+    return {
+      onHand: balance.on_hand,
+      reserved: nextReserved,
+      available: balance.on_hand.minus(nextReserved),
+    };
+  }
+
   private async transferMovementEvents(
     tx: Prisma.TransactionClient,
     context: OrganizationContext,
