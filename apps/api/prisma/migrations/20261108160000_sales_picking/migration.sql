@@ -7,6 +7,7 @@ ALTER TABLE "sales_order_lines"
 -- as already picked so the new cumulative invariant holds without data loss.
 UPDATE "sales_order_lines"
 SET "picked_quantity" = "fulfilled_quantity";
+
 ALTER TABLE "sales_order_lines"
   ADD CONSTRAINT "sales_order_lines_picking_range_check"
   CHECK ("fulfilled_quantity" >= 0 AND "fulfilled_quantity" <= "picked_quantity" AND "picked_quantity" <= "ordered_quantity");
