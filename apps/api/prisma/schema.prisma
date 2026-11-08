@@ -87,6 +87,16 @@ enum PurchaseOrderStatus {
   CANCELLED
 }
 
+enum CustomerType {
+  BUSINESS
+  INDIVIDUAL
+}
+
+enum CustomerStatus {
+  ACTIVE
+  ARCHIVED
+}
+
 model User {
   id                  String                   @id @default(uuid()) @db.Uuid
   email               String                   @unique @db.VarChar(320)
@@ -127,6 +137,7 @@ model Organization {
   outboxEvents       OutboxEvent[]
   stockAdjustments   StockAdjustment[]
   suppliers          Supplier[]
+  customers          Customer[]
   purchaseOrders     PurchaseOrder[]
   purchaseOrderSequence PurchaseOrderSequence?
   stockTransferSequence StockTransferSequence?
@@ -530,6 +541,41 @@ model StockTransferStatusHistory {
 
   @@index([organizationId, transferId, occurredAt])
   @@map("stock_transfer_status_history")
+}
+
+model Customer {
+  id                   String        @id @default(uuid()) @db.Uuid
+  organizationId       String        @map("organization_id") @db.Uuid
+  name                 String        @db.VarChar(180)
+  nameNormalized       String        @map("name_normalized") @db.VarChar(180)
+  type                 CustomerType  @default(BUSINESS)
+  contactName          String?       @map("contact_name") @db.VarChar(180)
+  email                String?       @db.VarChar(320)
+  emailNormalized      String?       @map("email_normalized") @db.VarChar(320)
+  phone                String?       @db.VarChar(40)
+  billingAddressLine1  String?       @map("billing_address_line_1") @db.VarChar(240)
+  billingAddressLine2  String?       @map("billing_address_line_2") @db.VarChar(240)
+  billingCity          String?       @map("billing_city") @db.VarChar(120)
+  billingRegion        String?       @map("billing_region") @db.VarChar(120)
+  billingPostalCode    String?       @map("billing_postal_code") @db.VarChar(32)
+  billingCountryCode   String?       @map("billing_country_code") @db.Char(2)
+  shippingAddressLine1 String?       @map("shipping_address_line_1") @db.VarChar(240)
+  shippingAddressLine2 String?       @map("shipping_address_line_2") @db.VarChar(240)
+  shippingCity         String?       @map("shipping_city") @db.VarChar(120)
+  shippingRegion       String?       @map("shipping_region") @db.VarChar(120)
+  shippingPostalCode   String?       @map("shipping_postal_code") @db.VarChar(32)
+  shippingCountryCode  String?       @map("shipping_country_code") @db.Char(2)
+  notes                String?       @db.VarChar(1000)
+  status               CustomerStatus @default(ACTIVE)
+  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization         Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, emailNormalized])
+  @@index([organizationId, status, name])
+  @@index([organizationId, nameNormalized])
+  @@map("customers")
 }
 
 model Supplier {

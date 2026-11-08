@@ -13,6 +13,8 @@ import { InventoryReadService } from "../dist/inventory/inventory-read.service.j
 import { StockAdjustmentsService } from "../dist/inventory/adjustments.service.js";
 import { SuppliersService } from "../dist/procurement/suppliers.service.js";
 import { PurchaseOrdersService } from "../dist/procurement/purchase-orders.service.js";
+import { StockTransfersService } from "../dist/inventory/transfers.service.js";
+import { CustomersService } from "../dist/sales/customers.service.js";
 
 const enabled = process.env.RUN_POSTGRES_INTEGRATION === "1";
 
@@ -62,6 +64,8 @@ test(
       const adjustments = new StockAdjustmentsService(prisma, inventory);
       const suppliers = new SuppliersService(prisma);
       const purchaseOrders = new PurchaseOrdersService(prisma, inventory);
+      const transfers = new StockTransfersService(prisma, inventory);
+      const customers = new CustomersService(prisma);
       const contextA = ownerA.context;
       const contextB = ownerB.context;
       const branch = await locations.createBranch(contextA, ownerA.userId, {
@@ -277,6 +281,71 @@ test(
               name: "Changed",
             }),
             (e) => e.getStatus() === 409,
+          );
+        },
+      );
+
+      await t.test(
+        "customer CRUD, normalized email uniqueness, search, archive and tenant scope",
+        async () => {
+          const customer = await customers.create(contextA, ownerA.userId, {
+            name: "Ada Customer",
+            type: "BUSINESS",
+            contactName: "Ada Buyer",
+            email: "ADA@example.test",
+            phone: "+234 809 111 2222",
+            billingCity: "Lagos",
+            billingCountryCode: "ng",
+            shippingAddressLine1: "12 Market Road",
+            notes: "Call before delivery",
+          });
+          assert.equal(customer.email, "ada@example.test");
+          assert.equal(customer.shippingAddressLine1, "12 Market Road");
+          await assert.rejects(
+            customers.get(contextB, customer.id),
+            (error) => error.getStatus() === 404,
+          );
+          await assert.rejects(
+            customers.create(contextA, ownerA.userId, {
+              name: "Duplicate customer",
+              email: "ada@example.test",
+            }),
+            (error) => error.getStatus() === 409,
+          );
+          assert.equal(
+            (
+              await customers.list(contextA, {
+                page: 1,
+                page_size: 10,
+                q: "Ada Buyer",
+                status: "ACTIVE",
+              })
+            ).total,
+            1,
+          );
+          const updated = await customers.update(
+            contextA,
+            ownerA.userId,
+            customer.id,
+            { phone: "+234 809 222 3333", billingCity: "Abuja" },
+          );
+          assert.equal(updated.billingCity, "Abuja");
+          assert.equal(
+            (await customers.archive(contextA, ownerA.userId, customer.id))
+              .status,
+            "ARCHIVED",
+          );
+          await assert.rejects(
+            customers.update(contextA, ownerA.userId, customer.id, {
+              name: "Edited after archive",
+            }),
+            (error) => error.getStatus() === 409,
+          );
+          assert.deepEqual(
+            (await customers.auditHistory(contextA, customer.id))
+              .map((event) => event.action)
+              .sort(),
+            ["ARCHIVED", "CREATED", "UPDATED"],
           );
         },
       );
@@ -1075,6 +1144,409 @@ test(
             }),
             null,
           );
+        },
+      );
+      await t.test(
+        "warehouse transfer dispatch, partial/full receipt, replay, and tenant scope",
+        async () => {
+          const destination = await locations.createWarehouse(
+            contextA,
+            ownerA.userId,
+            {
+              branchId: branch.id,
+              name: "Transfer destination",
+              code: `TD-${randomUUID().slice(0, 8)}`,
+            },
+          );
+          const clerkUserId = randomUUID();
+          const clerkEmail = `transfer-clerk-${clerkUserId}@example.test`;
+          await prisma.user.create({
+            data: {
+              id: clerkUserId,
+              email: clerkEmail,
+              emailNormalized: clerkEmail,
+              passwordHash: "integration-only",
+              status: "ACTIVE",
+              emailVerifiedAt: new Date(),
+            },
+          });
+          const clerkMembership = await prisma.membership.create({
+            data: {
+              organizationId: contextA.organizationId,
+              userId: clerkUserId,
+              role: "WAREHOUSE_CLERK",
+            },
+          });
+          const clerkContext = {
+            organizationId: contextA.organizationId,
+            membershipId: clerkMembership.id,
+            userId: clerkUserId,
+            role: "WAREHOUSE_CLERK",
+          };
+          await prisma.membershipWarehouseGrant.create({
+            data: {
+              organizationId: contextA.organizationId,
+              userId: clerkUserId,
+              warehouseId: warehouse.id,
+            },
+          });
+          const clerkDraft = {
+            sourceWarehouseId: warehouse.id,
+            destinationWarehouseId: destination.id,
+            lines: [{ productId: stockProduct.id, quantity: "1" }],
+          };
+          await assert.rejects(
+            transfers.create(clerkContext, clerkUserId, clerkDraft),
+            (error) => error.getStatus() === 404,
+          );
+          await prisma.membershipWarehouseGrant.create({
+            data: {
+              organizationId: contextA.organizationId,
+              userId: clerkUserId,
+              warehouseId: destination.id,
+            },
+          });
+          const permittedDraft = await transfers.create(
+            clerkContext,
+            clerkUserId,
+            clerkDraft,
+          );
+          assert.equal(permittedDraft.status, "DRAFT");
+          await transfers.cancel(clerkContext, clerkUserId, permittedDraft.id);
+          const transferProduct = await catalog.createProduct(
+            contextA,
+            ownerA.userId,
+            {
+              name: "Transfer item",
+              sku: `TRANSFER-${randomUUID()}`,
+              baseUnitId: unit.id,
+              defaultCost: "2.5000",
+              costCurrency: "NGN",
+            },
+          );
+          await inventory.postWarehouseMovement(
+            contextA,
+            ownerA.userId,
+            `transfer-opening-${randomUUID()}`,
+            {
+              warehouseId: warehouse.id,
+              productId: transferProduct.id,
+              documentType: "OPENING",
+              documentId: randomUUID(),
+              movementType: "OPENING_BALANCE",
+              quantityDelta: "10",
+              costPerBaseUnit: "2.5",
+              costCurrency: "NGN",
+            },
+          );
+          let transfer = await transfers.create(contextA, ownerA.userId, {
+            sourceWarehouseId: warehouse.id,
+            destinationWarehouseId: destination.id,
+            lines: [{ productId: transferProduct.id, quantity: "10" }],
+          });
+          assert.equal(transfer.status, "DRAFT");
+          await assert.rejects(
+            transfers.get(contextB, transfer.id),
+            (error) => error.getStatus() === 404,
+          );
+          await transfers.submit(contextA, ownerA.userId, transfer.id);
+          const dispatchKey = `transfer-dispatch-${randomUUID()}`;
+          await transfers.dispatch(
+            contextA,
+            ownerA.userId,
+            transfer.id,
+            dispatchKey,
+          );
+          await transfers.dispatch(
+            contextA,
+            ownerA.userId,
+            transfer.id,
+            dispatchKey,
+          );
+          transfer = await transfers.get(contextA, transfer.id);
+          assert.equal(transfer.status, "IN_TRANSIT");
+          const sourceAfterDispatch =
+            await prisma.inventoryBalance.findUniqueOrThrow({
+              where: {
+                organizationId_warehouseId_productId: {
+                  organizationId: contextA.organizationId,
+                  warehouseId: warehouse.id,
+                  productId: transferProduct.id,
+                },
+              },
+            });
+          assert.equal(sourceAfterDispatch.onHand.toString(), "0");
+          assert.equal(sourceAfterDispatch.inTransit.toString(), "10");
+          await assert.rejects(
+            transfers.receive(
+              contextA,
+              ownerA.userId,
+              transfer.id,
+              `transfer-too-much-${randomUUID()}`,
+              {
+                lines: [
+                  { transferLineId: transfer.lines[0].id, quantity: "11" },
+                ],
+              },
+            ),
+            (error) => error.getStatus() === 409,
+          );
+          const firstKey = `transfer-receipt-${randomUUID()}`;
+          const firstInput = {
+            lines: [{ transferLineId: transfer.lines[0].id, quantity: "4" }],
+          };
+          await transfers.receive(
+            contextA,
+            ownerA.userId,
+            transfer.id,
+            firstKey,
+            firstInput,
+          );
+          await transfers.receive(
+            contextA,
+            ownerA.userId,
+            transfer.id,
+            firstKey,
+            firstInput,
+          );
+          transfer = await transfers.get(contextA, transfer.id);
+          assert.equal(transfer.status, "PARTIALLY_RECEIVED");
+          await transfers.receive(
+            contextA,
+            ownerA.userId,
+            transfer.id,
+            `transfer-receipt-${randomUUID()}`,
+            {
+              lines: [{ transferLineId: transfer.lines[0].id, quantity: "6" }],
+            },
+          );
+          transfer = await transfers.get(contextA, transfer.id);
+          assert.equal(transfer.status, "RECEIVED");
+          const source = await prisma.inventoryBalance.findUniqueOrThrow({
+            where: {
+              organizationId_warehouseId_productId: {
+                organizationId: contextA.organizationId,
+                warehouseId: warehouse.id,
+                productId: transferProduct.id,
+              },
+            },
+          });
+          const target = await prisma.inventoryBalance.findUniqueOrThrow({
+            where: {
+              organizationId_warehouseId_productId: {
+                organizationId: contextA.organizationId,
+                warehouseId: destination.id,
+                productId: transferProduct.id,
+              },
+            },
+          });
+          assert.equal(source.inTransit.toString(), "0");
+          assert.equal(target.onHand.toString(), "10");
+          assert.equal(target.averageCost.toString(), "2.5");
+          assert.equal(
+            await prisma.stockMovement.count({
+              where: {
+                organizationId: contextA.organizationId,
+                documentType: "STOCK_TRANSFER",
+                documentId: transfer.id,
+              },
+            }),
+            3,
+          );
+          await inventory.postWarehouseMovement(
+            contextA,
+            ownerA.userId,
+            `transfer-concurrent-stock-${randomUUID()}`,
+            {
+              warehouseId: warehouse.id,
+              productId: transferProduct.id,
+              documentType: "RECEIPT",
+              documentId: randomUUID(),
+              movementType: "RECEIPT",
+              quantityDelta: "2",
+              costPerBaseUnit: "2.5",
+              costCurrency: "NGN",
+            },
+          );
+          const concurrent = await transfers.create(contextA, ownerA.userId, {
+            sourceWarehouseId: warehouse.id,
+            destinationWarehouseId: destination.id,
+            lines: [{ productId: transferProduct.id, quantity: "2" }],
+          });
+          await transfers.submit(contextA, ownerA.userId, concurrent.id);
+          await transfers.dispatch(
+            contextA,
+            ownerA.userId,
+            concurrent.id,
+            `dispatch-${randomUUID()}`,
+          );
+          const concurrentDetail = await transfers.get(contextA, concurrent.id);
+          await admin.query(
+            `CREATE FUNCTION "${schema}".fail_transfer_receipt_outbox() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.event_type = 'inventory.transfer.received' THEN RAISE EXCEPTION 'injected transfer receipt outbox failure'; END IF; RETURN NEW; END; $$`,
+          );
+          await admin.query(
+            `CREATE TRIGGER fail_transfer_receipt_outbox BEFORE INSERT ON "${schema}".outbox_events FOR EACH ROW EXECUTE FUNCTION "${schema}".fail_transfer_receipt_outbox()`,
+          );
+          const failedKey = `receipt-rollback-${randomUUID()}`;
+          await assert.rejects(
+            transfers.receive(
+              contextA,
+              ownerA.userId,
+              concurrent.id,
+              failedKey,
+              {
+                lines: [
+                  {
+                    transferLineId: concurrentDetail.lines[0].id,
+                    quantity: "2",
+                  },
+                ],
+              },
+            ),
+            /injected transfer receipt outbox failure/,
+          );
+          await admin.query(
+            `DROP TRIGGER fail_transfer_receipt_outbox ON "${schema}".outbox_events`,
+          );
+          await admin.query(
+            `DROP FUNCTION "${schema}".fail_transfer_receipt_outbox()`,
+          );
+          const rollbackBalance =
+            await prisma.inventoryBalance.findUniqueOrThrow({
+              where: {
+                organizationId_warehouseId_productId: {
+                  organizationId: contextA.organizationId,
+                  warehouseId: destination.id,
+                  productId: transferProduct.id,
+                },
+              },
+            });
+          assert.equal(rollbackBalance.onHand.toString(), "10");
+          assert.equal(
+            await prisma.stockTransferReceipt.count({
+              where: {
+                organizationId: contextA.organizationId,
+                transferId: concurrent.id,
+              },
+            }),
+            0,
+          );
+          assert.equal(
+            await prisma.idempotencyRecord.findUnique({
+              where: {
+                organizationId_key: {
+                  organizationId: contextA.organizationId,
+                  key: failedKey,
+                },
+              },
+            }),
+            null,
+          );
+          const competingReceipts = await Promise.allSettled([
+            transfers.receive(
+              contextA,
+              ownerA.userId,
+              concurrent.id,
+              `receipt-a-${randomUUID()}`,
+              {
+                lines: [
+                  {
+                    transferLineId: concurrentDetail.lines[0].id,
+                    quantity: "2",
+                  },
+                ],
+              },
+            ),
+            transfers.receive(
+              contextA,
+              ownerA.userId,
+              concurrent.id,
+              `receipt-b-${randomUUID()}`,
+              {
+                lines: [
+                  {
+                    transferLineId: concurrentDetail.lines[0].id,
+                    quantity: "2",
+                  },
+                ],
+              },
+            ),
+          ]);
+          assert.equal(
+            competingReceipts.filter((result) => result.status === "fulfilled")
+              .length,
+            1,
+          );
+          const concurrentTarget =
+            await prisma.inventoryBalance.findUniqueOrThrow({
+              where: {
+                organizationId_warehouseId_productId: {
+                  organizationId: contextA.organizationId,
+                  warehouseId: destination.id,
+                  productId: transferProduct.id,
+                },
+              },
+            });
+          assert.equal(concurrentTarget.onHand.toString(), "12");
+          assert.equal(
+            (await transfers.get(contextA, concurrent.id)).status,
+            "RECEIVED",
+          );
+          await inventory.postWarehouseMovement(
+            contextA,
+            ownerA.userId,
+            `transfer-dispatch-race-stock-${randomUUID()}`,
+            {
+              warehouseId: warehouse.id,
+              productId: transferProduct.id,
+              documentType: "RECEIPT",
+              documentId: randomUUID(),
+              movementType: "RECEIPT",
+              quantityDelta: "3",
+              costPerBaseUnit: "2.5",
+              costCurrency: "NGN",
+            },
+          );
+          const dispatchDrafts = await Promise.all(
+            [1, 2].map(() =>
+              transfers.create(contextA, ownerA.userId, {
+                sourceWarehouseId: warehouse.id,
+                destinationWarehouseId: destination.id,
+                lines: [{ productId: transferProduct.id, quantity: "2" }],
+              }),
+            ),
+          );
+          await Promise.all(
+            dispatchDrafts.map((draft) =>
+              transfers.submit(contextA, ownerA.userId, draft.id),
+            ),
+          );
+          const dispatchResults = await Promise.allSettled(
+            dispatchDrafts.map((draft) =>
+              transfers.dispatch(
+                contextA,
+                ownerA.userId,
+                draft.id,
+                `dispatch-race-${randomUUID()}`,
+              ),
+            ),
+          );
+          assert.equal(
+            dispatchResults.filter((result) => result.status === "fulfilled")
+              .length,
+            1,
+          );
+          const finalSource = await prisma.inventoryBalance.findUniqueOrThrow({
+            where: {
+              organizationId_warehouseId_productId: {
+                organizationId: contextA.organizationId,
+                warehouseId: warehouse.id,
+                productId: transferProduct.id,
+              },
+            },
+          });
+          assert.equal(finalSource.onHand.toString(), "1");
+          assert.equal(finalSource.inTransit.toString(), "2");
         },
       );
     } finally {

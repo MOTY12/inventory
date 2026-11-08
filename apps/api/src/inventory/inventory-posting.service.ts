@@ -34,6 +34,272 @@ export type PostWarehouseMovement = {
 export class InventoryPostingService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async postTransferOut(
+    tx: Prisma.TransactionClient,
+    context: OrganizationContext,
+    actorUserId: string,
+    input: {
+      transferId: string;
+      transferLineId: string;
+      warehouseId: string;
+      productId: string;
+      quantity: Prisma.Decimal;
+    },
+  ) {
+    const balance = await this.lockTransferBalance(
+      tx,
+      context,
+      input.warehouseId,
+      input.productId,
+    );
+    if (balance.on_hand.minus(balance.reserved).lt(input.quantity))
+      throw new ConflictException("Insufficient available stock for dispatch");
+    const movement = await tx.stockMovement.create({
+      data: {
+        organizationId: context.organizationId,
+        warehouseId: input.warehouseId,
+        productId: input.productId,
+        documentType: "STOCK_TRANSFER",
+        documentId: input.transferId,
+        documentLineId: input.transferLineId,
+        movementType: StockMovementType.TRANSFER_OUT,
+        quantityDelta: input.quantity.negated(),
+        costPerBaseUnit: balance.average_cost,
+        costCurrency: balance.cost_currency,
+        actorUserId,
+      },
+    });
+    await tx.inventoryBalance.update({
+      where: {
+        organizationId_warehouseId_productId: {
+          organizationId: context.organizationId,
+          warehouseId: input.warehouseId,
+          productId: input.productId,
+        },
+      },
+      data: {
+        onHand: balance.on_hand.minus(input.quantity),
+        inTransit: { increment: input.quantity },
+        version: { increment: 1 },
+      },
+    });
+    await this.transferMovementEvents(
+      tx,
+      context,
+      actorUserId,
+      movement.id,
+      input.warehouseId,
+      input.productId,
+      input.quantity.negated(),
+      StockMovementType.TRANSFER_OUT,
+    );
+    return {
+      movement,
+      costPerBaseUnit: balance.average_cost,
+      costCurrency: balance.cost_currency,
+    };
+  }
+
+  async postTransferIn(
+    tx: Prisma.TransactionClient,
+    context: OrganizationContext,
+    actorUserId: string,
+    input: {
+      transferId: string;
+      transferLineId: string;
+      sourceWarehouseId: string;
+      destinationWarehouseId: string;
+      productId: string;
+      quantity: Prisma.Decimal;
+      costPerBaseUnit: Prisma.Decimal | null;
+      costCurrency: string | null;
+    },
+  ) {
+    const keys = [input.sourceWarehouseId, input.destinationWarehouseId].sort();
+    const balances = new Map<
+      string,
+      Awaited<ReturnType<InventoryPostingService["lockTransferBalance"]>>
+    >();
+    for (const warehouseId of keys) {
+      await tx.inventoryBalance.upsert({
+        where: {
+          organizationId_warehouseId_productId: {
+            organizationId: context.organizationId,
+            warehouseId,
+            productId: input.productId,
+          },
+        },
+        create: {
+          organizationId: context.organizationId,
+          warehouseId,
+          productId: input.productId,
+        },
+        update: {},
+      });
+      balances.set(
+        warehouseId,
+        await this.lockTransferBalance(
+          tx,
+          context,
+          warehouseId,
+          input.productId,
+        ),
+      );
+    }
+    const source = balances.get(input.sourceWarehouseId)!;
+    const destination = balances.get(input.destinationWarehouseId)!;
+    if (source.in_transit.lt(input.quantity))
+      throw new ConflictException("In-transit balance is insufficient");
+    if (
+      destination.average_cost &&
+      input.costCurrency &&
+      destination.cost_currency !== input.costCurrency
+    )
+      throw new ConflictException(
+        "Transfer cost currency does not match destination balance",
+      );
+    const nextOnHand = destination.on_hand.plus(input.quantity);
+    let averageCost = destination.average_cost;
+    if (input.costPerBaseUnit) {
+      averageCost = destination.on_hand.isZero()
+        ? input.costPerBaseUnit
+        : destination.average_cost
+          ? destination.average_cost
+              .mul(destination.on_hand)
+              .plus(input.costPerBaseUnit.mul(input.quantity))
+              .div(nextOnHand)
+              .toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP)
+          : input.costPerBaseUnit;
+    }
+    const movement = await tx.stockMovement.create({
+      data: {
+        organizationId: context.organizationId,
+        warehouseId: input.destinationWarehouseId,
+        productId: input.productId,
+        documentType: "STOCK_TRANSFER",
+        documentId: input.transferId,
+        documentLineId: input.transferLineId,
+        movementType: StockMovementType.TRANSFER_IN,
+        quantityDelta: input.quantity,
+        costPerBaseUnit: input.costPerBaseUnit,
+        costCurrency: input.costCurrency,
+        actorUserId,
+      },
+    });
+    await tx.inventoryBalance.update({
+      where: {
+        organizationId_warehouseId_productId: {
+          organizationId: context.organizationId,
+          warehouseId: input.sourceWarehouseId,
+          productId: input.productId,
+        },
+      },
+      data: {
+        inTransit: source.in_transit.minus(input.quantity),
+        version: { increment: 1 },
+      },
+    });
+    await tx.inventoryBalance.update({
+      where: {
+        organizationId_warehouseId_productId: {
+          organizationId: context.organizationId,
+          warehouseId: input.destinationWarehouseId,
+          productId: input.productId,
+        },
+      },
+      data: {
+        onHand: nextOnHand,
+        averageCost,
+        costCurrency: input.costCurrency ?? destination.cost_currency,
+        version: { increment: 1 },
+      },
+    });
+    await this.transferMovementEvents(
+      tx,
+      context,
+      actorUserId,
+      movement.id,
+      input.destinationWarehouseId,
+      input.productId,
+      input.quantity,
+      StockMovementType.TRANSFER_IN,
+    );
+    return movement;
+  }
+
+  private async lockTransferBalance(
+    tx: Prisma.TransactionClient,
+    context: OrganizationContext,
+    warehouseId: string,
+    productId: string,
+  ) {
+    await tx.inventoryBalance.upsert({
+      where: {
+        organizationId_warehouseId_productId: {
+          organizationId: context.organizationId,
+          warehouseId,
+          productId,
+        },
+      },
+      create: {
+        organizationId: context.organizationId,
+        warehouseId,
+        productId,
+      },
+      update: {},
+    });
+    const rows = await tx.$queryRaw<
+      {
+        on_hand: Prisma.Decimal;
+        reserved: Prisma.Decimal;
+        in_transit: Prisma.Decimal;
+        average_cost: Prisma.Decimal | null;
+        cost_currency: string | null;
+      }[]
+    >(
+      Prisma.sql`SELECT on_hand,reserved,in_transit,average_cost,cost_currency FROM inventory_balances WHERE organization_id=${context.organizationId}::uuid AND warehouse_id=${warehouseId}::uuid AND product_id=${productId}::uuid FOR UPDATE`,
+    );
+    if (!rows[0])
+      throw new ConflictException("Could not lock inventory balance");
+    return rows[0];
+  }
+
+  private async transferMovementEvents(
+    tx: Prisma.TransactionClient,
+    context: OrganizationContext,
+    actorUserId: string,
+    movementId: string,
+    warehouseId: string,
+    productId: string,
+    delta: Prisma.Decimal,
+    movementType: StockMovementType,
+  ) {
+    await tx.auditEvent.create({
+      data: {
+        organizationId: context.organizationId,
+        actorUserId,
+        entityType: "STOCK_MOVEMENT",
+        entityId: movementId,
+        action: "POSTED",
+        metadata: {
+          movementType,
+          quantityDelta: delta.toFixed(6),
+          warehouseId,
+          productId,
+        },
+      },
+    });
+    await tx.outboxEvent.create({
+      data: {
+        organizationId: context.organizationId,
+        eventType: "inventory.movement.posted",
+        aggregateType: "STOCK_MOVEMENT",
+        aggregateId: movementId,
+        payload: { movementId, warehouseId, productId },
+      },
+    });
+  }
+
   async postWarehouseMovement(
     context: OrganizationContext,
     actorUserId: string,

@@ -9,6 +9,7 @@ import { LocationsModule } from "./locations/locations.module";
 import { CatalogModule } from "./catalog/catalog.module";
 import { InventoryModule } from "./inventory/inventory.module";
 import { ProcurementModule } from "./procurement/procurement.module";
+import { SalesModule } from "./sales/sales.module";
 
 @ApiTags("system")
 @Controller()
@@ -32,6 +33,7 @@ class AppController {
     CatalogModule,
     InventoryModule,
     ProcurementModule,
+    SalesModule,
   ],
   controllers: [AppController, HealthController],
 })

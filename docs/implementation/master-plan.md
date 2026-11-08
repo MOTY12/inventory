@@ -1,9 +1,11 @@
 # Master implementation plan
 
 ## Current phase
-**Phase 5/6 and procurement — updated 2026-11-06.** INV-005/006 are COMPLETED (14/47 roadmap tasks total); isolated PostgreSQL tests cover immutable ledger behavior and transactional posting/reconciliation. INV-001/002/003 and INV-007 remain IN_PROGRESS pending authenticated browser/API workflow and remaining adjustment scope tests. Movement history is implemented. PROCUREMENT-001 supplier directory remains IN_PROGRESS pending authenticated browser workflow; its additive migration is applied locally. PROCUREMENT-002/003 now have additive schema, APIs, responsive purchasing UI, transactional goods receipt integration and isolated PostgreSQL lifecycle/concurrency/rollback tests; both remain IN_PROGRESS pending authenticated browser checks and final permission review. Their additive migration is applied locally; all 11 migrations are current. INV-008 is dependency-ready but not implemented. Reservation lifecycle belongs to SALES-002 after SALES-001, INV-006 and ARCH-001. Research/product/architecture planning was closed for implementation start by owner direction on 2026-10-31. ARCH-001 inventory transition semantics are documented using provisional defaults. PROD-002 and ARCH-002 release/security decisions remain open. REA public-page inspection remains unavailable as documented. Target-user interviews are deferred to pilot validation; no interview findings are claimed.
+
+**Phase 5/6, procurement and sales — updated 2026-11-08.** INV-005/006 are COMPLETED (14/47 roadmap tasks total); isolated PostgreSQL tests cover immutable ledger behavior and transactional posting/reconciliation. INV-001/002/003 and INV-007 remain IN_PROGRESS pending authenticated browser/API workflow and remaining adjustment scope tests. PROCUREMENT-001/002/003 remain IN_PROGRESS pending authenticated browser checks and final permission review. Transfer migrations `20261107130000_stock_transfers` and `20261108100000_stock_transfer_constraints` are applied locally; INV-008 transfer models/APIs/posting/UI and isolated lifecycle/replay/concurrency/rollback/scope tests are implemented, but task remains IN_PROGRESS because browser verification is unavailable. Customer migration `20261108090000_customer_directory` is applied locally; SALES-001 CRUD/search/archive/audit API and UI plus integration coverage are implemented and remain IN_PROGRESS pending unavailable browser review. Browser control is disabled in Work settings. Reservation lifecycle belongs to SALES-002 after SALES-001, INV-006 and ARCH-001. Research/product/architecture planning was closed for implementation start by owner direction on 2026-10-31. ARCH-001 inventory transition semantics are documented using provisional defaults. PROD-002 and ARCH-002 release/security decisions remain open. REA public-page inspection remains unavailable as documented. Target-user interviews are deferred to pilot validation; no interview findings are claimed.
 
 ## Phases
+
 0. Research: inspect REA docs/capabilities; review public official inFlow sources; distinguish verified/documented/inferred/unknown. (Draft complete; some direct UI research remains unknown.)
 1. Product: interview target users, approve requirements/personas/stories, confirm MVP. (Draft complete; owner validation pending.)
 2. Architecture: approve data semantics, transaction/tenant/security/API design. (Draft complete; key policy approvals pending.)
@@ -19,7 +21,9 @@
 12. Phase 3: manufacturing, B2B portal, offline/mobile and broader ecosystem.
 
 ## Estimation method and complexity
+
 Relative engineering estimate is **XL** for a production-ready multi-tenant MVP, with 47 discrete tasks across the phases (task ledger). Assuming a small experienced team and user decisions delivered promptly, early delivery planning range is roughly 4–7 months to a controlled pilot and longer for production-grade regional support. This is a planning estimate, not a commitment; user research, compliance and integration decisions can move it materially. Complexity is highest in ledger/reservations/concurrency, tenant isolation, receiving/fulfillment state machines, valuation and migration/recovery.
 
 ## Exit gates
+
 Each task's criteria and tests must pass before status COMPLETED. No phase marked shipped based on documentation alone. Product/security/legal decisions and production release gates in `mvp-scope.md` and `acceptance-criteria.md` remain mandatory.

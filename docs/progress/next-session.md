@@ -1,41 +1,31 @@
 # Next session handoff
 
-## Checkpoint — 2026-11-07 (Africa/Lagos)
+## Checkpoint — 2026-11-08 (Africa/Lagos)
 
-Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. Current HEAD and `origin/develop` are `816aa06` (`Update page.tsx`). Owner-authored commits `d0f3d18` and `816aa06` added the shared shell/dashboard/register UX work while this session was active. No push was performed by this agent. Local follow-up refinements in dashboard metric scoping, PO register form visibility, role visibility and progress docs remain uncommitted. Preserve and inspect them before editing. Completed roadmap count remains **14/47**; procurement and catalog tasks remain in progress.
+Repository: `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. Current HEAD and `origin/develop` are `ce93cc2` (`Update the prompt`), authored by MOTY during this execution; starting HEAD was `3a8796a`. The commit contains the first transfer implementation. Remaining changes are uncommitted; inspect `git status --short` and the diff before continuing. This agent did not commit or push. Completed roadmap count remains **14/47**. INV-008 and SALES-001 are both `IN_PROGRESS`.
 
-## Delivered this session
+## Delivered
 
-- Added PO sequence, purchase order/header lines, goods receipt/header lines, statuses, tenant-composite foreign keys, idempotency uniqueness and quantity/currency/cost checks in Prisma. Applied additive migration `20261106214440_procurement_orders_and_receipts` to local `inventory_dev`; all 11 migrations are current. No database reset or deletion.
-- Added organization-scoped PO numbering via atomic PostgreSQL upsert; supplier/warehouse/product/unit validation; Decimal-safe costs/totals; conversion snapshots; warehouse-scoped list/detail; draft create/edit; submit/cancel; audit records and history.
-- Added receipt creation with `Idempotency-Key`, PO row lock, outstanding quantity validation, partial/full receipt state, transactional movement posting through `InventoryPostingService`, stock balance and weighted-average-cost updates, audit, and outbox. The posting service accepts an existing Prisma transaction while keeping standalone posting behavior.
-- Added `/purchase-orders` register/create page and `/purchase-orders/[purchaseOrderId]` detail/edit/submit/cancel/receive/history UI, retry-stable receipt key, pagination/search/status filtering, selectable product units, and integer-scaled browser totals. Added navigation and responsive styling.
-- Added DTO and isolated PostgreSQL coverage for PO draft/edit/submit/cancel, tenant denial, partial/full receipts, idempotent replay, over-receiving, concurrent competing receives, rollback on receipt-outbox failure, stock movements/balances/cost, and audit/outbox.
+- INV-008: tenant-composite transfer schema and additive migration `20261107130000_stock_transfers`, applied to local `inventory_dev`; transfer APIs/services for draft, list/search/status/warehouse filtering/pagination, detail/history, submit, cancel before dispatch, idempotent dispatch and partial/full idempotent receipt. InventoryPostingService owns both transfer movement and balance effects, cost snapshot, audit and outbox. `/transfers` and `/transfers/[transferId]` UI added.
+- SALES-001: customer type/status and full contact/address model with organization-scoped email uniqueness; additive migration `20261108090000_customer_directory`, applied locally. Tenant-scoped create/list/search/detail/update/archive/audit API and `/customers` plus `/customers/[customerId]` UI added.
+- All three migrations are additive, including `20261108100000_stock_transfer_constraints` with positive-quantity, distinct-warehouse and cost-pair checks. Migration deploy succeeded; the latest integration suite passed against this migration. Confirm `npx prisma migrate status --config prisma.config.ts` reports 14 current.
+- Latest isolated `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs`: **9 passed, 0 failed** in a random generated schema. Transfer coverage includes competing dispatches, competing receipts, rollback, replay, tenant and warehouse scope. Customer coverage includes CRUD, normalized email uniqueness, archive, audit and tenant scope.
+- Final checks: full `npm test` **40 passed, 0 failed, 2 opt-in PostgreSQL suites skipped**; `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build`, and `npx prisma validate --config prisma.config.ts` passed. Isolated PostgreSQL suite: **9 passed, 0 failed**. Migration status: 13 found and current. Rerun `git diff --check` after final documentation edits.
 
-## UI/UX redesign pass — 2026-11-07
+## Limitations
 
-- Added a shared authenticated shell at the root layout, covering the existing authenticated pages. Navigation is grouped around working inventory, purchasing and management routes; it has route-aware active state, breadcrumbs, keyboard-visible focus, mobile drawer, collapsible desktop sidebar, role-filtered links and a real organization switcher using the existing select-organization API.
-- Replaced placeholder dashboard cards with live products, warehouses, inventory balances, movements and purchase-order data. Added a guided first-run checklist and honest empty/error states. Low-stock and valuation metrics remain omitted because the application has no threshold/report endpoint to support those figures.
-- Product, supplier and purchase-order directories are now the first view. Their create/edit forms appear only when the user chooses the relevant action.
-- Added `docs/design/ux-audit.md` to record findings and deferred improvements.
-- Browser check: Chrome loaded `/`, `/products` and `/purchase-orders` with an existing authenticated owner session, shared shell, selected organization, route navigation, dashboard first-run checklist and register empty states. No screenshot captured. Authenticated create/edit actions, mobile device rendering and assistive-technology review remain pending.
-- Checks after changes: `npm run typecheck --workspace=@inventory/web`, `npm run lint`, `npm run format:check` and `npm run build --workspace=@inventory/web` all passed. `git diff --check` passed before documentation changes; rerun before committing.
-- Roadmap remains **14/47**; this UX work does not change task completion statuses.
-
-## Verification and limits
-
-- Local database migration deploy succeeded; Prisma reports 11/11 migrations current.
-- Latest isolated `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs`: **7 reported tests passed, 0 failed**. It uses a generated schema, asserts the current schema before fixture writes, and drops only that schema.
-- Final full `npm test`: **40 passed, 0 failed, 2 skipped**.
-- Final isolated PostgreSQL suite after restoring Prisma declarations: **7 reported tests passed, 0 failed**; it asserts the generated schema before fixture writes and drops only that schema.
-- Final typecheck, lint, format check, production build, Prisma validation, migration status (11/11 current) and `git diff --check` passed.
-- Earlier full run failed to bind its temporary API listener inside the sandbox; rerunning `npm test` with escalation passed. Isolated DB tests likewise require local DB permission.
-- No authenticated browser session is available in Chrome (Stockroom tab at `/login`). Supplier, product and purchasing browser acceptance is still unverified. Keep PROCUREMENT-001/002/003 and INV-003 `IN_PROGRESS`.
-- Preserve previously discovered generated test fixtures in `inventory_dev.public`: 12 tenant fixture organizations/memberships, 9 branches, 5 warehouses, 15 units, 20 products, 25 movements and 104 audit events. No cleanup occurred. Do not modify these records without explicit approval.
+- Browser automation is disabled in Codex Work settings. Authenticated transfer and customer workflows remain unverified; do not mark either task complete or increase 14/47 based on service tests alone.
+- INV-008 transition is DRAFT → SUBMITTED → IN_TRANSIT → PARTIALLY_RECEIVED → RECEIVED, cancellation only before dispatch. No approval stage is documented. Costing uses the provisional weighted-average policy.
+- SALES-002 has not started. Its reservation point is confirmation per the existing provisional architecture decision; do not release or consume inventory outside the ledger/posting transaction design.
+- Existing generated test fixture data in `inventory_dev.public` remains preserved; integration runs use isolated schemas and remove only those schemas.
 
 ## Exact next steps
 
-1. In Chrome, verify responsive layout at desktop/tablet/mobile sizes and exercise organization switching plus the product/supplier create/edit/archive interactions with an existing authorized account. Do not create or remove accounts to manufacture results.
-2. Exercise stock counts and PO draft/submit/cancel/partial/full receipt interactions in the authenticated UI, verifying warehouse balances and no browser console errors.
-3. Keep task count at 14/47 and PROCUREMENT-001/002/003 and INV-003 IN_PROGRESS until API, tenant/permission and authenticated workflow acceptance is complete.
-4. After these acceptance checks, implement dependency-ready INV-008 transfers. Reservation lifecycle remains SALES-002 after SALES-001, INV-006 and ARCH-001.
+1. Migration status is confirmed: all 14 migrations current. Run `git diff --check` and inspect `git status --short` and the remaining diff; generated `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo` are clean.
+2. Preserve all existing data and do not reset the database.
+3. Keep INV-008 and SALES-001 IN_PROGRESS while browser verification is unavailable. Do not increase roadmap count.
+4. Continue with SALES-002 after customer acceptance gate review, preserving strict tenant/warehouse scope and inventory reservation semantics. Record any materially different policy requirement before implementing it.
+
+## Escalation note
+
+Sandbox denies local API listener and PostgreSQL socket access. Full tests, isolated DB tests and Prisma migration status/deploy require escalated local execution. Do not run destructive DB commands.

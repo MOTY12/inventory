@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "../../features/auth/session-provider";
+import Link from "next/link";
 
 type Row = {
   id: string;
@@ -20,17 +21,24 @@ export default function TransfersPage() {
   const [products, setProducts] = useState<Option[]>([]);
   const [source, setSource] = useState("");
   const [destination, setDestination] = useState("");
-  const [product, setProduct] = useState("");
-  const [quantity, setQuantity] = useState("1");
+  const [lines, setLines] = useState<{ productId: string; quantity: string }[]>(
+    [{ productId: "", quantity: "1" }],
+  );
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [warehouseFilter, setWarehouseFilter] = useState("");
+  const [page, setPage] = useState(1);
   const load = useCallback(async () => {
     if (!organization) return;
     try {
       const [r, w, p] = await Promise.all([
-        authenticatedRequest<Page<Row>>(`${api}?page=1&page_size=50`),
+        authenticatedRequest<Page<Row>>(
+          `${api}?page=${page}&page_size=20${query ? `&q=${encodeURIComponent(query)}` : ""}${statusFilter ? `&status=${statusFilter}` : ""}${warehouseFilter ? `&warehouseId=${warehouseFilter}` : ""}`,
+        ),
         authenticatedRequest<Page<Option>>(
           "/organizations/current/warehouses?page=1&page_size=100&status=ACTIVE",
         ),
@@ -43,11 +51,24 @@ export default function TransfersPage() {
       setProducts(p.data);
       setSource((x) => x || w.data[0]?.id || "");
       setDestination((x) => x || w.data[1]?.id || "");
-      setProduct((x) => x || p.data[0]?.id || "");
+      setLines((current) =>
+        current.map((line, index) =>
+          index === 0 && !line.productId
+            ? { ...line, productId: p.data[0]?.id || "" }
+            : line,
+        ),
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load transfers");
     }
-  }, [authenticatedRequest, organization]);
+  }, [
+    authenticatedRequest,
+    organization,
+    page,
+    query,
+    statusFilter,
+    warehouseFilter,
+  ]);
   useEffect(() => {
     void Promise.resolve().then(load);
   }, [load]);
@@ -72,7 +93,7 @@ export default function TransfersPage() {
           sourceWarehouseId: source,
           destinationWarehouseId: destination,
           note: "",
-          lines: [{ productId: product, quantity }],
+          lines,
         }),
       });
       setOpen(false);
@@ -185,29 +206,74 @@ export default function TransfersPage() {
                   ))}
               </select>
             </label>
-            <label>
-              Product
-              <select
-                value={product}
-                onChange={(e) => setProduct(e.target.value)}
-              >
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Quantity
-              <input
-                type="number"
-                min="0.000001"
-                step="0.000001"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-              />
-            </label>
+            {lines.map((line, index) => (
+              <div className="form-grid" key={index}>
+                <label>
+                  Product
+                  <select
+                    value={line.productId}
+                    onChange={(event) =>
+                      setLines((current) =>
+                        current.map((item, i) =>
+                          i === index
+                            ? { ...item, productId: event.target.value }
+                            : item,
+                        ),
+                      )
+                    }
+                  >
+                    {products.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Quantity
+                  <input
+                    type="number"
+                    min="0.000001"
+                    step="0.000001"
+                    value={line.quantity}
+                    onChange={(event) =>
+                      setLines((current) =>
+                        current.map((item, i) =>
+                          i === index
+                            ? { ...item, quantity: event.target.value }
+                            : item,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+                {lines.length > 1 && (
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={() =>
+                      setLines((current) =>
+                        current.filter((_, i) => i !== index),
+                      )
+                    }
+                  >
+                    Remove line
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() =>
+                setLines((current) => [
+                  ...current,
+                  { productId: products[0]?.id || "", quantity: "1" },
+                ])
+              }
+            >
+              Add product line
+            </button>
           </div>
           <div className="action-row">
             <button
@@ -217,7 +283,15 @@ export default function TransfersPage() {
                 !source ||
                 !destination ||
                 source === destination ||
-                !product
+                !lines.length ||
+                lines.some(
+                  (line) =>
+                    !line.productId ||
+                    !line.quantity ||
+                    Number(line.quantity) <= 0,
+                ) ||
+                new Set(lines.map((line) => line.productId)).size !==
+                  lines.length
               }
               onClick={() => void create()}
             >
@@ -232,6 +306,62 @@ export default function TransfersPage() {
           </div>
         </section>
       )}
+      <section className="panel">
+        <div className="form-grid">
+          <label>
+            Search transfer
+            <input
+              value={query}
+              onChange={(event) => {
+                setPage(1);
+                setQuery(event.target.value);
+              }}
+              placeholder="Transfer number"
+            />
+          </label>
+          <label>
+            Status
+            <select
+              value={statusFilter}
+              onChange={(event) => {
+                setPage(1);
+                setStatusFilter(event.target.value);
+              }}
+            >
+              <option value="">All statuses</option>
+              {[
+                "DRAFT",
+                "SUBMITTED",
+                "IN_TRANSIT",
+                "PARTIALLY_RECEIVED",
+                "RECEIVED",
+                "CANCELLED",
+              ].map((value) => (
+                <option key={value} value={value}>
+                  {value.replaceAll("_", " ")}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Warehouse
+            <select
+              value={warehouseFilter}
+              onChange={(event) => {
+                setPage(1);
+                setWarehouseFilter(event.target.value);
+              }}
+            >
+              <option value="">All warehouses</option>
+              {warehouses.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </section>
       <section className="panel">
         <div className="catalog-table-wrap">
           <table>
@@ -249,7 +379,9 @@ export default function TransfersPage() {
               {rows.map((r) => (
                 <tr key={r.id}>
                   <td>
-                    <strong>{r.number}</strong>
+                    <Link href={`/transfers/${r.id}`}>
+                      <strong>{r.number}</strong>
+                    </Link>
                   </td>
                   <td>{r.sourceWarehouse.name}</td>
                   <td>{r.destinationWarehouse.name}</td>
@@ -310,6 +442,23 @@ export default function TransfersPage() {
               )}
             </tbody>
           </table>
+        </div>
+        <div className="action-row" aria-label="Transfer pages">
+          <button
+            className="button button-secondary"
+            disabled={page <= 1}
+            onClick={() => setPage((x) => x - 1)}
+          >
+            Previous
+          </button>
+          <span>Page {page}</span>
+          <button
+            className="button button-secondary"
+            disabled={rows.length < 20}
+            onClick={() => setPage((x) => x + 1)}
+          >
+            Next
+          </button>
         </div>
       </section>
     </main>
