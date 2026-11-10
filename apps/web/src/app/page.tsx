@@ -26,6 +26,17 @@ type Order = {
   subtotal: string;
   currency: string;
 };
+type LowStockResult = {
+  data: {
+    id: string;
+    product: { name: string; sku: string };
+    warehouse: { name: string };
+    availableQuantity: string;
+    minimumQuantity: string;
+  }[];
+  total: number;
+  summary: { products: number; warehouses: number };
+};
 
 function Dashboard() {
   const { organization, user, authenticatedRequest } = useSession();
@@ -35,6 +46,11 @@ function Dashboard() {
   const [balanceCount, setBalanceCount] = useState(0);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [lowStock, setLowStock] = useState<LowStockResult>({
+    data: [],
+    total: 0,
+    summary: { products: 0, warehouses: 0 },
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -58,20 +74,25 @@ function Dashboard() {
     setLoading(true);
     setError("");
     try {
-      const [productResult, warehouseResult, orderResult] = await Promise.all([
-        authenticatedRequest<Page<Product>>(
-          "/organizations/current/catalog/products?page=1&page_size=1&status=ACTIVE",
-        ),
-        authenticatedRequest<Page<Warehouse>>(
-          "/organizations/current/warehouses?page=1&page_size=100&status=ACTIVE",
-        ),
-        authenticatedRequest<Page<Order>>(
-          "/organizations/current/procurement/purchase-orders?page=1&page_size=5",
-        ),
-      ]);
+      const [productResult, warehouseResult, orderResult, lowStockResult] =
+        await Promise.all([
+          authenticatedRequest<Page<Product>>(
+            "/organizations/current/catalog/products?page=1&page_size=1&status=ACTIVE",
+          ),
+          authenticatedRequest<Page<Warehouse>>(
+            "/organizations/current/warehouses?page=1&page_size=100&status=ACTIVE",
+          ),
+          authenticatedRequest<Page<Order>>(
+            "/organizations/current/procurement/purchase-orders?page=1&page_size=5",
+          ),
+          authenticatedRequest<LowStockResult>(
+            "/organizations/current/inventory/low-stock?page=1&page_size=5",
+          ),
+        ]);
       setProducts(productResult);
       setWarehouses(warehouseResult.data);
       setOrders(orderResult.data);
+      setLowStock(lowStockResult);
       const stock = await Promise.all(
         warehouseResult.data.map(async (warehouse) => {
           const [balanceResult, movementResult] = await Promise.all([
@@ -221,8 +242,67 @@ function Dashboard() {
                 </strong>
                 <small>Draft, submitted or receiving</small>
               </article>
+              <article className="metric-card">
+                <span>Low-stock alerts</span>
+                <strong>{loading ? "—" : lowStock.total}</strong>
+                <small>Configured rules below minimum</small>
+              </article>
+              <article className="metric-card">
+                <span>Products requiring attention</span>
+                <strong>{loading ? "—" : lowStock.summary.products}</strong>
+                <small>Distinct products below minimum</small>
+              </article>
+              <article className="metric-card">
+                <span>Warehouses affected</span>
+                <strong>{loading ? "—" : lowStock.summary.warehouses}</strong>
+                <small>
+                  <Link href="/inventory/low-stock">View low-stock alerts</Link>
+                </small>
+              </article>
             </section>
             <div className="dashboard-columns">
+              <section className="dashboard-panel">
+                <div className="panel-heading">
+                  <div>
+                    <h2>Low stock</h2>
+                    <p>Configured rules only; incoming stock is excluded</p>
+                  </div>
+                  <Link href="/inventory/low-stock">View alerts →</Link>
+                </div>
+                {loading ? (
+                  <p className="panel-message">Loading alerts…</p>
+                ) : lowStock.data.length ? (
+                  <div className="table-scroll">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Product</th>
+                          <th>Warehouse</th>
+                          <th>Available</th>
+                          <th>Minimum</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lowStock.data.map((alert) => (
+                          <tr key={alert.id}>
+                            <td>
+                              {alert.product.name}
+                              <small>{alert.product.sku}</small>
+                            </td>
+                            <td>{alert.warehouse.name}</td>
+                            <td>{alert.availableQuantity}</td>
+                            <td>{alert.minimumQuantity}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="panel-message">
+                    No products are below a configured reorder threshold.
+                  </p>
+                )}
+              </section>
               <section className="dashboard-panel">
                 <div className="panel-heading">
                   <div>

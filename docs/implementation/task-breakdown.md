@@ -121,8 +121,10 @@ Description: Draft, dispatch, in-transit, receive/shortage reconciliation. Prior
 
 ### INV-009: Reorder rules and alerts
 
-**Files/modules affected:** apps/api/src/inventory/reordering/, apps/web/src/features/inventory/reordering/, worker jobs.
-Description: Per-warehouse thresholds, projected quantity and low-stock queue/email. Priority: P1. Dependencies: INV-006, PROCUREMENT-002. Deliverables: rules, list and job. Acceptance: formula visible, no duplicate alerts, no automatic PO submission. Tests: formula/cadence/tenant job tests. Status: NOT_STARTED.
+**Files/modules affected:** `apps/api/src/inventory/reordering/`, `apps/web/src/features/inventory/reordering/`, inventory schema and scheduler.
+Description: Per-warehouse thresholds and a low-stock queue. Priority: P1. Dependencies: INV-006, PROCUREMENT-002. Deliverables: tenant-scoped rules, alert history, list APIs/UI and scheduled evaluation. Acceptance: formula visible, no duplicate alerts, no automatic PO submission. Tests: formula/cadence/tenant job tests. Status: IN_PROGRESS.
+
+Implementation update (2026-11-09): Added additive migration `20261108190000_reorder_rules_low_stock`, applied locally after isolated-schema migration/integration success. Rules are unique by organization/product/warehouse; quantities are exact Decimal values and validated against base-unit precision. Availability is `on hand - reserved`; suggested replenishment is `max(target quantity - available quantity, 0)`. Incoming PO and in-transit quantities are explicitly excluded pending a supported/approved projection policy. A per-process five-minute evaluator records OPENED/UPDATED/RESOLVED/REOPENED transitions, with serializable transactions, row locks, bounded retry and one current alert per rule. APIs provide rule list/create/update, history, low-stock list and manual evaluation. Web has `/inventory/reorder-rules`, `/inventory/low-stock`, navigation and dashboard indicators. Isolated PostgreSQL behavior passed; scheduled cadence timing and authenticated browser workflows remain unverified. Task remains IN_PROGRESS because PROCUREMENT-002 is still IN_PROGRESS and browser acceptance is disabled. No PO is created automatically. REPORT-001 remains gated on INV-009 completion.
 
 ### INV-010: Barcode-compatible workflows
 

@@ -17,6 +17,7 @@ import { StockTransfersService } from "../dist/inventory/transfers.service.js";
 import { CustomersService } from "../dist/sales/customers.service.js";
 import { SalesOrdersService } from "../dist/sales/sales-orders.service.js";
 import { ImportsService } from "../dist/imports/imports.service.js";
+import { ReorderingService } from "../dist/inventory/reordering/reordering.service.js";
 
 const enabled = process.env.RUN_POSTGRES_INTEGRATION === "1";
 
@@ -70,6 +71,7 @@ test(
       const customers = new CustomersService(prisma);
       const salesOrders = new SalesOrdersService(prisma, inventory);
       const imports = new ImportsService(prisma, catalog, inventory);
+      const reordering = new ReorderingService(prisma);
       const contextA = ownerA.context;
       const contextB = ownerB.context;
       const branch = await locations.createBranch(contextA, ownerA.userId, {
@@ -115,6 +117,171 @@ test(
         },
       );
 
+      await t.test(
+        "reorder rules are tenant-scoped, reservation-aware, idempotent, and reopen after recovery",
+        async () => {
+          const item = await catalog.createProduct(contextA, ownerA.userId, {
+            name: "Reorder integration item",
+            sku: `REORDER-${randomUUID()}`,
+            baseUnitId: unit.id,
+          });
+          await inventory.postWarehouseMovement(
+            contextA,
+            ownerA.userId,
+            `reorder-opening-${randomUUID()}`,
+            {
+              warehouseId: warehouse.id,
+              productId: item.id,
+              documentType: "OPENING",
+              documentId: randomUUID(),
+              movementType: "OPENING_BALANCE",
+              quantityDelta: "12",
+            },
+          );
+          await prisma.$transaction((tx) =>
+            inventory.applyReservationDelta(
+              tx,
+              contextA,
+              warehouse.id,
+              item.id,
+              new Prisma.Decimal("4"),
+            ),
+          );
+          const rule = await reordering.create(contextA, ownerA.userId, {
+            productId: item.id,
+            warehouseId: warehouse.id,
+            minimumQuantity: "10",
+            targetQuantity: "30",
+          });
+          assert.equal(rule.alert.status, "OPEN");
+          const alerts = await reordering.listAlerts(contextA, {
+            page: 1,
+            page_size: 10,
+          });
+          assert.deepEqual(alerts.summary, { products: 1, warehouses: 1 });
+          const alert = alerts.data.find(
+            (entry) => entry.rule.productId === item.id,
+          );
+          assert.equal(alert.onHandQuantity.toString(), "12");
+          assert.equal(alert.reservedQuantity.toString(), "4");
+          assert.equal(alert.availableQuantity.toString(), "8");
+          assert.equal(alert.suggestedQuantity.toString(), "22");
+          assert.equal(alert.incomingQuantity.toString(), "0");
+          assert.equal(
+            (await reordering.listRules(contextB, { page: 1, page_size: 10 }))
+              .total,
+            0,
+          );
+          await assert.rejects(
+            reordering.update(contextB, ownerB.userId, rule.id, {
+              status: "PAUSED",
+            }),
+            (e) => e.getStatus() === 404,
+          );
+          await assert.rejects(
+            reordering.create(contextA, ownerA.userId, {
+              productId: item.id,
+              warehouseId: warehouse.id,
+              minimumQuantity: "-1",
+              targetQuantity: "30",
+            }),
+            (e) => e.getStatus() === 409,
+          );
+          await assert.rejects(
+            reordering.create(contextA, ownerA.userId, {
+              productId: item.id,
+              warehouseId: warehouse.id,
+              minimumQuantity: "10",
+              targetQuantity: "30",
+            }),
+            (e) => e.getStatus() === 409,
+          );
+          const concurrentEvaluations = await Promise.all([
+            reordering.evaluateOrganization(contextA),
+            reordering.evaluateOrganization(contextA),
+          ]);
+          assert.equal(
+            concurrentEvaluations[0].failed + concurrentEvaluations[1].failed,
+            0,
+          );
+          const alertRecord = await prisma.lowStockAlert.findUniqueOrThrow({
+            where: {
+              organizationId_reorderRuleId: {
+                organizationId: contextA.organizationId,
+                reorderRuleId: rule.id,
+              },
+            },
+          });
+          assert.equal(
+            await prisma.lowStockAlertHistory.count({
+              where: {
+                organizationId: contextA.organizationId,
+                alertId: alertRecord.id,
+              },
+            }),
+            1,
+          );
+          await inventory.postWarehouseMovement(
+            contextA,
+            ownerA.userId,
+            `reorder-receipt-${randomUUID()}`,
+            {
+              warehouseId: warehouse.id,
+              productId: item.id,
+              documentType: "TEST_RECEIPT",
+              documentId: randomUUID(),
+              movementType: "RECEIPT",
+              quantityDelta: "12",
+            },
+          );
+          await reordering.evaluateOrganization(contextA);
+          assert.equal(
+            (
+              await prisma.lowStockAlert.findUniqueOrThrow({
+                where: { id: alertRecord.id },
+              })
+            ).status,
+            "RESOLVED",
+          );
+          await prisma.$transaction((tx) =>
+            inventory.applyReservationDelta(
+              tx,
+              contextA,
+              warehouse.id,
+              item.id,
+              new Prisma.Decimal("12"),
+            ),
+          );
+          await reordering.evaluateOrganization(contextA);
+          assert.equal(
+            (
+              await prisma.lowStockAlert.findUniqueOrThrow({
+                where: { id: alertRecord.id },
+              })
+            ).status,
+            "OPEN",
+          );
+          await reordering.update(contextA, ownerA.userId, rule.id, {
+            status: "PAUSED",
+          });
+          assert.equal(
+            (
+              await reordering.listAlerts(contextA, {
+                page: 1,
+                page_size: 10,
+                status: "RESOLVED",
+              })
+            ).data.some((entry) => entry.id === alertRecord.id),
+            true,
+          );
+          assert.deepEqual(
+            (await reordering.history(contextA, rule.id))
+              .map((event) => event.eventType)
+              .reverse(),
+            ["OPENED", "RESOLVED", "REOPENED", "RESOLVED"],
+          );
+        },
+      );
       await t.test(
         "product CRUD, uniqueness, tenant isolation, conversions and list filters",
         async () => {

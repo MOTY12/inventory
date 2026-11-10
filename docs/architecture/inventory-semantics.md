@@ -72,3 +72,12 @@ The isolated PostgreSQL integration suite covers competing confirmation, insuffi
 ## CSV and opening balance import contract (2026-11-08)
 
 Product import is create-only: an existing organization SKU/barcode or duplicate in the same file is a row error; commit requires every row to be valid and creates the entire batch atomically. Preview has no product or inventory side effects and expires after 24 hours. Opening balance import uses a conservative initialization policy: each product/warehouse pair must have no prior movement history and a zero/no balance projection. It posts an immutable `OPENING_BALANCE` movement through `InventoryPostingService`, including source batch/line references, audit, outbox and idempotency in one transaction. It never overwrites live stock. This is provisional operational behavior rather than an owner-validated accounting rule. Isolated PostgreSQL coverage includes preview/no-side-effect, replay, invalid row rejection and injected outbox rollback for both product and opening-stock commits.
+
+# Reorder rules and low-stock alerts (implementation policy, 2026-11-09)
+
+- A rule is unique per organization, stocked product and active warehouse. Minimum and target use exact Decimal quantities and cannot exceed base-unit precision; target must exceed a non-negative minimum.
+- Availability is `on hand - reserved`. A low-stock alert opens only when an active rule's available quantity is below its minimum.
+- Suggested quantity is `max(target - available, 0)`. The alert UI shows incoming as zero and projected available equal to current available because incoming purchase orders and in-transit quantities are excluded until an approved policy defines eligible supply.
+- Alert transitions are OPENED, UPDATED, RESOLVED and REOPENED. There is at most one current alert per rule; transition snapshots are retained in `low_stock_alert_history`.
+- Rule evaluation runs every five minutes in each API process and can also be requested manually. Serializable transactions, rule row locks, bounded serialization retry and unique alert constraints make repeated/concurrent evaluations safe. Per-rule errors are logged and retried on a later pass.
+- This does not submit or create purchase orders. Scheduler delivery across replicas is not backed by a distributed queue; duplicate concurrent evaluation is database-serialized.

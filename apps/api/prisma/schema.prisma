@@ -119,6 +119,23 @@ enum ImportBatchStatus {
   COMMITTED
 }
 
+enum ReorderRuleStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum LowStockAlertStatus {
+  OPEN
+  RESOLVED
+}
+
+enum LowStockAlertEventType {
+  OPENED
+  UPDATED
+  RESOLVED
+  REOPENED
+}
+
 enum InventoryReservationStatus {
   ACTIVE
   RELEASED
@@ -187,6 +204,9 @@ model Organization {
   salesPicks                 SalesPick[]
   salesPickLines             SalesPickLine[]
   importBatches              ImportBatch[]
+  reorderRules               ReorderRule[]
+  lowStockAlerts             LowStockAlert[]
+  lowStockAlertHistory       LowStockAlertHistory[]
 
   @@map("organizations")
 }
@@ -216,6 +236,8 @@ model Membership {
   postedSalesFulfillments    SalesFulfillment[]
   confirmedSalesPicks        SalesPick[]
   createdImportBatches       ImportBatch[]
+  createdReorderRules        ReorderRule[]
+  lowStockAlertHistory       LowStockAlertHistory[]
 
   @@unique([organizationId, userId])
   @@index([userId, status])
@@ -245,6 +267,7 @@ model Warehouse {
   inventoryReservations InventoryReservation[]
   salesFulfillments     SalesFulfillment[]
   salesPicks            SalesPick[]
+  reorderRules          ReorderRule[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, code])
@@ -343,6 +366,7 @@ model Product {
   inventoryReservations InventoryReservation[]
   salesFulfillmentLines SalesFulfillmentLine[]
   salesPickLines        SalesPickLine[]
+  reorderRules          ReorderRule[]
 
   @@unique([organizationId, id])
   @@unique([organizationId, skuNormalized])
@@ -835,6 +859,84 @@ model ImportBatch {
   @@index([organizationId, kind, createdAt])
   @@index([organizationId, status, expiresAt])
   @@map("import_batches")
+}
+
+model ReorderRule {
+  id              String                 @id @default(uuid()) @db.Uuid
+  organizationId  String                 @map("organization_id") @db.Uuid
+  productId       String                 @map("product_id") @db.Uuid
+  warehouseId     String                 @map("warehouse_id") @db.Uuid
+  minimumQuantity Decimal                @map("minimum_quantity") @db.Decimal(20, 6)
+  targetQuantity  Decimal                @map("target_quantity") @db.Decimal(20, 6)
+  status          ReorderRuleStatus      @default(ACTIVE)
+  createdByUserId String                 @map("created_by_user_id") @db.Uuid
+  lastEvaluatedAt DateTime?              @map("last_evaluated_at") @db.Timestamptz(3)
+  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  product         Product                @relation(fields: [organizationId, productId], references: [organizationId, id], onDelete: Restrict)
+  warehouse       Warehouse              @relation(fields: [organizationId, warehouseId], references: [organizationId, id], onDelete: Restrict)
+  createdBy       Membership             @relation(fields: [organizationId, createdByUserId], references: [organizationId, userId], onDelete: Restrict)
+  alert           LowStockAlert?
+  alertHistory    LowStockAlertHistory[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, productId, warehouseId])
+  @@index([organizationId, status, warehouseId, productId])
+  @@map("reorder_rules")
+}
+
+model LowStockAlert {
+  id                String                 @id @default(uuid()) @db.Uuid
+  organizationId    String                 @map("organization_id") @db.Uuid
+  reorderRuleId     String                 @map("reorder_rule_id") @db.Uuid
+  status            LowStockAlertStatus    @default(OPEN)
+  resolutionReason  String?                @map("resolution_reason") @db.VarChar(48)
+  onHandQuantity    Decimal                @map("on_hand_quantity") @db.Decimal(20, 6)
+  reservedQuantity  Decimal                @map("reserved_quantity") @db.Decimal(20, 6)
+  availableQuantity Decimal                @map("available_quantity") @db.Decimal(20, 6)
+  minimumQuantity   Decimal                @map("minimum_quantity") @db.Decimal(20, 6)
+  targetQuantity    Decimal                @map("target_quantity") @db.Decimal(20, 6)
+  suggestedQuantity Decimal                @map("suggested_quantity") @db.Decimal(20, 6)
+  lastEvaluatedAt   DateTime               @map("last_evaluated_at") @db.Timestamptz(3)
+  openedAt          DateTime               @default(now()) @map("opened_at") @db.Timestamptz(3)
+  resolvedAt        DateTime?              @map("resolved_at") @db.Timestamptz(3)
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organization      Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  rule              ReorderRule            @relation(fields: [organizationId, reorderRuleId], references: [organizationId, id], onDelete: Cascade)
+  history           LowStockAlertHistory[]
+
+  @@unique([organizationId, id])
+  @@unique([organizationId, reorderRuleId])
+  @@index([organizationId, status, lastEvaluatedAt])
+  @@map("low_stock_alerts")
+}
+
+model LowStockAlertHistory {
+  id                String                 @id @default(uuid()) @db.Uuid
+  organizationId    String                 @map("organization_id") @db.Uuid
+  reorderRuleId     String                 @map("reorder_rule_id") @db.Uuid
+  alertId           String                 @map("alert_id") @db.Uuid
+  eventType         LowStockAlertEventType @map("event_type")
+  reason            String?                @db.VarChar(48)
+  onHandQuantity    Decimal                @map("on_hand_quantity") @db.Decimal(20, 6)
+  reservedQuantity  Decimal                @map("reserved_quantity") @db.Decimal(20, 6)
+  availableQuantity Decimal                @map("available_quantity") @db.Decimal(20, 6)
+  minimumQuantity   Decimal                @map("minimum_quantity") @db.Decimal(20, 6)
+  targetQuantity    Decimal                @map("target_quantity") @db.Decimal(20, 6)
+  suggestedQuantity Decimal                @map("suggested_quantity") @db.Decimal(20, 6)
+  actorUserId       String?                @map("actor_user_id") @db.Uuid
+  occurredAt        DateTime               @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  organization      Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  rule              ReorderRule            @relation(fields: [organizationId, reorderRuleId], references: [organizationId, id], onDelete: Cascade)
+  alert             LowStockAlert          @relation(fields: [organizationId, alertId], references: [organizationId, id], onDelete: Cascade)
+  actor             Membership?            @relation(fields: [organizationId, actorUserId], references: [organizationId, userId], onDelete: Restrict)
+
+  @@unique([organizationId, id])
+  @@index([organizationId, alertId, occurredAt])
+  @@index([organizationId, reorderRuleId, occurredAt])
+  @@map("low_stock_alert_history")
 }
 
 model SalesFulfillment {

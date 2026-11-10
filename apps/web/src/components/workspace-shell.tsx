@@ -18,6 +18,12 @@ const groups = [
       { href: "/products", label: "Products", icon: "products" },
       { href: "/imports", label: "Import data", icon: "catalog" },
       { href: "/inventory", label: "Stock counts", icon: "counts" },
+      { href: "/inventory/low-stock", label: "Low stock", icon: "counts" },
+      {
+        href: "/inventory/reorder-rules",
+        label: "Reorder rules",
+        icon: "counts",
+      },
       { href: "/transfers", label: "Transfers", icon: "purchasing" },
       { href: "/locations", label: "Branches & warehouses", icon: "locations" },
       { href: "/catalog", label: "Categories & units", icon: "catalog" },
@@ -54,6 +60,8 @@ const names: Record<string, string> = {
   products: "Products",
   imports: "Import data",
   inventory: "Stock counts",
+  "low-stock": "Low stock",
+  "reorder-rules": "Reorder rules",
   transfers: "Warehouse transfers",
   locations: "Branches & warehouses",
   catalog: "Categories & units",
@@ -191,6 +199,8 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
     .filter((group) => group.links.length > 0);
   const title = useMemo(() => {
     const first = pathname.split("/")[1] ?? "";
+    if (pathname === "/inventory/low-stock") return "Low stock";
+    if (pathname === "/inventory/reorder-rules") return "Reorder rules";
     if (first === "purchase-orders" && pathname.split("/").length > 2)
       return "Purchase order";
     if (first === "products" && pathname.split("/").length > 2)

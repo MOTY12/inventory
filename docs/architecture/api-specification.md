@@ -33,7 +33,8 @@ Base `/api/v1`; JSON; bearer access token; request ID; critical POST/PATCH comma
 - `GET /inventory/movements` and `/products/:id/movements`
 - `POST /inventory/adjustments` creates draft; `POST /inventory/adjustments/:id/post` commits audited deltas.
 - `GET/POST /organizations/current/inventory/transfers`; `GET /organizations/current/inventory/transfers/:id`; submit/cancel; dispatch and `POST /:id/receipts` with `Idempotency-Key`.
-- `GET/PATCH /reorder-rules`; `GET /inventory/reorder-suggestions`.
+- `GET/POST /organizations/current/inventory/reorder-rules`; `PATCH /organizations/current/inventory/reorder-rules/:ruleId`; `GET /organizations/current/inventory/reorder-rules/:ruleId/history`; `POST /organizations/current/inventory/reorder-rules/evaluate`; `GET /organizations/current/inventory/low-stock`.
+- Low-stock calculations use `available = on hand - reserved`; suggested quantity is `max(target - available, 0)`. Incoming purchase orders and in-transit quantities are excluded and displayed as zero until an approved supply projection policy exists. Rule evaluations run every five minutes per API process and are also manually triggerable. No purchase order is automatically submitted.
 
 ## Procurement
 

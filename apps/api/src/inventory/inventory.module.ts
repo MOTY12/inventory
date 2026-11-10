@@ -11,15 +11,24 @@ import { InventoryPostingService } from "./inventory-posting.service";
 import { StockAdjustmentsService } from "./adjustments.service";
 import { StockTransfersController } from "./transfers.controller";
 import { StockTransfersService } from "./transfers.service";
+import { ReorderingController } from "./reordering/reordering.controller";
+import { ReorderingScheduler } from "./reordering/reordering.scheduler";
+import { ReorderingService } from "./reordering/reordering.service";
 
 @Module({
   imports: [AuthModule],
-  controllers: [InventoryController, StockTransfersController],
+  controllers: [
+    InventoryController,
+    StockTransfersController,
+    ReorderingController,
+  ],
   providers: [
     InventoryReadService,
     InventoryPostingService,
     StockAdjustmentsService,
     StockTransfersService,
+    ReorderingService,
+    ReorderingScheduler,
     OrganizationContextGuard,
     RoleCapabilityGuard,
     WarehouseScopeGuard,
