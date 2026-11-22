@@ -1,44 +1,42 @@
 # Next session checkpoint
 
-**Updated:** 2026-11-09 (Africa/Lagos)
+**Updated:** 2026-11-22 (Africa/Lagos)
 
-## Current state
+## Repository state
 
-- Repo: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; base commit at session start `353a049` (`Update migration.sql`). Changes from this session are uncommitted. No push was performed.
-- Completed roadmap count remains **15/47**. No task was newly completed. SALES-003, INV-004, PROCUREMENT-002, and INV-009 remain IN_PROGRESS pending documented browser/dependency acceptance.
-- INV-009 API, UI, Prisma schema and additive migration are implemented. Local migration `20261108190000_reorder_rules_low_stock` applied successfully; do not reset the DB.
+- Workspace: `/Users/newuser/Documents/GitHub/inventory`
+- Branch: `develop`; HEAD: `114c382` (`update the inventory system`).
+- Worktree was clean before this continuation. It now contains the scheduler test `apps/api/test/reordering.scheduler.test.mjs` and progress/roadmap documentation updates; no runtime implementation/schema changed. Preserve these changes. No commit or push was made.
+- Completed roadmap count remains **15/47**. INV-009 is implemented but `IN_PROGRESS`; PROCUREMENT-002 remains `IN_PROGRESS` and is a documented INV-009 dependency. Browser acceptance is also pending. Do not start REPORT-001 until INV-009's dependency and completion gates pass.
 
-## Implemented in this session
+## Current milestone: INV-009 reorder rules and low-stock alerts
 
-- `ReorderRule`, `LowStockAlert`, and `LowStockAlertHistory` schema, tenant composite constraints, check constraints and indexes; additive migration `apps/api/prisma/migrations/20261108190000_reorder_rules_low_stock/migration.sql`.
-- Reorder rule create/list/update, threshold validation and warehouse-grant filtering. Exactly one rule per organization/product/warehouse.
-- Low-stock evaluation with exact Decimal math, available = on-hand minus reserved, suggested = max(target minus available, 0), immutable event snapshots, open/update/resolve/reopen transitions, serializable transactions, row locks and bounded retry. Scheduler evaluates every five minutes per API process; manual evaluate endpoint included.
-- Incoming POs and in-transit stock are excluded from the projected quantity (incoming shown as zero). No automatic purchase order creation.
-- Authenticated UI routes `/inventory/reorder-rules` and `/inventory/low-stock`, workspace links, manual evaluate action, and dashboard alert count/list.
-- Files touched include Prisma schema/migration, inventory module/reordering service/controller/DTO/scheduler, integration test, web dashboard/shell/reordering pages, and roadmap/progress/architecture docs. Use `git status --short` for exact list.
+- Implemented: tenant/warehouse-scoped per-product rules; exact Decimal thresholds; manual and scheduled evaluation; immutable alert history and OPENED/UPDATED/RESOLVED/REOPENED transitions; rule/low-stock APIs and UI; dashboard indicators.
+- Formula: `available = on hand - reserved`; `suggested = max(target - available, 0)`. Incoming purchase orders and in-transit quantities are excluded (shown as zero); rules do not automatically create or submit POs.
+- Additive migration `20261108190000_reorder_rules_low_stock` was previously applied locally, and prior isolated PostgreSQL integration passed 12/12. No reset/deletion was performed. That prior evidence is historical; current-session database access was not available for a fresh health or migration-status check.
+- Implementation is not equivalent to task completion. INV-009 remains `IN_PROGRESS` because PROCUREMENT-002 is still `IN_PROGRESS` and browser workflows are unverified. The scheduler test checks the interval configuration but does not wait five wall-clock minutes to observe cadence.
 
-## Verification actually completed
+## Verification performed this session
 
-- Prisma format, validation and client generation passed.
-- `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test` passed (**40 pass, 0 fail, 2 PostgreSQL suites skipped by default**), and production `npm run build` passed. The Next route list includes both reorder pages.
-- Isolated PostgreSQL integration passed **12/12, 0 failures** after applying migrations in a unique temporary schema; the schema was dropped by the suite. It verifies threshold/duplicate errors, tenant scoping, reservation-aware formula, concurrent evaluation, one alert/history stream, resolution and reopening, and regressions for inventory/purchasing/sales/imports/transfers.
-- First integration run revealed incorrect alert-history field mapping and a concurrency serialization wrapper; both were fixed and the passing suite rerun. Sandbox loopback denial was bypassed only through approved local integration execution.
-- Applied local additive migration using `npm run db:migrate:deploy --workspace=@inventory/api`; deploy succeeded. Before deploy, `migrate status` showed only this new migration pending. Post-deploy `npx prisma migrate status --config prisma.config.ts` confirmed all 19 migrations applied.
-- Browser acceptance not done: Work settings report local browser use disabled. Do not claim UI acceptance passed.
-- The scheduler's five-minute timing/cadence has not been asserted by an automated clock test; only manual evaluation and persistence/concurrency behavior were exercised.
-
-## Remaining gates / decisions
-
-- INV-009 stays IN_PROGRESS because PROCUREMENT-002 is still IN_PROGRESS and browser acceptance is unavailable. Completed count remains 15/47.
-- REPORT-001 depends on INV-009 and must not start until that milestone’s gates pass.
-- Incoming supply policy is unresolved; current implementation explicitly excludes purchase orders and in-transit quantities. The per-process scheduler has DB serialization/idempotency, not a distributed queue.
-- SALES-004 remains gated on tax, invoice, payment and accounting decisions.
+- Passed: `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build`.
+- Passed: `npm test` — 41 passed, 0 failed, 2 opt-in PostgreSQL suites skipped. This includes deterministic scheduler coverage for interval configuration, non-overlap, another pass after completion and timer cleanup.
+- Passed: `npm run db:validate --workspace=@inventory/api`.
+- The first sandboxed `npm test` run failed because the API contract test could not bind its ephemeral port (`EPERM`); the approved rerun passed.
+- Live integrations unavailable this session: Docker socket permission denied; API port 4000 and web port 3002 were not listening; browser RPC returned `Trusted RPC service is not configured: browser`. Do not report live UI or DB acceptance for this session.
+- The generated web build contains `/inventory/reorder-rules` and `/inventory/low-stock` routes. No implementation functionality is claimed complete based only on this build.
 
 ## Exact next steps
 
-1. Migration status is verified at 19/19 current; rerun only if the local DB changes before continuing.
-2. Inspect `git status --short` and `git diff`; preserve all changes. Then rerun `npm run typecheck && npm run lint && npm run format:check && npm test && npm run build && git diff --check` after any modifications.
-3. When browser control is enabled, log in and manually verify sales confirm → partial/multiple pick → partial/full fulfillment; product/opening CSV preview, validation, commit and replay; reorder rule create/edit/pause and low-stock open/evaluate/recovery/reopen. Verify warehouse-grant visibility.
-4. Update task statuses only from actual acceptance evidence. Keep 15/47 until criteria for a roadmap task are fully satisfied.
-5. After INV-009 gates and dependencies are actually satisfied, inspect REPORT-001 acceptance and dependencies, then build tenant/warehouse scoped reports with quantities reconciled to the ledger cutoff. Avoid valuation/accounting assumptions not approved.
-6. No commit or push was created; commit only a coherent verified milestone if safe. Never reset or clean unrelated work.
+1. Start/verify Docker Desktop through supported local controls (do not reset or remove volumes); confirm Compose PostgreSQL, Redis and S3Mock health. If Docker remains inaccessible, record the specific permission/environment blocker.
+2. Start API and web using documented workspace commands; confirm readiness and frontend/API connectivity. Avoid terminating unknown processes or claiming a port is free without checking.
+3. With supported browser control available, use a synthetic QA account and verify authenticated workflows: create/edit/pause a reorder rule; evaluate a low-stock condition; inspect displayed on-hand/reserved/available/suggested values and alert history; restore stock and verify resolution/reopen; check warehouse-grant visibility. Do not persist credentials or tokens in docs.
+4. If required for acceptance, observe a scheduled pass after five minutes; current deterministic coverage verifies interval configuration and overlap handling. Complete remaining PROCUREMENT-002 criteria. Keep INV-009 `IN_PROGRESS` until its acceptance criteria and dependency are satisfied.
+5. Reconcile all other pending status claims against task-breakdown and actual artifacts; completed remains 15/47. After INV-009 is eligible, inspect REPORT-001 dependencies and acceptance, then proceed. SALES-004 remains gated by unresolved tax/invoice/payment/accounting decisions.
+6. Before ending, update `current-state.md`, `next-session.md`, `session-log.md`, and the ledger; run `git diff --check`. Preserve user files; commit only a coherent verified milestone if safe, and do not push.
+
+## Decisions and blockers
+
+- Provisional reorder behavior remains as documented; no new business/security/accounting decisions were made.
+- Incoming-supply projection policy remains unresolved and excluded from calculations.
+- Per-process scheduler has database serialization/idempotency but no distributed queue. Actual wall-clock cadence observation remains pending.
+- Current-session browser RPC, Docker socket, and app services were unavailable. No production deployment or push occurred.

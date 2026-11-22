@@ -1,12 +1,12 @@
 # Current state
 
-**Updated:** 2026-11-09 (Africa/Lagos)
+**Updated:** 2026-11-22 (Africa/Lagos)
 
 ## Repository and roadmap
 
-- Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; starting `HEAD` was `353a049` (`Update migration.sql`) and worktree was clean. Current implementation and test changes are uncommitted; preserve them. No push was performed.
+- Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; current `HEAD` is `114c382` (`update the inventory system`). The 2026-11-09 implementation checkpoint started at `353a049`; its worktree description below is historical, not current. This 2026-11-22 continuation changed only progress/roadmap documentation; no push was performed.
 - Completed roadmap count remains **15/47**. SALES-003 and INV-004 have implementation plus database/API verification, but remain IN_PROGRESS pending authenticated browser acceptance. No task was marked complete based solely on a build.
-- Local database: `inventory_dev` at `localhost:5433`. Reorder migration `20261108190000_reorder_rules_low_stock` was applied additively with `npm run db:migrate:deploy --workspace=@inventory/api` after isolated schema validation. No reset/deletion was run. Post-deploy `npx prisma migrate status --config prisma.config.ts` confirmed all 19 migrations applied.
+- Historical local database verification (2026-11-09): `inventory_dev` at `localhost:5433`; reorder migration `20261108190000_reorder_rules_low_stock` applied additively with `npm run db:migrate:deploy --workspace=@inventory/api` after isolated schema validation. No reset/deletion was run, and `npx prisma migrate status --config prisma.config.ts` confirmed all 19 migrations applied then. Current session could not access Docker or the live database; see continuation verification below.
 
 ## INV-009 implementation milestone
 
@@ -15,7 +15,7 @@
 - Rule and alert APIs filter by organization and warehouse grants. Evaluation uses `available = on hand - reserved`; recommendation is `max(target - available, 0)`. Incoming PO and in-transit supply are deliberately excluded and shown as 0; no automatic PO creation.
 - Alert lifecycle: OPENED, UPDATED, RESOLVED, REOPENED, with quantity snapshots. Per-process five-minute schedule plus manual evaluation; serializable transactions, row lock, uniqueness and bounded retry. No distributed worker/queue was added.
 - UI: `/inventory/reorder-rules`, `/inventory/low-stock`, workspace navigation and real dashboard low-stock indicators.
-- Scheduled five-minute cadence is implemented but not timed in automated tests; manual evaluation and DB concurrency/transition behavior are integration tested. Browser workflows are unverified.
+- Deterministic scheduler test verifies five-minute interval configuration, no overlapping passes, subsequent pass eligibility and timer cleanup. It does not wait five wall-clock minutes; manual evaluation and DB concurrency/transition behavior are integration tested. Browser workflows are unverified.
 
 ## Implemented this continuation
 
@@ -46,3 +46,10 @@
 3. Keep SALES-003, INV-004, PROCUREMENT-002, and INV-009 IN_PROGRESS until their own criteria and browser gates pass. Completed count remains 15/47.
 4. Do not begin REPORT-001 until INV-009 completion gates pass. Then verify actual REPORT-001 dependencies and implement tenant/warehouse scoped ledger-reconciled reports; do not start SALES-004 absent financial policy approval.
 5. Run final workspace checks after latest changes and preserve the current uncommitted work. No Git commit or push was made.
+
+## 2026-11-22 continuation verification
+
+- Actual repository is branch `develop` at `114c382` (`update the inventory system`); worktree was clean before this documentation correction. No application code or migrations were changed in this continuation.
+- Reconfirmed `npm run typecheck`, `npm run lint`, `npm run format:check`, and `npm run build` pass. After adding a deterministic scheduler test, `npm test` passed: 41 passed, 0 failed, 2 opt-in PostgreSQL suites skipped. `npm run db:validate --workspace=@inventory/api` passed. An earlier sandboxed run failed because its API contract test could not bind an ephemeral local port (`EPERM`); the approved rerun passed.
+- Current-session Docker socket access was denied, API `localhost:4000` and web `localhost:3002` were not listening, and the supported browser RPC returned “Trusted RPC service is not configured: browser.” Therefore no current live DB health, migration status, or authenticated browser acceptance is claimed. Earlier isolated PostgreSQL results and applied migration evidence remain as recorded above.
+- Reorder runtime implementation was not altered; added `apps/api/test/reordering.scheduler.test.mjs` to verify interval configuration, overlap suppression, subsequent pass and timer cleanup. INV-009 remains IN_PROGRESS; dependency PROCUREMENT-002 remains IN_PROGRESS. Completed count remains 15/47. No commit or push was made.

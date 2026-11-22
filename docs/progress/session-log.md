@@ -267,3 +267,12 @@
 - Workspace typecheck, lint, format, full default tests (40 passed, 0 failed, 2 opt-in DB skips), Prisma validation/client generation and production build passed. Routes `/inventory/reorder-rules` and `/inventory/low-stock` appear in Next build. Browser acceptance remains unavailable because Work settings disable local browser use.
 - Count stays 15/47; INV-009 remains IN_PROGRESS because PROCUREMENT-002 remains IN_PROGRESS and browser acceptance is pending. REPORT-001 remains gated. No commit/push. Exact next steps are in `docs/progress/next-session.md`.
 - Scheduler interval itself is not clock-tested; authenticated browser acceptance remains unavailable.
+
+# 2026-11-22 — INV-009 continuation and checkpoint reconciliation
+
+- Resumed at `114c382` on `develop`; startup docs reviewed in required order. Worktree was clean before documentation updates. No application implementation or schema changed; no commit/push.
+- Tried supported in-app browser context RPC; browser service is not configured. Docker socket access was denied. API port 4000 and web port 3002 were not listening, so current live readiness, DB migration state and authenticated UI workflow could not be verified.
+- Added `apps/api/test/reordering.scheduler.test.mjs`; deterministic fake-timer coverage verifies five-minute interval configuration, overlap suppression, another pass after completion, and timer cleanup. It does not observe five minutes of wall-clock time.
+- Passed `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run db:validate --workspace=@inventory/api`, and `npm run build`. `npm test` passed with 41 passed, 0 failed and 2 opt-in PostgreSQL suites skipped. An initial sandboxed attempt hit `EPERM` binding its temporary API test port; the approved rerun and subsequent test run passed. Build includes `/inventory/reorder-rules` and `/inventory/low-stock`.
+- Corrected the stale task-breakdown summary to include INV-009 under IN_PROGRESS and refreshed master-plan/current-state/next-session status. Completed count remains 15/47. INV-009 remains IN_PROGRESS because PROCUREMENT-002 and browser acceptance remain pending. No new task completed.
+- Next: restore local Docker and app services without resetting data; run authenticated reorder-rule/low-stock/alert-history/warehouse-scope browser acceptance and, if required, observe a scheduled pass; finish PROCUREMENT-002 gates; only then reassess REPORT-001 eligibility. See `docs/progress/next-session.md` for exact sequence.
