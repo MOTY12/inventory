@@ -42,8 +42,8 @@
 
 ## Exact next steps
 
-1. Review and commit the verified auth form change with this checkpoint. Do not push.
-2. Review auth/verification screen states and remaining shell/dashboard/product/inventory/procurement/sales/report interactions for visual consistency. Preserve existing API calls and RBAC.
+1. Confirm clean `git status` and read this checkpoint. No additional implementation commit is pending; do not push.
+2. Review verification/invitation and remaining shell/dashboard/product/inventory/procurement/sales/report interactions for visual consistency. Preserve existing API calls and RBAC.
 3. If browser control becomes available, run desktop/tablet/mobile visual review. Exercise organization switching, role-specific navigation/actions, product conversion, count posting, transfer dispatch/receipt, goods receiving, and sales fulfillment. No browser tool/runtime was available in this session.
 4. Keep INV-010 IN_PROGRESS pending barcode repeat-scan/Enter verification and camera feasibility. Do not count UI work as roadmap completion.
 5. After the next page milestone, run typecheck, lint, formatting, relevant tests and the web production build; document unavailable database/browser checks as pending.
