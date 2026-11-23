@@ -39,5 +39,5 @@
 
 ## Git
 
-- Shared shell/dashboard milestone committed locally as `33fa0a6` (`ui: establish enterprise workspace design system`) and checkpoint as `960912d` (`docs: checkpoint enterprise UI redesign`) on `develop`; no push. Product list follow-up changes are currently uncommitted.
+- Shared shell/dashboard milestone committed as `33fa0a6` (`ui: establish enterprise workspace design system`), checkpoint as `960912d` (`docs: checkpoint enterprise UI redesign`), and product list fix as `f041826` (`ui: refine product list and pagination`) on `develop`; no push.
 - INV-010 remains in progress pending barcode repeat/keyboard acceptance and camera feasibility. Browser UI and API endpoint acceptance remain pending where not evidenced. See `docs/progress/next-session.md` for exact next actions. Do not start SALES-004 until financial policy is approved.

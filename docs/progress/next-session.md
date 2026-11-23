@@ -8,7 +8,7 @@
 - Branch: `develop`; starting HEAD for this session: `ae44aea` (`UPDARE REPORT`). Worktree was clean at start. No changes from other authors were present.
 - Roadmap: **28/47 complete** by the task ledger. REPORT-001 is complete; INV-010 remains IN_PROGRESS. This UI/UX redesign is tracked as session work, not a new roadmap task; it does not change the roadmap count.
 - No schema, API, database, or migration changes were made in this redesign.
-- UI milestone commit: `33fa0a6` (`ui: establish enterprise workspace design system`). No push or production operation occurred.
+- UI commits: `33fa0a6` (shared shell/dashboard), `960912d` (checkpoint), and `f041826` (product list/pagination). No push or production operation occurred.
 
 ## Completed this session: shared shell and dashboard milestone
 
@@ -32,12 +32,12 @@
 
 ## Exact next steps
 
-1. Confirm `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo` are clean after their generated changes were restored; preserve the product list change and this documentation.
-2. If browser control becomes available, run responsive visual review at desktop, tablet, and mobile widths. Verify organization switching, account menu, active links, and dashboard metrics for OWNER, BUYER, and SALES roles.
-3. Continue the redesign at Product detail and Catalog: review the real detail/create/edit/archive and category/unit/conversion workflows, improve hierarchy and consistency with the shared system, and preserve API behavior. Then review Inventory, Purchasing, Sales, Reports, and Administration in that order.
+1. Confirm `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo` are clean after their generated changes were restored; start with the committed Product detail and Catalog pages.
+2. Continue the redesign at Product detail and Catalog: review detail/create/edit/archive and category/unit/conversion workflows, improve hierarchy and consistency with the shared system, and preserve API behavior. Then review Inventory, Purchasing, Sales, Reports, and Administration in that order.
+3. If browser control becomes available, run responsive visual review at desktop, tablet, and mobile widths. Verify organization switching, account menu, active links, and dashboard metrics for OWNER, BUYER, and SALES roles.
 4. Do not count this redesign as a roadmap task. Keep INV-010 IN_PROGRESS until its barcode normalization/repeat-scan and Enter-key acceptance is verified; its camera capability question remains open.
 5. Run typecheck, lint, formatting, relevant tests, and the web production build after the next page milestone. Record any database/browser tests that are unavailable as pending, not passing.
-6. Review the current product diff and progress note, then make a focused local commit when verified. Check `git status` and `git log -1`; no push without authorization.
+6. Recheck `git status`/`git log` after page-specific changes. Commit only verified, focused work; do not push.
 
 ## Remaining limits and decisions
 
