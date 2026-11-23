@@ -43,5 +43,5 @@
 
 ## Git
 
-- Earlier UI commits: `33fa0a6` (shared system), `960912d` (checkpoint), `f041826` (product list), `0e42502` (product checkpoint), and `43dacf1` (inventory/order UI). Catalog/supplier/customer UI pass passed checks and is pending commit. No push.
+- Earlier UI commits: `33fa0a6` (shared system), `960912d` (checkpoint), `f041826` (product list), `0e42502` (product checkpoint), `43dacf1` (inventory/order UI), and `17e4688` (catalog/contact directories). No push.
 - INV-010 remains in progress pending barcode repeat/keyboard acceptance and camera feasibility. Browser UI and API endpoint acceptance remain pending where not evidenced. See `docs/progress/next-session.md` for exact next actions. Do not start SALES-004 until financial policy is approved.
