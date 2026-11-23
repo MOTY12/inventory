@@ -2,7 +2,8 @@
 
 ## Current phase
 
-**Reorder rules acceptance follow-up — updated 2026-11-22.** Completed count remains 15/47. INV-009 implementation and isolated PostgreSQL integration are documented; migration `20261108190000_reorder_rules_low_stock` was previously applied locally without reset/deletion. This session reconfirmed typecheck, lint, formatting, test suite (40 passed, 2 opt-in DB suites skipped), and production build. Authenticated browser acceptance remains unverified because browser RPC is unavailable; Docker and live app ports were also unavailable during this session. INV-009 remains IN_PROGRESS because PROCUREMENT-002 and browser acceptance are still open. It excludes incoming PO/in-transit quantities and does not create POs. REPORT-001 remains gated on INV-009 completion. SALES-004 remains gated by unresolved tax/invoice/payment/accounting decisions. No push or production deployment was performed.
+**Core workflow acceptance verification — updated 2026-11-22.** Reconciled individual task entries against additive migration status (19/19 current), opt-in PostgreSQL integration (22/22 passed, no skips), authenticated HTTP checks, tenant/warehouse authorization, idempotency and ledger/balance reconciliation. Twelve tasks newly satisfy their documented acceptance and prerequisites: INV-001–004, INV-007–009, PROCUREMENT-001–003, SALES-001 and SALES-003. Individual ledger count is **27/47**. No migration was applied during this continuation; no data was reset or deleted. Manual interactive browser UAT remains unavailable because the browser RPC service is not configured and is tracked under QUALITY-001. This phase did not start reporting, invoicing, or another major feature. No commit or push was made.
+
 
 ## Phases
 

@@ -761,6 +761,23 @@ test(
             }),
             (e) => e.getStatus() === 409,
           );
+          await assert.rejects(
+            purchaseOrders.create(contextA, ownerA.userId, {
+              supplierId: supplier.id,
+              warehouseId: warehouse.id,
+              currency: "NGN",
+              lines: [
+                {
+                  productId: product.id,
+                  unitId: unit.id,
+                  quantity: "1",
+                  unitCost: "1",
+                },
+              ],
+            }),
+            (error) => error.getStatus() === 404,
+            "a purchase order cannot reference an archived supplier",
+          );
         },
       );
 
@@ -819,6 +836,23 @@ test(
               name: "Edited after archive",
             }),
             (error) => error.getStatus() === 409,
+          );
+          await assert.rejects(
+            salesOrders.create(
+              contextA,
+              ownerA.userId,
+              {
+                customerId: customer.id,
+                warehouseId: warehouse.id,
+                currency: "NGN",
+                lines: [
+                  { productId: product.id, unitId: unit.id, quantity: "1", unitPrice: "1" },
+                ],
+              },
+              `archived-customer-${randomUUID()}`,
+            ),
+            (error) => error.getStatus() === 404,
+            "a sales order cannot reference an archived customer",
           );
           assert.deepEqual(
             (await customers.auditHistory(contextA, customer.id))
@@ -2181,6 +2215,20 @@ test(
           assert.equal(
             savedCounts.filter((x) => x.status === "POSTED").length,
             1,
+          );
+          await assert.rejects(
+            adjustments.create(contextB, ownerB.userId, warehouse.id, {
+              productId: stockProduct.id,
+              countedQuantity: "17",
+              reason: "Foreign organization count attempt",
+            }),
+            (error) => error.getStatus() === 404,
+            "an adjustment cannot use another organization's warehouse",
+          );
+          await assert.rejects(
+            adjustments.post(contextB, ownerB.userId, warehouse.id, count1.id),
+            (error) => error.getStatus() === 404,
+            "an adjustment cannot be posted from another organization",
           );
           const movementCount = await prisma.stockMovement.count({
             where: {
