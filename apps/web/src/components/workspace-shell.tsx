@@ -48,6 +48,10 @@ const groups = [
     ],
   },
   {
+    label: "REPORTS",
+    links: [{ href: "/reports", label: "Inventory reports", icon: "reports" }],
+  },
+  {
     label: "MANAGEMENT",
     links: [
       { href: "/organizations", label: "Workspace settings", icon: "settings" },
@@ -69,6 +73,7 @@ const names: Record<string, string> = {
   suppliers: "Suppliers",
   customers: "Customers",
   "sales-orders": "Sales orders",
+  reports: "Inventory reports",
   organizations: "Workspace settings",
 };
 
@@ -123,6 +128,12 @@ function Icon({ name }: { name: string }) {
       <>
         <circle cx="12" cy="12" r="3" />
         <path d="m19.4 15 .1.1 1.3 1-1.4 2.4-1.6-.6a8 8 0 0 1-1.5.9l-.3 1.7h-2.8l-.3-1.7a8 8 0 0 1-1.5-.9l-1.6.6-1.4-2.4 1.3-1a7 7 0 0 1 0-1.8l-1.3-1 1.4-2.4 1.6.6a8 8 0 0 1 1.5-.9l.3-1.7H16l.3 1.7a8 8 0 0 1 1.5.9l1.6-.6 1.4 2.4-1.3 1a7 7 0 0 1-.1 1.8Z" />
+      </>
+    ),
+    reports: (
+      <>
+        <path d="M4 19V5m0 14h17" />
+        <path d="m7 15 4-4 3 2 5-6" />
       </>
     ),
   };

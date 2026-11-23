@@ -2,8 +2,7 @@
 
 ## Current phase
 
-**Core workflow acceptance verification — updated 2026-11-22.** Reconciled individual task entries against additive migration status (19/19 current), opt-in PostgreSQL integration (22/22 passed, no skips), authenticated HTTP checks, tenant/warehouse authorization, idempotency and ledger/balance reconciliation. Twelve tasks newly satisfy their documented acceptance and prerequisites: INV-001–004, INV-007–009, PROCUREMENT-001–003, SALES-001 and SALES-003. Individual ledger count is **27/47**. No migration was applied during this continuation; no data was reset or deleted. Manual interactive browser UAT remains unavailable because the browser RPC service is not configured and is tracked under QUALITY-001. This phase did not start reporting, invoicing, or another major feature. No commit or push was made.
-
+**Inventory reporting delivered; INV-010 underway — updated 2026-11-23.** REPORT-001 is complete based on API/UI implementation, report fixture reconciliation against immutable movements, historical weighted-average valuation and reservation cutoffs, tenant/warehouse authorization checks, route authentication/OpenAPI checks, and the 13/13 opt-in report-containing PostgreSQL suite. Typecheck, lint, format, default suite and optimized production build passed. Completed ledger count is **28/47**. The local database remains at 19/19 migrations; reporting required no schema change and no migration or user data was modified. Next eligible roadmap item INV-010 has begun with keyboard barcode scanning in sales-order creation; browser interaction and camera feasibility remain unverified. Next.js and eslint-config-next were updated from 16.4.3 to 16.4.6 to clear the previous security build blocker. Registry audit access was unavailable in the network-restricted environment. Interactive browser UAT remains unavailable and is tracked in QUALITY-001.
 
 ## Phases
 

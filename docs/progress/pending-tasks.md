@@ -1,11 +1,24 @@
-# Pending tasks
+# Pending work
 
-1. **PROD-002 (in progress):** Confirm target segment/brand, tax/invoice compliance, SaaS pricing and subscription limits before customer commitments. Provisional inventory/auth defaults are not validated business requirements.
-2. **ARCH-002 (in progress):** Resolve RLS and privileged support access. Tenant-scoped RBAC baseline is implemented; MFA enforcement remains a later policy decision.
-3. **FOUNDATION-006 production hardening:** Configure production email and shared/distributed rate limiting; add automated browser E2E for session restore and role/grant workflows.
-4. **INV-001 (implementation present; verification pending):** Product-specific conversion list/create and UI are implemented. Apply `20261102113000_products_and_unit_conversions` safely and verify PostgreSQL tenant/integrity behavior and conversion validation before completion.
-5. **INV-002/003 (implementation present; verification pending):** Product create/list/detail/edit/archive and searchable paginated UI/APIs are implemented. Apply migration and verify authenticated end-to-end behavior, constraints, and tenant isolation.
-6. **INV-005 (schema present; verification pending):** Apply ledger/idempotency/outbox migration `20261102143000_inventory_ledger_schema`; verify composite references and immutable movement trigger.
-7. **INV-006 (implementation present; verification and extensions pending):** Apply `20261102150000_inventory_balance_projection`; verify posting/idempotency/reconciliation on PostgreSQL; add atomic transfer-batch and reservation posting before completion.
+This summary is subordinate to the unique task statuses and dependencies in `docs/implementation/task-breakdown.md`.
 
-Full numbered task/status ledger: `docs/implementation/task-breakdown.md`.
+## Current implementation
+
+- **INV-010 — IN_PROGRESS:** Keyboard barcode input and exact tenant-scoped barcode lookup are wired into new sales orders. Verify repeated scans increment base-unit quantity, keyboard Enter behavior, and unknown-code error; assess camera scanning feasibility. Keep in progress until evidence exists.
+
+## Product/architecture approvals and production follow-up
+
+- **PROD-002 — IN_PROGRESS:** Validate target segment/brand, statutory tax and invoice obligations, pricing/subscription limits before customer commitments.
+- **ARCH-002 — IN_PROGRESS:** Decide RLS and privileged support access. Do not expand tenant security boundary without approval.
+- **FOUNDATION-006 hardening:** Production email provider, distributed/shared rate limiting, and automated browser E2E remain follow-up work.
+- Product, legal/accounting, hosting/data-residency, MFA enforcement, and billing decisions remain documented in `docs/progress/decisions.md`.
+
+## Roadmap tasks not yet started
+
+- Check task dependencies and open decision gates in `docs/implementation/task-breakdown.md` before implementation. Current candidates after INV-010 include procurement/sales finance records, report exports, and report/dashboard extensions; do not implement tax/invoice/payment behavior that depends on unresolved decisions.
+- QUALITY-001 interactive end-to-end UAT remains unverified because browser RPC is unavailable.
+
+## Environment/verification gaps
+
+- npm advisory audit could not connect to the registry in this environment. Next.js is now 16.4.6 and production build passed, but dependency audit status remains unknown.
+- No report performance benchmark or manual authenticated report UI session was conducted.

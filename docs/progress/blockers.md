@@ -1,21 +1,22 @@
 # Blockers and constraints
 
-## Implementation follow-ups
+**Current status as of 2026-11-23 (Africa/Lagos).** Older environment statements in the session log are historical and superseded by this checkpoint.
 
-- **INV-001 PostgreSQL integration:** The additive migration `20261102082437_catalog_units_categories` applied successfully, but the new live tenant/FK integration case was not executed. Sandbox DB connection failed; the elevated retry was rejected. The default suite passes with the opt-in DB test skipped. Rerun `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/postgres.integration.test.mjs` when local PostgreSQL access is permitted.
-- **Local runtime at 2026-11-02 current session:** Docker Compose status was denied by the Docker socket; `pg_isready -h localhost -p 5433` returned no response; API port 4000 was connection-refused. Product, ledger, and balance migrations are unapplied. Do not report services healthy based on older checkpoints.
-- **Current catalog/inventory verification:** Product/conversion, ledger/idempotency/outbox, and balance migrations remain unapplied. `npm run typecheck`, Prisma validation/generation, lint, format, build, and diff checks passed, but no automated tests were run under the acceleration instruction and DB/API/browser workflows could not be tested. Restore database/runtime access before claiming integration acceptance.
+## Active verification gaps
 
-- **Automated browser E2E:** No automated browser test suite exists. Manual Chrome testing verified registration, mailbox email verification, login, dashboard, organization setup, locations page, branch/warehouse creation, and persistence after reload. Role/grant settings and full refresh/logout UI remain unverified in Chrome.
-- **Previous Docker verification (historical):** Docker Compose PostgreSQL, Redis and S3Mock were healthy in an earlier session, and PostgreSQL was reachable at `localhost:5433`. This is not the current runtime state; current Docker access is denied and the port is not responding.
-- **Production email:** Only the development/test delivery adapter is configured. Production email provider and operational delivery behavior remain open.
-- **Distributed rate limits:** Authentication throttling is process-local and does not coordinate multiple API replicas. Add shared storage before horizontal production operation.
-- **FOUNDATION-009:** Complete. Migration applied and PostgreSQL integration tests passed 9/9. Manual Chrome workflow succeeded.
-- **Local development account:** Created and email-verified using the local development mailbox; Chrome login and dashboard navigation passed. Credentials were given to the user in this session; do not store the password in progress documentation.
-- **Development server lifecycle (historical):** `npm run build` replaces the API `dist` output while `nest start --watch` is running, briefly stopping the API. In a prior session the dev API was restarted and frontend returned HTTP 200; current API is down as noted above.
+- **Browser workflow:** Interactive browser RPC is not configured (`Trusted RPC service is not configured: browser`, from the prior attempt). REPORT-001 UI and INV-010 keyboard scanning are build-verified, not browser-verified. Keep full authenticated UAT under QUALITY-001 and do not claim UI acceptance.
+- **Dependency audit:** `npm audit --omit=dev --audit-level=high` could not resolve `registry.npmjs.org` (`ENOTFOUND`). Next.js and eslint-config-next are updated to 16.4.6 and production build passes, but a complete registry audit remains pending.
+- **Report performance:** Fixture reconciliation and query behavior were verified against isolated PostgreSQL; a representative large-tenant performance benchmark has not been run.
+- **INV-010 camera workflow:** Keyboard scanner is implemented; mobile camera API feasibility and any camera-based scan implementation are not verified.
 
-## Planning constraints
+## Production hardening and policy gates
 
-- **REA CDP unavailable:** Browser target discovery at `127.0.0.1:9222` was unavailable. Public official pages and visible browser evidence were used as documented; no Chrome reconfiguration was done.
-- **Material decisions pending:** target segment/brand, tax and statutory invoice scope, subscription pricing/limits, production data residency/hosting commitments, MFA enforcement, RLS and privileged support access remain open in `decisions.md`. Owner defaults are provisional assumptions, not validated requirements.
-- **Interview evidence deferred:** the protocol exists; interviews are deferred to pilot validation and no participant findings are claimed.
+- Production email provider and delivery operations are pending.
+- Authentication rate limiting is process-local; shared storage is required before horizontally scaling API replicas.
+- Open material decisions are recorded in `docs/progress/decisions.md`: target segment/brand, tax/invoice requirements, pricing/limits, production residency/hosting commitments, MFA enforcement, RLS and privileged support access. Keep dependent work gated.
+- Browser E2E/session restore, role/grant workflows, pilot and production release checks remain outstanding.
+
+## Database/runtime evidence
+
+- This session connected to local PostgreSQL at `localhost:5433`; the inventory reporting integration suite created and cleaned up a random isolated test schema. Prisma reports 19 migrations and the configured `inventory_dev` schema up to date. Reporting and barcode lookup required no database migration; no production database was touched.
+- Docker health was not rechecked in this task. Do not infer container health from the successful direct PostgreSQL connection.

@@ -245,6 +245,14 @@ export class ReorderingService {
         ...(status === "OPEN" ? { status: ReorderRuleStatus.ACTIVE } : {}),
         ...(warehouseIds ? { warehouseId: { in: warehouseIds } } : {}),
         ...(query.warehouseId ? { warehouseId: query.warehouseId } : {}),
+        ...(query.productId || query.categoryId
+          ? {
+              product: {
+                ...(query.productId ? { id: query.productId } : {}),
+                ...(query.categoryId ? { categoryId: query.categoryId } : {}),
+              },
+            }
+          : {}),
         ...(query.q
           ? {
               OR: [

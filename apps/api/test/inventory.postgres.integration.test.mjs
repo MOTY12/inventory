@@ -18,6 +18,7 @@ import { CustomersService } from "../dist/sales/customers.service.js";
 import { SalesOrdersService } from "../dist/sales/sales-orders.service.js";
 import { ImportsService } from "../dist/imports/imports.service.js";
 import { ReorderingService } from "../dist/inventory/reordering/reordering.service.js";
+import { ReportingService } from "../dist/reporting/reporting.service.js";
 
 const enabled = process.env.RUN_POSTGRES_INTEGRATION === "1";
 
@@ -72,6 +73,7 @@ test(
       const salesOrders = new SalesOrdersService(prisma, inventory);
       const imports = new ImportsService(prisma, catalog, inventory);
       const reordering = new ReorderingService(prisma);
+      const reports = new ReportingService(prisma, reordering);
       const contextA = ownerA.context;
       const contextB = ownerB.context;
       const branch = await locations.createBranch(contextA, ownerA.userId, {
@@ -114,6 +116,222 @@ test(
           name: "Foreign item",
           sku: `FOREIGN-${randomUUID()}`,
           baseUnitId: foreignUnit.id,
+        },
+      );
+
+      await t.test(
+        "reports reconcile historical WAC, current balances, filters, low-stock rules, and tenant scope",
+        async () => {
+          const reportProduct = await catalog.createProduct(
+            contextA,
+            ownerA.userId,
+            {
+              name: "Report valuation item",
+              sku: `REPORT-${randomUUID()}`,
+              baseUnitId: unit.id,
+            },
+          );
+          const openingDocumentId = randomUUID();
+          await inventory.postWarehouseMovement(
+            contextA,
+            ownerA.userId,
+            `report-opening-${randomUUID()}`,
+            {
+              warehouseId: warehouse.id,
+              productId: reportProduct.id,
+              documentType: "OPENING_BALANCE",
+              documentId: openingDocumentId,
+              movementType: "OPENING_BALANCE",
+              quantityDelta: "10",
+              costPerBaseUnit: "2.0000",
+              costCurrency: "NGN",
+            },
+          );
+          const opening = await prisma.stockMovement.findFirstOrThrow({
+            where: {
+              organizationId: contextA.organizationId,
+              documentId: openingDocumentId,
+            },
+          });
+          await new Promise((resolve) => setTimeout(resolve, 15));
+          await inventory.postWarehouseMovement(
+            contextA,
+            ownerA.userId,
+            `report-receipt-${randomUUID()}`,
+            {
+              warehouseId: warehouse.id,
+              productId: reportProduct.id,
+              documentType: "GOODS_RECEIPT",
+              documentId: randomUUID(),
+              movementType: "RECEIPT",
+              quantityDelta: "10",
+              costPerBaseUnit: "4.0000",
+              costCurrency: "NGN",
+            },
+          );
+          await prisma.$transaction((tx) =>
+            inventory.applyReservationDelta(
+              tx,
+              contextA,
+              warehouse.id,
+              reportProduct.id,
+              new Prisma.Decimal("5"),
+            ),
+          );
+
+          const historical = await reports.valuation(contextA, {
+            page: 1,
+            page_size: 25,
+            product_id: reportProduct.id,
+            as_of: opening.occurredAt.toISOString(),
+          });
+          assert.equal(historical.total, 1);
+          assert.equal(historical.data[0].quantity_on_hand.toString(), "10");
+          assert.equal(historical.data[0].average_unit_cost.toString(), "2");
+          assert.equal(historical.data[0].inventory_value.toString(), "20");
+
+          const valuation = await reports.valuation(contextA, {
+            page: 1,
+            page_size: 25,
+            product_id: reportProduct.id,
+          });
+          assert.equal(valuation.total, 1);
+          assert.equal(valuation.data[0].quantity_on_hand.toString(), "20");
+          assert.equal(valuation.data[0].average_unit_cost.toString(), "3");
+          assert.equal(valuation.data[0].inventory_value.toString(), "60");
+          assert.equal(
+            valuation.totals.inventory_value_by_currency[0].inventory_value.toString(),
+            "60",
+          );
+
+          const summary = await reports.inventorySummary(contextA, {
+            page: 1,
+            page_size: 25,
+            product_id: reportProduct.id,
+          });
+          assert.equal(summary.totals.on_hand.toString(), "20");
+          assert.equal(summary.totals.reserved.toString(), "5");
+          assert.equal(summary.totals.available.toString(), "15");
+          assert.equal(summary.by_warehouse[0].on_hand.toString(), "20");
+          assert.equal(summary.by_category[0].on_hand.toString(), "20");
+
+          const movements = await reports.movements(contextA, {
+            page: 1,
+            page_size: 2,
+            product_id: reportProduct.id,
+            movement_type: "RECEIPT",
+          });
+          assert.equal(movements.total, 1);
+          assert.equal(movements.data[0].quantityIn.toString(), "10");
+          assert.equal(
+            movements.data[0].relatedTransaction.documentType,
+            "GOODS_RECEIPT",
+          );
+
+          await reordering.create(contextA, ownerA.userId, {
+            productId: reportProduct.id,
+            warehouseId: warehouse.id,
+            minimumQuantity: "18",
+            targetQuantity: "30",
+          });
+          const lowStock = await reports.lowStock(contextA, {
+            page: 1,
+            page_size: 25,
+            product_id: reportProduct.id,
+          });
+          assert.equal(lowStock.total, 1);
+          assert.equal(lowStock.data[0].availableQuantity.toString(), "15");
+          assert.equal(lowStock.data[0].suggestedQuantity.toString(), "15");
+          const summaryWithAlert = await reports.inventorySummary(contextA, {
+            page: 1,
+            page_size: 25,
+            product_id: reportProduct.id,
+          });
+          assert.equal(summaryWithAlert.totals.current_low_stock_products, 1);
+          await reordering.update(
+            contextA,
+            ownerA.userId,
+            lowStock.data[0].rule.id,
+            {
+              status: "PAUSED",
+            },
+          );
+
+          await assert.rejects(
+            reports.valuation(contextB, {
+              page: 1,
+              page_size: 25,
+              warehouse_id: warehouse.id,
+            }),
+            (error) => error.getStatus() === 404,
+          );
+          assert.equal(
+            (
+              await reports.inventorySummary(contextB, {
+                page: 1,
+                page_size: 25,
+              })
+            ).data.length,
+            0,
+          );
+
+          const secondWarehouse = await locations.createWarehouse(
+            contextA,
+            ownerA.userId,
+            {
+              branchId: branch.id,
+              name: "Report restricted warehouse",
+              code: "IT-02",
+            },
+          );
+          await inventory.postWarehouseMovement(
+            contextA,
+            ownerA.userId,
+            `report-second-warehouse-${randomUUID()}`,
+            {
+              warehouseId: secondWarehouse.id,
+              productId: reportProduct.id,
+              documentType: "OPENING_BALANCE",
+              documentId: randomUUID(),
+              movementType: "OPENING_BALANCE",
+              quantityDelta: "7",
+              costPerBaseUnit: "9.0000",
+              costCurrency: "NGN",
+            },
+          );
+          await prisma.membershipWarehouseGrant.create({
+            data: {
+              organizationId: contextA.organizationId,
+              userId: ownerA.userId,
+              warehouseId: warehouse.id,
+            },
+          });
+          const limitedContext = {
+            ...contextA,
+            role: "WAREHOUSE_CLERK",
+          };
+          const limitedSummary = await reports.inventorySummary(
+            limitedContext,
+            { page: 1, page_size: 25, product_id: reportProduct.id },
+          );
+          assert.equal(limitedSummary.total, 1);
+          assert.equal(limitedSummary.totals.on_hand.toString(), "20");
+          assert.equal(limitedSummary.data[0].warehouse_id, warehouse.id);
+          await assert.rejects(
+            reports.movements(limitedContext, {
+              page: 1,
+              page_size: 25,
+              warehouse_id: secondWarehouse.id,
+            }),
+            (error) => error.getStatus() === 404,
+          );
+          await prisma.membershipWarehouseGrant.deleteMany({
+            where: {
+              organizationId: contextA.organizationId,
+              userId: ownerA.userId,
+              warehouseId: warehouse.id,
+            },
+          });
         },
       );
 
@@ -846,7 +1064,12 @@ test(
                 warehouseId: warehouse.id,
                 currency: "NGN",
                 lines: [
-                  { productId: product.id, unitId: unit.id, quantity: "1", unitPrice: "1" },
+                  {
+                    productId: product.id,
+                    unitId: unit.id,
+                    quantity: "1",
+                    unitPrice: "1",
+                  },
                 ],
               },
               `archived-customer-${randomUUID()}`,

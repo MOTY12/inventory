@@ -33,6 +33,6 @@ import { ReorderingService } from "./reordering/reordering.service";
     RoleCapabilityGuard,
     WarehouseScopeGuard,
   ],
-  exports: [InventoryPostingService],
+  exports: [InventoryPostingService, ReorderingService],
 })
 export class InventoryModule {}

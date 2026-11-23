@@ -33,6 +33,8 @@ export class ReorderRuleListQueryDto extends PaginationQueryDto {
 
 export class LowStockListQueryDto extends PaginationQueryDto {
   @IsOptional() @IsUUID() warehouseId?: string;
+  @IsOptional() @IsUUID() productId?: string;
+  @IsOptional() @IsUUID() categoryId?: string;
   @IsOptional() @IsString() @MaxLength(100) q?: string;
   @IsOptional() @IsString() @Matches(/^(OPEN|RESOLVED)$/) status?:
     "OPEN" | "RESOLVED";

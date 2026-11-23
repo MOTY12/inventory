@@ -244,6 +244,22 @@ test("running API responds with request IDs and Swagger document", async () => {
     const unauthenticated = await fetch(`${baseUrl}/api/v1/auth/me`);
     assert.equal(unauthenticated.status, 401);
 
+    for (const report of [
+      "inventory-summary",
+      "valuation",
+      "movements",
+      "low-stock",
+    ]) {
+      const response = await fetch(
+        `${baseUrl}/api/v1/organizations/current/reports/${report}`,
+      );
+      assert.equal(
+        response.status,
+        401,
+        `${report} must require a bearer token`,
+      );
+    }
+
     const invalidRegistration = await fetch(`${baseUrl}/api/v1/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -295,6 +311,12 @@ test("running API responds with request IDs and Swagger document", async () => {
     assert.ok(spec.paths["/api/v1/auth/refresh"]);
     assert.ok(spec.paths["/api/v1/auth/forgot-password"]);
     assert.ok(spec.paths["/api/v1/auth/reset-password"]);
+    assert.ok(
+      spec.paths["/api/v1/organizations/current/reports/inventory-summary"],
+    );
+    assert.ok(spec.paths["/api/v1/organizations/current/reports/valuation"]);
+    assert.ok(spec.paths["/api/v1/organizations/current/reports/movements"]);
+    assert.ok(spec.paths["/api/v1/organizations/current/reports/low-stock"]);
 
     for (
       let attempt = 0;
