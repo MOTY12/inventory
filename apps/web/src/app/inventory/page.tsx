@@ -8,7 +8,12 @@ import {
 } from "../../features/auth/session-provider";
 
 type Warehouse = { id: string; name: string; code: string };
-type Product = { id: string; name: string; sku: string };
+type Product = {
+  id: string;
+  name: string;
+  sku: string;
+  baseUnit: { code: string; name: string };
+};
 type Adjustment = {
   id: string;
   productId: string;
@@ -25,6 +30,18 @@ type Movement = {
   documentType: string;
   occurredAt: string;
   product: { name: string; sku: string };
+};
+type Balance = {
+  productId: string;
+  onHand: string;
+  reserved: string;
+  inTransit: string;
+  product: {
+    id: string;
+    name: string;
+    sku: string;
+    baseUnit: { code: string; name: string };
+  };
 };
 type Page<T> = { data: T[]; total: number };
 
@@ -46,6 +63,9 @@ function InventoryManager() {
   const [products, setProducts] = useState<Product[]>([]);
   const [adjustments, setAdjustments] = useState<Adjustment[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
+  const [balances, setBalances] = useState<Balance[]>([]);
+  const [balanceTotal, setBalanceTotal] = useState(0);
+  const [balancePage, setBalancePage] = useState(1);
   const [warehouseId, setWarehouseId] = useState("");
   const [productId, setProductId] = useState("");
   const [countedQuantity, setCountedQuantity] = useState("");
@@ -54,9 +74,28 @@ function InventoryManager() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const canWrite = [
+    "OWNER",
+    "ADMIN",
+    "MANAGER",
+    "BUYER",
+    "WAREHOUSE_CLERK",
+  ].includes(organization?.role ?? "");
+  const selectedProduct = products.find((product) => product.id === productId);
 
   const reload = useCallback(async () => {
-    if (!organization) return;
+    if (!organization) {
+      setWarehouses([]);
+      setProducts([]);
+      setAdjustments([]);
+      setMovements([]);
+      setBalances([]);
+      setBalanceTotal(0);
+      setWarehouseId("");
+      setProductId("");
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -70,26 +109,37 @@ function InventoryManager() {
       ]);
       setWarehouses(locations.data);
       setProducts(catalog.data);
-      const selected = warehouseId || locations.data[0]?.id || "";
+      const selected = locations.data.some(
+        (warehouse) => warehouse.id === warehouseId,
+      )
+        ? warehouseId
+        : locations.data[0]?.id || "";
       setWarehouseId(selected);
-      setAdjustments(
-        selected
-          ? (
-              await authenticatedRequest<Page<Adjustment>>(
-                `/inventory/warehouses/${selected}/adjustments?page=1&page_size=100`,
-              )
-            ).data
-          : [],
+      setProductId((current) =>
+        catalog.data.some((product) => product.id === current) ? current : "",
       );
-      setMovements(
-        selected
-          ? (
-              await authenticatedRequest<Page<Movement>>(
-                `/inventory/warehouses/${selected}/movements?page=1&page_size=50`,
-              )
-            ).data
-          : [],
-      );
+      if (selected) {
+        const [counts, movementResult, balanceResult] = await Promise.all([
+          authenticatedRequest<Page<Adjustment>>(
+            `/inventory/warehouses/${selected}/adjustments?page=1&page_size=100`,
+          ),
+          authenticatedRequest<Page<Movement>>(
+            `/inventory/warehouses/${selected}/movements?page=1&page_size=50`,
+          ),
+          authenticatedRequest<Page<Balance>>(
+            `/inventory/warehouses/${selected}/balances?page=${balancePage}&page_size=100`,
+          ),
+        ]);
+        setAdjustments(counts.data);
+        setMovements(movementResult.data);
+        setBalances(balanceResult.data);
+        setBalanceTotal(balanceResult.total);
+      } else {
+        setAdjustments([]);
+        setMovements([]);
+        setBalances([]);
+        setBalanceTotal(0);
+      }
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Could not load inventory.",
@@ -97,7 +147,7 @@ function InventoryManager() {
     } finally {
       setLoading(false);
     }
-  }, [authenticatedRequest, organization, warehouseId]);
+  }, [authenticatedRequest, balancePage, organization, warehouseId]);
 
   useEffect(() => {
     void Promise.resolve().then(reload);
@@ -131,6 +181,13 @@ function InventoryManager() {
   }
 
   async function postCount(id: string) {
+    if (
+      !window.confirm(
+        "Post this count variance to on-hand stock? This creates an immutable inventory movement.",
+      )
+    ) {
+      return;
+    }
     setBusy(true);
     setError("");
     setNotice("");
@@ -175,75 +232,215 @@ function InventoryManager() {
         </p>
       )}
       {error && (
-        <p className="catalog-error" role="alert">
-          {error}
-        </p>
+        <div className="catalog-error" role="alert">
+          <span>{error}</span>
+          <button
+            className="catalog-text-button"
+            onClick={() => void reload()}
+            type="button"
+          >
+            Try again
+          </button>
+        </div>
       )}
       <section className="product-editor">
-        <label>
-          Warehouse
-          <select
-            value={warehouseId}
-            onChange={(e) => setWarehouseId(e.target.value)}
-          >
-            {warehouses.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name} ({w.code})
-              </option>
-            ))}
-          </select>
-        </label>
-        <form onSubmit={createCount} className="inventory-count-form">
-          <h2>Record a physical count</h2>
-          <label>
-            Product
-            <select
-              required
-              value={productId}
-              onChange={(e) => setProductId(e.target.value)}
-            >
-              <option value="">Choose a product</option>
-              {products
-                .filter((p) => p.id)
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} · {p.sku}
+        {loading ? (
+          <p className="catalog-loading" role="status">
+            Loading warehouse inventory…
+          </p>
+        ) : warehouses.length === 0 ? (
+          <div className="catalog-empty">
+            <h2>Add a warehouse to begin counting stock</h2>
+            <p>Inventory counts and balances are recorded by warehouse.</p>
+            <Link className="catalog-secondary-link" href="/locations">
+              Set up a warehouse
+            </Link>
+          </div>
+        ) : (
+          <>
+            <label>
+              Warehouse
+              <select
+                value={warehouseId}
+                onChange={(event) => {
+                  setBalancePage(1);
+                  setWarehouseId(event.target.value);
+                }}
+              >
+                {warehouses.map((warehouse) => (
+                  <option key={warehouse.id} value={warehouse.id}>
+                    {warehouse.name} ({warehouse.code})
                   </option>
                 ))}
-            </select>
-          </label>
-          <label>
-            Counted quantity
-            <input
-              required
-              inputMode="decimal"
-              pattern="(?:0|[1-9][0-9]*)(?:\.[0-9]{1,6})?"
-              value={countedQuantity}
-              onChange={(e) => setCountedQuantity(e.target.value)}
-            />
-          </label>
-          <label>
-            Reason
-            <textarea
-              required
-              minLength={3}
-              maxLength={500}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </label>
-          <button
-            className="catalog-primary-button"
-            disabled={busy || !warehouseId || !products.length}
-          >
-            {busy ? "Saving…" : "Save count"}
-          </button>
-        </form>
+              </select>
+            </label>
+            {canWrite ? (
+              <form
+                onSubmit={createCount}
+                className="inventory-count-form"
+                aria-labelledby="count-form-title"
+              >
+                <h2 id="count-form-title">Record a physical count</h2>
+                <p className="catalog-form-hint">
+                  A draft captures the current system quantity. Posting writes
+                  only the variance to the stock ledger.
+                </p>
+                <label>
+                  Product
+                  <select
+                    required
+                    value={productId}
+                    onChange={(event) => setProductId(event.target.value)}
+                  >
+                    <option value="">Choose a product</option>
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} · {product.sku} · {product.baseUnit.code}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Counted quantity
+                  <span className="inventory-field-hint">
+                    {selectedProduct
+                      ? `Enter ${selectedProduct.baseUnit.name} (${selectedProduct.baseUnit.code})`
+                      : "Select a product to see its base unit"}
+                  </span>
+                  <input
+                    required
+                    inputMode="decimal"
+                    pattern="(?:0|[1-9][0-9]*)(?:\.[0-9]{1,6})?"
+                    value={countedQuantity}
+                    onChange={(event) => setCountedQuantity(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Reason
+                  <textarea
+                    required
+                    minLength={3}
+                    maxLength={500}
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                    placeholder="For example: monthly shelf count"
+                  />
+                </label>
+                <button
+                  className="catalog-primary-button"
+                  disabled={busy || !warehouseId || !products.length}
+                  type="submit"
+                >
+                  {busy ? "Saving…" : "Save count draft"}
+                </button>
+              </form>
+            ) : (
+              <p className="catalog-readonly">
+                You have view-only inventory access. Contact an organization
+                administrator if you need to record counts.
+              </p>
+            )}
+          </>
+        )}
       </section>
+      {warehouseId && (
+        <section
+          className="inventory-count-list"
+          aria-labelledby="balance-title"
+        >
+          <div className="inventory-section-heading">
+            <div>
+              <h2 id="balance-title">Warehouse stock overview</h2>
+              <p>
+                On hand includes reserved stock. Available is on hand minus
+                reservations; in-transit stock is separate.
+              </p>
+            </div>
+            <span>{balanceTotal} product balances</span>
+          </div>
+          {loading ? (
+            <p role="status">Loading balances…</p>
+          ) : balances.length === 0 ? (
+            <div className="empty-state">
+              <strong>No stock balances in this warehouse</strong>
+              <p>Receive stock or post an opening count to create balances.</p>
+            </div>
+          ) : (
+            <>
+              <div className="table-scroll">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th>SKU</th>
+                      <th>On hand</th>
+                      <th>Reserved</th>
+                      <th>Available</th>
+                      <th>In transit</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {balances.map((balance) => (
+                      <tr key={balance.productId}>
+                        <td>
+                          <Link href={`/products/${balance.product.id}`}>
+                            {balance.product.name}
+                          </Link>
+                          <small>{balance.product.baseUnit.code}</small>
+                        </td>
+                        <td>{balance.product.sku}</td>
+                        <td>{balance.onHand}</td>
+                        <td>{balance.reserved}</td>
+                        <td>
+                          {subtractQuantities(balance.onHand, balance.reserved)}
+                        </td>
+                        <td>{balance.inTransit}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {balanceTotal > 100 && (
+                <nav
+                  aria-label="Warehouse balance pages"
+                  className="product-pagination"
+                >
+                  <span>
+                    Showing {(balancePage - 1) * 100 + 1}–
+                    {Math.min(balancePage * 100, balanceTotal)} of{" "}
+                    {balanceTotal}
+                  </span>
+                  <div>
+                    <button
+                      className="catalog-text-button"
+                      disabled={balancePage <= 1}
+                      onClick={() => setBalancePage((page) => page - 1)}
+                      type="button"
+                    >
+                      Previous
+                    </button>
+                    <span>
+                      Page {balancePage} of {Math.ceil(balanceTotal / 100)}
+                    </span>
+                    <button
+                      className="catalog-text-button"
+                      disabled={balancePage >= Math.ceil(balanceTotal / 100)}
+                      onClick={() => setBalancePage((page) => page + 1)}
+                      type="button"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </nav>
+              )}
+            </>
+          )}
+        </section>
+      )}
       <section className="inventory-count-list">
         <h2>Count history</h2>
         {loading ? (
-          <p>Loading counts…</p>
+          <p role="status">Loading counts…</p>
         ) : adjustments.length === 0 ? (
           <p>No counts recorded for this warehouse.</p>
         ) : (
@@ -263,6 +460,7 @@ function InventoryManager() {
                   <small>
                     System {a.systemQuantity} · Counted {a.countedQuantity} ·
                     Variance {variance}
+                    {product ? ` ${product.baseUnit.code}` : ""}
                   </small>
                 </div>
                 <div>
@@ -271,7 +469,7 @@ function InventoryManager() {
                   >
                     {a.status}
                   </span>
-                  {a.status === "DRAFT" && (
+                  {a.status === "DRAFT" && canWrite && (
                     <button
                       type="button"
                       disabled={busy}
@@ -289,7 +487,7 @@ function InventoryManager() {
       <section className="inventory-count-list">
         <h2>Stock movement history</h2>
         {loading ? (
-          <p>Loading movements…</p>
+          <p role="status">Loading movements…</p>
         ) : movements.length === 0 ? (
           <p>No stock movements recorded for this warehouse.</p>
         ) : (

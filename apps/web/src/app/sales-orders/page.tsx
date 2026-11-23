@@ -82,9 +82,16 @@ export default function SalesOrdersPage() {
         )}
       </header>
       {error && (
-        <p className="error-banner" role="alert">
+        <div className="error-banner" role="alert">
           {error}
-        </p>
+          <button
+            className="button-link"
+            onClick={() => void load()}
+            type="button"
+          >
+            Try again
+          </button>
+        </div>
       )}
       <section className="panel">
         <div className="table-toolbar">
@@ -118,11 +125,21 @@ export default function SalesOrdersPage() {
           </label>
         </div>
         {busy ? (
-          <p className="muted">Loading sales orders…</p>
+          <p className="muted" role="status">
+            Loading sales orders…
+          </p>
         ) : rows.length === 0 ? (
           <div className="empty-state">
-            <h2>No sales orders yet</h2>
-            <p>Create an order to reserve available stock for a customer.</p>
+            <h2>
+              {query || status
+                ? "No matching sales orders"
+                : "No sales orders yet"}
+            </h2>
+            <p>
+              {query || status
+                ? "Change the search or status filter to see other orders."
+                : "Create an order to reserve available stock for a customer."}
+            </p>
             {canWrite && (
               <Link href="/sales-orders/new" className="button button-primary">
                 Create sales order
@@ -150,6 +167,12 @@ export default function SalesOrdersPage() {
                       quantityUnits(line.fulfilledQuantity) >=
                       quantityUnits(line.orderedQuantity),
                   ).length;
+                  const partiallyFulfilledLines = row.lines.filter(
+                    (line) =>
+                      quantityUnits(line.fulfilledQuantity) > BigInt(0) &&
+                      quantityUnits(line.fulfilledQuantity) <
+                        quantityUnits(line.orderedQuantity),
+                  ).length;
                   return (
                     <tr key={row.id}>
                       <td>
@@ -164,7 +187,12 @@ export default function SalesOrdersPage() {
                         {row.currency} {row.total}
                       </td>
                       <td>
-                        {fulfilledLines} / {row.lines.length} lines
+                        <strong>
+                          {fulfilledLines} of {row.lines.length} lines complete
+                        </strong>
+                        <small>
+                          {partiallyFulfilledLines} partially fulfilled
+                        </small>
                       </td>
                       <td>
                         <span className="status-badge">
@@ -178,7 +206,7 @@ export default function SalesOrdersPage() {
             </table>
           </div>
         )}
-        <div className="pagination-row">
+        <nav className="pagination-row" aria-label="Sales order pages">
           <span>
             {total} order{total === 1 ? "" : "s"}
           </span>
@@ -186,6 +214,7 @@ export default function SalesOrdersPage() {
             <button
               className="button button-secondary"
               disabled={page <= 1 || busy}
+              type="button"
               onClick={() => setPage((value) => value - 1)}
             >
               Previous
@@ -194,12 +223,13 @@ export default function SalesOrdersPage() {
             <button
               className="button button-secondary"
               disabled={page * 20 >= total || busy}
+              type="button"
               onClick={() => setPage((value) => value + 1)}
             >
               Next
             </button>
           </div>
-        </div>
+        </nav>
       </section>
     </main>
   );

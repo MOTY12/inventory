@@ -122,78 +122,88 @@ function ProductDetails() {
         </p>
       )}
       {error && (
-        <p className="catalog-error" role="alert">
-          {error}
-        </p>
+        <div className="catalog-error" role="alert">
+          <span>{error}</span>
+          <button
+            className="catalog-text-button"
+            onClick={() => void reload()}
+            type="button"
+          >
+            Try again
+          </button>
+        </div>
       )}
       {loading ? (
-        <div className="catalog-loading">Loading product…</div>
-      ) : (
-        product && (
-          <>
-            <section className="product-detail-card">
+        <div className="catalog-loading" role="status">
+          Loading product…
+        </div>
+      ) : product ? (
+        <>
+          <section className="product-detail-card">
+            <div>
+              <span className="catalog-eyebrow">
+                {product.status} ·{" "}
+                {product.type === "STOCKED" ? "STOCKED" : "NON-STOCK"}
+              </span>
+              <h2>{product.name}</h2>
+              <p>{product.description || "No description"}</p>
+            </div>
+            <dl>
               <div>
-                <span className="catalog-eyebrow">
-                  {product.status} ·{" "}
-                  {product.type === "STOCKED" ? "STOCKED" : "NON-STOCK"}
-                </span>
-                <h2>{product.name}</h2>
-                <p>{product.description || "No description"}</p>
+                <dt>SKU</dt>
+                <dd>{product.sku}</dd>
               </div>
-              <dl>
-                <div>
-                  <dt>SKU</dt>
-                  <dd>{product.sku}</dd>
-                </div>
-                <div>
-                  <dt>Barcode</dt>
-                  <dd>{product.barcode || "—"}</dd>
-                </div>
-                <div>
-                  <dt>Category</dt>
-                  <dd>{product.category?.name || "Uncategorized"}</dd>
-                </div>
-                <div>
-                  <dt>Inventory tracking</dt>
-                  <dd>{product.trackInventory ? "Enabled" : "Disabled"}</dd>
-                </div>
-              </dl>
-            </section>
-            <section className="product-list-panel">
-              <div className="catalog-panel-heading">
-                <div>
-                  <span className="catalog-eyebrow">UNITS OF MEASURE</span>
-                  <h2>Conversions</h2>
-                  <p>
-                    Each factor states how many base units are in one selected
-                    unit.
-                  </p>
-                </div>
+              <div>
+                <dt>Barcode</dt>
+                <dd>{product.barcode || "—"}</dd>
               </div>
-              <div className="conversion-base">
-                <strong>
-                  {product.baseUnit.name} ({product.baseUnit.code})
-                </strong>
-                <span>Base unit · 1 {product.baseUnit.code} = 1 base unit</span>
+              <div>
+                <dt>Category</dt>
+                <dd>{product.category?.name || "Uncategorized"}</dd>
               </div>
-              <ul className="conversion-list">
-                {product.unitConversions.map((c) => (
-                  <li key={c.unitId}>
-                    <strong>
-                      {c.unit.name} ({c.unit.code})
-                    </strong>
-                    <span>
-                      1 {c.unit.code} = {c.baseQuantity} {product.baseUnit.code}
-                    </span>
-                  </li>
-                ))}
-                {product.unitConversions.length === 0 && (
-                  <li className="conversion-empty">
-                    No alternate units have been defined.
-                  </li>
-                )}
-              </ul>
-              {canWrite && product.status === "ACTIVE" && (
+              <div>
+                <dt>Inventory tracking</dt>
+                <dd>{product.trackInventory ? "Enabled" : "Disabled"}</dd>
+              </div>
+            </dl>
+          </section>
+          <section className="product-list-panel">
+            <div className="catalog-panel-heading">
+              <div>
+                <span className="catalog-eyebrow">UNITS OF MEASURE</span>
+                <h2>Conversions</h2>
+                <p>
+                  Each factor states how many base units are in one selected
+                  unit.
+                </p>
+              </div>
+            </div>
+            <div className="conversion-base">
+              <strong>
+                {product.baseUnit.name} ({product.baseUnit.code})
+              </strong>
+              <span>Base unit · 1 {product.baseUnit.code} = 1 base unit</span>
+            </div>
+            <ul className="conversion-list">
+              {product.unitConversions.map((c) => (
+                <li key={c.unitId}>
+                  <strong>
+                    {c.unit.name} ({c.unit.code})
+                  </strong>
+                  <span>
+                    1 {c.unit.code} = {c.baseQuantity} {product.baseUnit.code}
+                  </span>
+                </li>
+              ))}
+              {product.unitConversions.length === 0 && (
+                <li className="conversion-empty">
+                  No alternate units have been defined.
+                </li>
+              )}
+            </ul>
+            {canWrite &&
+              product.status === "ACTIVE" &&
+              availableUnits.length > 0 && (
                 <form className="conversion-form" onSubmit={addConversion}>
                   <h3>Add product unit conversion</h3>
                   <div className="product-form-grid">
@@ -238,9 +248,37 @@ function ProductDetails() {
                   </button>
                 </form>
               )}
-            </section>
-          </>
-        )
+            {canWrite &&
+              product.status === "ACTIVE" &&
+              availableUnits.length === 0 && (
+                <p className="catalog-form-hint" role="status">
+                  Every active unit is already configured for this product.
+                </p>
+              )}
+            {product.status !== "ACTIVE" && (
+              <p className="catalog-readonly">
+                Archived products are read-only. Restore the product before
+                changing its unit setup.
+              </p>
+            )}
+            {!canWrite && product.status === "ACTIVE" && (
+              <p className="catalog-readonly">
+                You have view-only catalog access.
+              </p>
+            )}
+          </section>
+        </>
+      ) : (
+        <section className="catalog-empty" aria-live="polite">
+          <h2>Product unavailable</h2>
+          <p>
+            This product could not be found in the active workspace or you no
+            longer have access to it.
+          </p>
+          <Link className="catalog-secondary-link" href="/products">
+            Return to products
+          </Link>
+        </section>
       )}
     </main>
   );

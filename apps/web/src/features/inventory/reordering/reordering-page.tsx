@@ -65,9 +65,13 @@ export function ReorderingPage({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const canWrite = ["OWNER", "ADMIN", "MANAGER", "BUYER"].includes(
-    organization?.role ?? "",
-  );
+  const canWrite = [
+    "OWNER",
+    "ADMIN",
+    "MANAGER",
+    "BUYER",
+    "WAREHOUSE_CLERK",
+  ].includes(organization?.role ?? "");
 
   const load = useCallback(async () => {
     if (!organization) {
@@ -173,6 +177,11 @@ export function ReorderingPage({
         { status: rule.status === "ACTIVE" ? "PAUSED" : "ACTIVE" },
         "PATCH",
       );
+      setNotice(
+        rule.status === "ACTIVE"
+          ? "Reorder rule paused."
+          : "Reorder rule enabled.",
+      );
       await load();
     } catch (e) {
       setError(
@@ -224,11 +233,12 @@ export function ReorderingPage({
           <Link className="catalog-secondary-link" href="/inventory/low-stock">
             Low stock
           </Link>
-          {alertsOnly && (
+          {alertsOnly && canWrite && (
             <button
               className="button-secondary"
               disabled={busy}
               onClick={evaluate}
+              type="button"
             >
               Evaluate now
             </button>
@@ -278,7 +288,7 @@ export function ReorderingPage({
             </span>
           </div>
           {loading ? (
-            <p>Loading low-stock alerts…</p>
+            <p role="status">Loading low-stock alerts…</p>
           ) : alerts.length === 0 ? (
             <p className="empty-state">
               No open low-stock alerts. Rules are evaluated every five minutes.
@@ -326,7 +336,7 @@ export function ReorderingPage({
             Available = on hand − reserved. Incoming quantities are excluded; no
             purchase order is created automatically.
           </p>
-          <div className="catalog-actions" aria-label="Low-stock pagination">
+          <nav className="catalog-actions" aria-label="Low-stock pagination">
             <button
               className="button-secondary"
               disabled={page <= 1 || loading}
@@ -344,7 +354,7 @@ export function ReorderingPage({
             >
               Next
             </button>
-          </div>
+          </nav>
         </section>
       ) : (
         <>
@@ -453,7 +463,7 @@ export function ReorderingPage({
               <span>{total} rules</span>
             </div>
             {loading ? (
-              <p>Loading reorder rules…</p>
+              <p role="status">Loading reorder rules…</p>
             ) : rules.length === 0 ? (
               <p className="empty-state">
                 No reorder rules yet. Create one to track a product’s available
@@ -514,7 +524,7 @@ export function ReorderingPage({
                 </table>
               </div>
             )}
-            <div
+            <nav
               className="catalog-actions"
               aria-label="Reorder rule pagination"
             >
@@ -535,7 +545,7 @@ export function ReorderingPage({
               >
                 Next
               </button>
-            </div>
+            </nav>
           </section>
         </>
       )}

@@ -200,9 +200,16 @@ export default function PurchaseOrdersPage() {
         </p>
       )}
       {error && (
-        <p className="catalog-error" role="alert">
+        <div className="catalog-error" role="alert">
           {error}
-        </p>
+          <button
+            className="catalog-text-button"
+            onClick={() => void load()}
+            type="button"
+          >
+            Try again
+          </button>
+        </div>
       )}
       {!organization ? (
         <section className="catalog-empty">
@@ -262,6 +269,7 @@ export default function PurchaseOrdersPage() {
                     required
                     maxLength={3}
                     minLength={3}
+                    pattern="[A-Z]{3}"
                     value={currency}
                     onChange={(event) =>
                       setCurrency(event.target.value.toUpperCase())
@@ -451,11 +459,19 @@ export default function PurchaseOrdersPage() {
               </label>
             </div>
             {loading ? (
-              <p>Loading purchase orders…</p>
+              <p role="status">Loading purchase orders…</p>
             ) : orders.length === 0 ? (
               <div className="catalog-empty">
-                <h3>No purchase orders yet</h3>
-                <p>New drafts will appear here.</p>
+                <h3>
+                  {query || status
+                    ? "No matching purchase orders"
+                    : "No purchase orders yet"}
+                </h3>
+                <p>
+                  {query || status
+                    ? "Change the search or status filter to see other orders."
+                    : "New drafts will appear here."}
+                </p>
               </div>
             ) : (
               <div className="catalog-table-wrap">
@@ -504,7 +520,7 @@ export default function PurchaseOrdersPage() {
                 </table>
               </div>
             )}
-            <div className="po-pagination" aria-label="Purchase order pages">
+            <nav className="po-pagination" aria-label="Purchase order pages">
               <span>
                 {totalOrders} orders · page {page} of{" "}
                 {Math.max(1, Math.ceil(totalOrders / 20))}
@@ -527,7 +543,7 @@ export default function PurchaseOrdersPage() {
                   Next
                 </button>
               </div>
-            </div>
+            </nav>
           </section>
         </>
       )}

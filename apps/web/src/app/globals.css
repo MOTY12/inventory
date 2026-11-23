@@ -3447,6 +3447,17 @@ textarea:focus-visible {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+.catalog-error:has(.catalog-text-button) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.catalog-error .catalog-text-button {
+  flex: 0 0 auto;
+  color: var(--status-danger);
+  text-decoration: underline;
+}
 .dashboard-stock-context {
   margin: -12px 0 0;
   color: var(--text-secondary);

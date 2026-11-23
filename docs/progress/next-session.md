@@ -5,42 +5,45 @@
 ## Repository state
 
 - Workspace: `/Users/newuser/Documents/GitHub/inventory`
-- Branch: `develop`; starting HEAD for this session: `ae44aea` (`UPDARE REPORT`). Worktree was clean at start. No changes from other authors were present.
-- Roadmap: **28/47 complete** by the task ledger. REPORT-001 is complete; INV-010 remains IN_PROGRESS. This UI/UX redesign is tracked as session work, not a new roadmap task; it does not change the roadmap count.
-- No schema, API, database, or migration changes were made in this redesign.
-- UI commits: `33fa0a6` (shared shell/dashboard), `960912d` (checkpoint), and `f041826` (product list/pagination). No push or production operation occurred.
+- Branch: `develop`; this redesign session started at `ae44aea` with a clean worktree. No user changes were overwritten.
+- Roadmap: **28/47 complete** according to the existing task ledger. REPORT-001 is complete; INV-010 remains IN_PROGRESS. UI redesign work is not a roadmap task and does not change the count.
+- No API, database, schema, or migration changes were made. Database/migration status was not checked in this session.
+- Prior UI commits: `33fa0a6` (shared design system), `960912d` (checkpoint), `f041826` (product list), `0e42502` (product checkpoint). This session’s module-pass changes are pending commit after final diff review. No push or deploy.
 
-## Completed this session: shared shell and dashboard milestone
+## Completed in this session
 
-- Grouped existing routes under Overview, Catalog, Inventory, Purchasing, Sales, Reports, and Administration. Fixed `/inventory` active-state overlap with nested inventory routes.
-- Moved organization selection to the top navigation and added a keyboard-operable account menu with identity, role, and sign-out action. Existing organization switch behavior and session APIs are retained.
-- Added a centralized set of enterprise visual tokens and shared responsive styling for shell navigation, page headers, cards, forms, tables, controls, status colors, and small-screen layouts. This applies the restrained Inventory Valuation visual direction across existing pages without replacing their API integrations or business logic.
-- Dashboard now reads inventory value by currency from the existing inventory summary API, counts pending purchase orders by submitted/partially received status, counts pending sales orders by confirmed/partially fulfilled status, and uses the warehouse API's total for its count. The dashboard avoids requesting purchasing or sales data from roles lacking that area’s access.
-- Products page review fixed pagination being repeated per row, uses the filtered total in its count, announces loading state, and shows default cost/sale price for product-edit roles. No API or authorization policy changed.
-- This is an early design-system milestone. Individual page-specific layout and workflow review is still outstanding for Catalog/Products detail, Inventory, Purchasing, Sales, Reports, and Administration.
+- Reorganized the shell navigation by real product area, moved organization selection to the topbar, added an account popover with escape/focus handling, and established shared enterprise design tokens and responsive styles based on the Inventory Valuation page.
+- Dashboard uses existing APIs for valuation grouped by currency, pending purchasing/sales counts, active warehouse total, low-stock alerts, movements and balances. It avoids calls to sales or purchasing endpoints when the membership role lacks that capability.
+- Products list: moved repeated per-row pagination to one accessible navigation footer, showed the actual filtered result count and default cost/sale prices for roles that already edit products, and announced loading state.
+- Product detail: retry/unavailable states, archived and view-only messaging, and a useful no-available-conversions state.
+- Inventory counts: tenant/warehouse-scoped balance view distinguishes on-hand, reserved, available and in-transit quantities; exact scaled-decimal availability; pagination beyond 100 records; role-gated adjustment actions; posting confirmation; and stale warehouse/product selection reset on organization changes.
+- Reorder rules/alerts: role-gated evaluation and write controls, including warehouse-clerk access already allowed by server RBAC; loading is announced.
+- Transfers: role-gated write actions, exact decimal receipt arithmetic, input bounds, stable retry key for an identical receipt request, dispatch/cancel confirmations, and list loading/filter-aware empty/pagination states. Workspace changes reset selections to IDs available in the active organization.
+- Purchase orders: loading, retry, filter-aware empty state, pagination navigation, and uppercase three-letter currency validation.
+- Sales orders: loading/retry states, filter-aware empty state, line-completion vs partial fulfillment display, named pagination navigation.
+- No backend authorization or business rules were changed. Shared CSS restyles all current modules; page-specific review remains for Catalog, supplier/customer details, receiving/fulfillment details, Reports and Administration.
 
-## Verification performed
+## Verification
 
 - `npm run typecheck`: passed.
-- `npm run lint`: passed with no remaining warnings after the permission-aware dashboard update.
+- `npm run lint`: passed without warnings.
 - `npm run format:check`: passed.
 - `git diff --check`: passed.
-- `npm test`: **41 passed, 0 failed, 2 skipped**. Both skips are opt-in PostgreSQL integration suites; database acceptance was not run in this UI task. Initial sandbox attempt failed on local ephemeral port bind (`EPERM`); rerun with loopback permission passed.
-- `npm run build --workspace=@inventory/web`: passed with Next.js Webpack compiler; build listed all current static and dynamic frontend routes.
-- No interactive browser or responsive visual review was performed. No browser-control tool/runtime was available in this session; do not claim visual UAT. No services or database were started or modified.
-- The build/typecheck generated changes to `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo`; restore these generated-only files before finalizing, then recheck status.
+- `npm test`: 41 passed, 0 failed, 2 opt-in PostgreSQL suites skipped. A sandboxed attempt was blocked by `listen EPERM` in the local API contract test; rerun with loopback binding permission passed. The skipped PostgreSQL suites were not treated as passing.
+- `npm run build --workspace=@inventory/web`: passed using Next.js Webpack. Build generated all current frontend routes.
+- No interactive browser, responsive visual, authenticated runtime API, PostgreSQL integration, or migration verification was performed in this UI pass. Do not claim visual UAT.
+- Build/typecheck-generated edits to `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo` were restored; verify they remain clean.
 
 ## Exact next steps
 
-1. Confirm `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo` are clean after their generated changes were restored; start with the committed Product detail and Catalog pages.
-2. Continue the redesign at Product detail and Catalog: review detail/create/edit/archive and category/unit/conversion workflows, improve hierarchy and consistency with the shared system, and preserve API behavior. Then review Inventory, Purchasing, Sales, Reports, and Administration in that order.
-3. If browser control becomes available, run responsive visual review at desktop, tablet, and mobile widths. Verify organization switching, account menu, active links, and dashboard metrics for OWNER, BUYER, and SALES roles.
-4. Do not count this redesign as a roadmap task. Keep INV-010 IN_PROGRESS until its barcode normalization/repeat-scan and Enter-key acceptance is verified; its camera capability question remains open.
-5. Run typecheck, lint, formatting, relevant tests, and the web production build after the next page milestone. Record any database/browser tests that are unavailable as pending, not passing.
-6. Recheck `git status`/`git log` after page-specific changes. Commit only verified, focused work; do not push.
+1. Inspect the complete current diff and `git status`; commit only the verified UI source and this checkpoint. Do not push.
+2. Continue page-by-page at Catalog, then supplier/customer directories and details, purchase-order details/receiving, sales-order details/picking/fulfillment, Reports, and Organizations/Locations administration. Preserve existing API calls and RBAC.
+3. If browser control becomes available, run desktop/tablet/mobile visual review. Exercise organization switching, role-specific navigation/actions, product conversion, count posting, transfer dispatch/receipt, goods receiving, and sales fulfillment. No browser tool/runtime was available in this session.
+4. Keep INV-010 IN_PROGRESS pending barcode repeat-scan/Enter verification and camera feasibility. Do not count UI work as roadmap completion.
+5. After the next page milestone, run typecheck, lint, formatting, relevant tests and the web production build; document unavailable database/browser checks as pending.
 
 ## Remaining limits and decisions
 
-- No authenticated browser workflow, responsive visual acceptance, or runtime dashboard endpoint check was performed.
-- PostgreSQL and migration state were not checked during this UI session; the prior checkpoint reports 19 migrations current, but this session did not reverify that state.
-- Dependency advisory audit remains unknown because registry access failed in the prior session. Production email, distributed rate limiting, and product/security/compliance decisions remain tracked in `docs/progress/decisions.md`.
+- No live workflow was exercised against a database or authenticated browser. Existing test suite contains no frontend interaction coverage; passing checks prove compile/build and backend tests, not UI behavior.
+- Full visual consistency is unverified because browser inspection was unavailable. Global styling applies across pages, but several page families still require focused review.
+- npm dependency audit remains unknown because registry access failed previously. Existing production-hardening decisions remain in `docs/progress/decisions.md`.
