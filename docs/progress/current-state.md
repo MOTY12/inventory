@@ -14,8 +14,9 @@
 - Reorganized the workspace navigation into existing product areas, moved organization selection to the topbar, and added an account menu with identity, role, and sign-out. Organization switching and session behavior remain on their existing APIs.
 - Added centralized design tokens and responsive shared styles for the app shell, page headings, cards, forms, tables, controls, and semantic status colors. These styles apply across the current modules. Individual page-by-page workflow redesign remains incomplete.
 - Dashboard reads inventory value grouped by currency, exact pending purchase/sales order counts for accessible areas, and warehouse total from existing APIs. Purchasing and sales requests respect the active role so restricted endpoints do not fail the entire dashboard.
-- Verification: `npm run typecheck`, `npm run lint`, `npm run format:check`, `git diff --check`, `npm test` (41 passed, 0 failed, 2 opt-in PostgreSQL suites skipped), and `npm run build --workspace=@inventory/web` passed. Build generated all current routes. Database and migration status were not rechecked, and no interactive/browser visual review was performed.
-- This work is not a new roadmap task and does not change the completed count (28/47). Continue the UI review by Products and Catalog, then Inventory, Purchasing, Sales, Reports, and Administration. Exact handoff is in `docs/progress/next-session.md`.
+- Products page review found pagination controls repeated inside every product row; moved them into a single accessible pagination nav after the table. The list count now uses filtered total results, loading is announced as a status, and roles already allowed to edit products see default cost/sale price in the list. No API or authorization policy changed.
+- Verification: typecheck, lint, format check, diff check, `npm test` (41 passed, 0 failed, 2 opt-in PostgreSQL suites skipped), and the web production build passed. The first sandboxed `npm test` attempt hit `listen EPERM` in the API contract test; the same suite passed when rerun with local loopback bind permission. Build generated all current routes. Database and migration status were not rechecked; no interactive/browser visual review was performed.
+- This work is not a new roadmap task and does not change the completed count (28/47). Products received a source-level list pass; continue with Catalog/Products detail UX and then Inventory, Purchasing, Sales, Reports, and Administration. Exact handoff is in `docs/progress/next-session.md`.
 
 ## REPORT-001 implementation and verification
 
@@ -38,5 +39,5 @@
 
 ## Git
 
-- UI milestone committed locally as `33fa0a6` (`ui: establish enterprise workspace design system`) on `develop`; no push. The commit contains the shared shell/dashboard/styles and progress checkpoint.
+- Shared shell/dashboard milestone committed locally as `33fa0a6` (`ui: establish enterprise workspace design system`) and checkpoint as `960912d` (`docs: checkpoint enterprise UI redesign`) on `develop`; no push. Product list follow-up changes are currently uncommitted.
 - INV-010 remains in progress pending barcode repeat/keyboard acceptance and camera feasibility. Browser UI and API endpoint acceptance remain pending where not evidenced. See `docs/progress/next-session.md` for exact next actions. Do not start SALES-004 until financial policy is approved.

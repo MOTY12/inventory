@@ -399,7 +399,7 @@ function ProductManager() {
             <span className="catalog-eyebrow">WORKSPACE INVENTORY</span>
             <h2>
               Product list{" "}
-              <span className="catalog-count">{products.length}</span>
+              <span className="catalog-count">{loading ? "…" : total}</span>
             </h2>
           </div>
           <div className="product-filters">
@@ -427,7 +427,9 @@ function ProductManager() {
           </div>
         </div>
         {loading ? (
-          <div className="catalog-loading">Loading products…</div>
+          <div className="catalog-loading" role="status">
+            Loading products…
+          </div>
         ) : products.length === 0 ? (
           <div className="catalog-empty">
             <h3>No products found</h3>
@@ -446,6 +448,7 @@ function ProductManager() {
                   <th>SKU / barcode</th>
                   <th>Category</th>
                   <th>Base unit</th>
+                  {canWrite && <th>Default cost / sale price</th>}
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -472,6 +475,28 @@ function ProductManager() {
                     <td>
                       {p.baseUnit.name} ({p.baseUnit.code})
                     </td>
+                    {canWrite && (
+                      <td>
+                        <div className="product-price-pair">
+                          <span>
+                            Cost
+                            <strong>
+                              {p.defaultCost === null
+                                ? "—"
+                                : `${p.costCurrency ?? "—"} ${p.defaultCost}`}
+                            </strong>
+                          </span>
+                          <span>
+                            Sale
+                            <strong>
+                              {p.defaultSalePrice === null
+                                ? "—"
+                                : `${p.saleCurrency ?? "—"} ${p.defaultSalePrice}`}
+                            </strong>
+                          </span>
+                        </div>
+                      </td>
+                    )}
                     <td>
                       <span className="catalog-status">{p.status}</span>
                     </td>
@@ -495,40 +520,43 @@ function ProductManager() {
                           </button>
                         </>
                       )}
-                      {!loading && total > 20 && (
-                        <div className="product-pagination">
-                          <span>
-                            Showing {(page - 1) * 20 + 1}–
-                            {Math.min(page * 20, total)} of {total}
-                          </span>
-                          <div>
-                            <button
-                              className="catalog-text-button"
-                              type="button"
-                              disabled={page <= 1}
-                              onClick={() => setPage(page - 1)}
-                            >
-                              Previous
-                            </button>
-                            <span>
-                              Page {page} of {Math.ceil(total / 20)}
-                            </span>
-                            <button
-                              className="catalog-text-button"
-                              type="button"
-                              disabled={page >= Math.ceil(total / 20)}
-                              onClick={() => setPage(page + 1)}
-                            >
-                              Next
-                            </button>
-                          </div>
-                        </div>
-                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            {!loading && total > 20 && (
+              <nav
+                aria-label="Product list pages"
+                className="product-pagination"
+              >
+                <span>
+                  Showing {(page - 1) * 20 + 1}–{Math.min(page * 20, total)} of{" "}
+                  {total}
+                </span>
+                <div>
+                  <button
+                    className="catalog-text-button"
+                    type="button"
+                    disabled={page <= 1}
+                    onClick={() => setPage(page - 1)}
+                  >
+                    Previous
+                  </button>
+                  <span>
+                    Page {page} of {Math.ceil(total / 20)}
+                  </span>
+                  <button
+                    className="catalog-text-button"
+                    type="button"
+                    disabled={page >= Math.ceil(total / 20)}
+                    onClick={() => setPage(page + 1)}
+                  >
+                    Next
+                  </button>
+                </div>
+              </nav>
+            )}
           </div>
         )}
       </section>
