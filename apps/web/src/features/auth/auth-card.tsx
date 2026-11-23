@@ -32,6 +32,17 @@ export function AuthCard({
     setSubmitting(true);
     setLocalError(null);
     try {
+      const formData = new FormData(event.currentTarget);
+      const password = formData.get("password");
+      const confirmation = formData.get("confirmPassword");
+      if (
+        typeof confirmation === "string" &&
+        typeof password === "string" &&
+        password !== confirmation
+      ) {
+        setLocalError("The passwords do not match.");
+        return;
+      }
       await onSubmit(event);
     } catch (cause) {
       setLocalError(
@@ -95,17 +106,32 @@ export function EmailField() {
 
 export function PasswordField({ confirm = false }: { confirm?: boolean }) {
   return (
-    <label className="auth-field">
-      {confirm ? "New password" : "Password"}
-      <input
-        autoComplete={confirm ? "new-password" : "current-password"}
-        maxLength={128}
-        minLength={12}
-        name={confirm ? "password" : "password"}
-        required
-        type="password"
-      />
-      {confirm && <small>Use at least 12 characters.</small>}
-    </label>
+    <>
+      <label className="auth-field">
+        {confirm ? "New password" : "Password"}
+        <input
+          autoComplete={confirm ? "new-password" : "current-password"}
+          maxLength={128}
+          minLength={12}
+          name="password"
+          required
+          type="password"
+        />
+        {confirm && <small>Use at least 12 characters.</small>}
+      </label>
+      {confirm && (
+        <label className="auth-field">
+          Confirm new password
+          <input
+            autoComplete="new-password"
+            maxLength={128}
+            minLength={12}
+            name="confirmPassword"
+            required
+            type="password"
+          />
+        </label>
+      )}
+    </>
   );
 }
