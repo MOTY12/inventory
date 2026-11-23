@@ -46,6 +46,10 @@ export function isPositiveDecimal(value: string): boolean {
   return scaled(value, QUANTITY_SCALE) > ZERO;
 }
 
+export function isAtMostQuantity(value: string, maximum: string): boolean {
+  return scaled(value, QUANTITY_SCALE) <= scaled(maximum, QUANTITY_SCALE);
+}
+
 export function formatDecimal(value: string, scale = MONEY_SCALE): string {
   return formatScaled(scaled(value, scale), scale);
 }

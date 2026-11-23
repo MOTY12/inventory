@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useSession } from "../../../features/auth/session-provider";
 import {
   formatDecimal,
   isPositiveDecimal,
+  isAtMostQuantity,
   subtractQuantity,
 } from "../../../features/procurement/decimal";
 
@@ -69,30 +70,43 @@ export default function PurchaseOrderDetailPage() {
   const [draftEdits, setDraftEdits] = useState<
     Record<string, { quantity: string; unitCost: string }>
   >({});
+  const requestVersion = useRef(0);
   const canWrite = ["OWNER", "ADMIN", "MANAGER", "BUYER"].includes(
     organization?.role ?? "",
   );
   const reload = useCallback(async () => {
-    if (!id) return;
+    const version = ++requestVersion.current;
+    if (!id || !organization) {
+      setOrder(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError("");
+    setOrder(null);
     try {
-      setOrder(await authenticatedRequest<Order>(`${base}/${id}`));
+      const result = await authenticatedRequest<Order>(`${base}/${id}`);
+      if (version !== requestVersion.current) return;
+      setOrder(result);
     } catch (cause) {
+      if (version !== requestVersion.current) return;
       setError(
         cause instanceof Error
           ? cause.message
           : "Could not load the purchase order.",
       );
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
-  }, [authenticatedRequest, id]);
+  }, [authenticatedRequest, id, organization]);
   useEffect(() => {
     void Promise.resolve().then(reload);
   }, [reload]);
 
   async function action(path: string, success: string) {
+    if (path === "cancel" && !window.confirm("Cancel this purchase order?")) {
+      return;
+    }
     setBusy(true);
     setError("");
     setNotice("");
@@ -112,14 +126,39 @@ export default function PurchaseOrderDetailPage() {
   }
   async function receive() {
     if (!order) return;
-    const lines = order.lines
-      .filter((line) => Number(quantities[line.id]) > 0)
-      .map((line) => ({
-        purchaseOrderLineId: line.id,
-        quantity: quantities[line.id],
-      }));
-    if (!lines.length) {
+    const enteredLines = order.lines.filter(
+      (line) => (quantities[line.id] ?? "").trim() !== "",
+    );
+    if (!enteredLines.length) {
       setError("Enter at least one positive quantity to receive.");
+      return;
+    }
+    if (
+      enteredLines.some((line) => !isPositiveDecimal(quantities[line.id] ?? ""))
+    ) {
+      setError("Each entered receipt quantity must be a positive decimal.");
+      return;
+    }
+    const lines = enteredLines.map((line) => ({
+      purchaseOrderLineId: line.id,
+      quantity: quantities[line.id],
+    }));
+    const exceedsRemaining = lines.some((entry) => {
+      const line = order.lines.find(
+        (candidate) => candidate.id === entry.purchaseOrderLineId,
+      );
+      return (
+        !line ||
+        !isAtMostQuantity(
+          entry.quantity,
+          subtractQuantity(line.orderedQuantity, line.receivedQuantity),
+        )
+      );
+    });
+    if (exceedsRemaining) {
+      setError(
+        "A receipt quantity cannot exceed the remaining order quantity.",
+      );
       return;
     }
     setBusy(true);
@@ -209,13 +248,30 @@ export default function PurchaseOrderDetailPage() {
         </p>
       )}
       {error && (
-        <p className="catalog-error" role="alert">
-          {error}
-        </p>
+        <div className="catalog-error" role="alert">
+          <span>{error}</span>
+          <button
+            className="catalog-text-button"
+            onClick={() => void reload()}
+            type="button"
+          >
+            Try again
+          </button>
+        </div>
       )}
-      {loading ? (
+      {!organization ? (
+        <section className="catalog-empty">
+          <h2>Choose a workspace first</h2>
+          <p>Purchase orders belong to the active organization.</p>
+          <Link href="/organizations" className="catalog-secondary-link">
+            Manage organizations
+          </Link>
+        </section>
+      ) : loading ? (
         <section className="catalog-panel">
-          <p>Loading purchase order details…</p>
+          <p className="catalog-loading" role="status">
+            Loading purchase order details…
+          </p>
         </section>
       ) : !order ? (
         <section className="catalog-empty">
