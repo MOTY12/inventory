@@ -39,7 +39,35 @@ export function sumLineAmounts(
 export function subtractQuantity(left: string, right: string): string {
   const difference =
     scaled(left, QUANTITY_SCALE) - scaled(right, QUANTITY_SCALE);
-  return formatScaled(difference > ZERO ? difference : ZERO, QUANTITY_SCALE);
+  return formatQuantityScaled(
+    difference > ZERO ? difference : ZERO,
+    QUANTITY_SCALE,
+  );
+}
+
+export function addQuantities(left: string, right: string): string {
+  return formatQuantityScaled(
+    scaled(left, QUANTITY_SCALE) + scaled(right, QUANTITY_SCALE),
+    QUANTITY_SCALE,
+  );
+}
+
+export function divideQuantityExact(
+  numerator: string,
+  denominator: string,
+): string | null {
+  const divisor = scaled(denominator, QUANTITY_SCALE);
+  if (divisor <= ZERO) return null;
+  const dividend = scaled(numerator, QUANTITY_SCALE) * QUANTITY_FACTOR;
+  if (dividend % divisor !== ZERO) return null;
+  return formatQuantityScaled(dividend / divisor, QUANTITY_SCALE);
+}
+
+export function matchesQuantityPrecision(value: string, precision: number) {
+  if (!Number.isInteger(precision) || precision < 0 || precision > 6)
+    return false;
+  const quantum = TEN ** BigInt(QUANTITY_SCALE - precision);
+  return scaled(value, QUANTITY_SCALE) % quantum === ZERO;
 }
 
 export function isPositiveDecimal(value: string): boolean {
@@ -59,6 +87,13 @@ function formatScaled(value: bigint, scale: number): string {
   const integer = (value / factor)
     .toString()
     .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const fraction = (value % factor).toString().padStart(scale, "0");
+  return `${integer}.${fraction}`;
+}
+
+function formatQuantityScaled(value: bigint, scale: number): string {
+  const factor = TEN ** BigInt(scale);
+  const integer = (value / factor).toString();
   const fraction = (value % factor).toString().padStart(scale, "0");
   return `${integer}.${fraction}`;
 }

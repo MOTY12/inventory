@@ -1,8 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { useParams } from "next/navigation";
+import { BarcodeScanner } from "../../../components/barcode/barcode-scanner";
+import {
+  addQuantities,
+  divideQuantityExact,
+  matchesQuantityPrecision,
+  subtractQuantity,
+} from "../../../features/procurement/decimal";
 import { useSession } from "../../../features/auth/session-provider";
 
 type Order = {
@@ -19,9 +32,11 @@ type Order = {
   warehouse: { name: string };
   lines: {
     id: string;
+    productId: string;
     productName: string;
     sku: string;
     unitCode: string;
+    unit: { precision: number };
     orderedQuantity: string;
     baseQuantity: string;
     unitPrice: string;
@@ -90,6 +105,10 @@ export default function SalesOrderDetailPage() {
   const params = useParams<{ salesOrderId: string }>();
   const id = params.salesOrderId;
   const { organization, authenticatedRequest } = useSession();
+  const organizationIdRef = useRef(organization?.id ?? "");
+  useLayoutEffect(() => {
+    organizationIdRef.current = organization?.id ?? "";
+  }, [organization?.id]);
   const [order, setOrder] = useState<Order | null>(null);
   const [audit, setAudit] = useState<Audit[]>([]);
   const [fulfillments, setFulfillments] = useState<Fulfillment[]>([]);
@@ -97,6 +116,7 @@ export default function SalesOrderDetailPage() {
   const [pickQuantities, setPickQuantities] = useState<Record<string, string>>(
     {},
   );
+  const pickQuantitiesRef = useRef<Record<string, string>>({});
   const [fulfillmentQuantities, setFulfillmentQuantities] = useState<
     Record<string, string>
   >({});
@@ -122,6 +142,8 @@ export default function SalesOrderDetailPage() {
     const version = ++requestVersion.current;
     if (!organization || !id) {
       setOrder(null);
+      pickQuantitiesRef.current = {};
+      setPickQuantities({});
       setAudit([]);
       setFulfillments([]);
       setPicks([]);
@@ -131,6 +153,8 @@ export default function SalesOrderDetailPage() {
     setLoading(true);
     setError("");
     setOrder(null);
+    pickQuantitiesRef.current = {};
+    setPickQuantities({});
     try {
       const [result, events, posted, confirmedPicks] = await Promise.all([
         authenticatedRequest<Order>(`${endpoint}/${id}`),
@@ -347,6 +371,7 @@ export default function SalesOrderDetailPage() {
         { "Idempotency-Key": pickKey.current.key },
       );
       pickKey.current = null;
+      pickQuantitiesRef.current = {};
       setPickQuantities({});
       setNotice("Picked quantities confirmed and are ready for fulfillment.");
       await load();
@@ -359,6 +384,89 @@ export default function SalesOrderDetailPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function updatePickQuantities(
+    update: (current: Record<string, string>) => Record<string, string>,
+  ) {
+    const next = update(pickQuantitiesRef.current);
+    pickQuantitiesRef.current = next;
+    setPickQuantities(next);
+  }
+
+  async function addScannedPick(barcode: string) {
+    if (
+      !order ||
+      !["CONFIRMED", "PARTIALLY_FULFILLED"].includes(order.status)
+    ) {
+      throw new Error("This order is not open for picking.");
+    }
+    const scannedOrganizationId = organization?.id;
+    const scannedRequestVersion = requestVersion.current;
+    const product = await authenticatedRequest<{
+      id: string;
+      name: string;
+      sku: string;
+      type: string;
+      trackInventory: boolean;
+    }>(
+      `/organizations/current/catalog/products/by-barcode?barcode=${encodeURIComponent(barcode)}`,
+    );
+    if (
+      !scannedOrganizationId ||
+      organizationIdRef.current !== scannedOrganizationId ||
+      requestVersion.current !== scannedRequestVersion
+    ) {
+      throw new Error("Workspace or order changed; scan the barcode again.");
+    }
+    if (product.type !== "STOCKED" || !product.trackInventory)
+      throw new Error("This barcode is not an active stocked product.");
+    const exactLine = order.lines.find(
+      (candidate) => candidate.productId === product.id,
+    );
+    if (!exactLine)
+      throw new Error(`${product.name} is not on this sales order.`);
+    if (!exactLine.reservation || exactLine.reservation.status !== "ACTIVE")
+      throw new Error(`${product.name} has no active stock reservation.`);
+    const increment = divideQuantityExact(
+      exactLine.orderedQuantity,
+      exactLine.baseQuantity,
+    );
+    if (
+      !increment ||
+      !matchesQuantityPrecision(increment, exactLine.unit.precision)
+    ) {
+      throw new Error(
+        `One base unit cannot be represented in ${exactLine.unitCode}; use a compatible order unit.`,
+      );
+    }
+    const nextQuantity = addQuantities(
+      pickQuantitiesRef.current[exactLine.id] ?? "0",
+      increment,
+    );
+    const unpicked = subtractQuantity(
+      exactLine.orderedQuantity,
+      exactLine.pickedQuantity,
+    );
+    if (!matchesQuantityPrecision(nextQuantity, exactLine.unit.precision)) {
+      throw new Error(
+        `The scanned quantity exceeds the precision supported by ${exactLine.unitCode}.`,
+      );
+    }
+    if (quantityUnits(nextQuantity) > quantityUnits(unpicked)) {
+      throw new Error(`${product.name} is already at its unpicked limit.`);
+    }
+    updatePickQuantities((current) => ({
+      ...current,
+      [exactLine.id]: nextQuantity,
+    }));
+    return {
+      productName: product.name,
+      sku: product.sku,
+      quantity: addQuantities(exactLine.pickedQuantity, nextQuantity),
+      unitCode: exactLine.unitCode,
+      detail: `of ${exactLine.orderedQuantity} picked or pending`,
+    };
   }
 
   return (
@@ -587,7 +695,7 @@ export default function SalesOrderDetailPage() {
                                   type="number"
                                   value={pickQuantities[line.id] ?? ""}
                                   onChange={(event) =>
-                                    setPickQuantities((current) => ({
+                                    updatePickQuantities((current) => ({
                                       ...current,
                                       [line.id]: event.target.value,
                                     }))
@@ -655,6 +763,11 @@ export default function SalesOrderDetailPage() {
           {canWrite &&
             ["CONFIRMED", "PARTIALLY_FULFILLED"].includes(order.status) && (
               <div className="order-actions">
+                <BarcodeScanner
+                  onScan={addScannedPick}
+                  label="Scan products to add to this pick"
+                  buttonLabel="Add to pick"
+                />
                 <p>
                   Step 1: confirm picked quantities from the active reservation.
                 </p>

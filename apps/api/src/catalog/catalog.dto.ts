@@ -30,6 +30,15 @@ export class CatalogListQueryDto extends PaginationQueryDto {
   status?: CatalogStatus;
 }
 
+export class ProductBarcodeQueryDto {
+  @ApiProperty({ minLength: 1, maxLength: 100 })
+  @IsString()
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @MinLength(1)
+  @MaxLength(100)
+  barcode!: string;
+}
+
 export class CreateCategoryDto {
   @ApiProperty({ minLength: 2, maxLength: 120 })
   @IsString()

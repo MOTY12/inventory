@@ -1,13 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { BarcodeScanner } from "../../../components/barcode/barcode-scanner";
 import { useSession } from "../../../features/auth/session-provider";
 import {
+  addQuantities,
+  divideQuantityExact,
   formatDecimal,
   isPositiveDecimal,
   isAtMostQuantity,
+  matchesQuantityPrecision,
   subtractQuantity,
 } from "../../../features/procurement/decimal";
 
@@ -21,8 +31,8 @@ type Line = {
   baseQuantity: string;
   unitCost: string;
   lineTotal: string;
-  product: { name: string; sku: string };
-  unit: { code: string; name: string };
+  product: { name: string; sku: string; baseUnitId: string };
+  unit: { id: string; code: string; name: string; precision: number };
 };
 type Receipt = {
   id: string;
@@ -54,10 +64,15 @@ const base = "/organizations/current/procurement/purchase-orders";
 
 export default function PurchaseOrderDetailPage() {
   const { authenticatedRequest, organization } = useSession();
+  const organizationIdRef = useRef(organization?.id ?? "");
+  useLayoutEffect(() => {
+    organizationIdRef.current = organization?.id ?? "";
+  }, [organization?.id]);
   const params = useParams<{ purchaseOrderId: string }>();
   const id = params.purchaseOrderId;
   const [order, setOrder] = useState<Order | null>(null);
   const [quantities, setQuantities] = useState<Record<string, string>>({});
+  const quantitiesRef = useRef<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -78,12 +93,16 @@ export default function PurchaseOrderDetailPage() {
     const version = ++requestVersion.current;
     if (!id || !organization) {
       setOrder(null);
+      quantitiesRef.current = {};
+      setQuantities({});
       setLoading(false);
       return;
     }
     setLoading(true);
     setError("");
     setOrder(null);
+    quantitiesRef.current = {};
+    setQuantities({});
     try {
       const result = await authenticatedRequest<Order>(`${base}/${id}`);
       if (version !== requestVersion.current) return;
@@ -179,6 +198,7 @@ export default function PurchaseOrderDetailPage() {
         "Idempotency-Key": key,
       });
       setReceiptKey(null);
+      quantitiesRef.current = {};
       setQuantities({});
       setNotice("Goods received and inventory updated.");
       await reload();
@@ -189,6 +209,86 @@ export default function PurchaseOrderDetailPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function updateReceiveQuantities(
+    update: (current: Record<string, string>) => Record<string, string>,
+  ) {
+    const next = update(quantitiesRef.current);
+    quantitiesRef.current = next;
+    setQuantities(next);
+  }
+
+  async function addScannedReceipt(barcode: string) {
+    if (!order || !["SUBMITTED", "PARTIALLY_RECEIVED"].includes(order.status)) {
+      throw new Error("This purchase order is not open for receiving.");
+    }
+    const scannedOrganizationId = organization?.id;
+    const scannedRequestVersion = requestVersion.current;
+    const product = await authenticatedRequest<{
+      id: string;
+      name: string;
+      sku: string;
+      type: string;
+      trackInventory: boolean;
+      baseUnit: { id: string };
+    }>(
+      `/organizations/current/catalog/products/by-barcode?barcode=${encodeURIComponent(barcode)}`,
+    );
+    if (
+      !scannedOrganizationId ||
+      organizationIdRef.current !== scannedOrganizationId ||
+      requestVersion.current !== scannedRequestVersion
+    ) {
+      throw new Error("Workspace or order changed; scan the barcode again.");
+    }
+    if (product.type !== "STOCKED" || !product.trackInventory)
+      throw new Error("This barcode is not an active stocked product.");
+    const matching = order.lines.filter(
+      (line) => line.productId === product.id,
+    );
+    if (!matching.length)
+      throw new Error(`${product.name} is not on this purchase order.`);
+    const line =
+      matching.find((candidate) => candidate.unitId === product.baseUnit.id) ??
+      (matching.length === 1 ? matching[0] : null);
+    if (!line)
+      throw new Error(
+        `${product.name} has multiple order units. Scan a base-unit line or enter the received unit manually.`,
+      );
+    const increment = divideQuantityExact(
+      line.orderedQuantity,
+      line.baseQuantity,
+    );
+    if (
+      !increment ||
+      !matchesQuantityPrecision(increment, line.unit.precision)
+    ) {
+      throw new Error(
+        `One base unit cannot be represented in ${line.unit.code}; enter the received quantity manually.`,
+      );
+    }
+    const nextQuantity = addQuantities(
+      quantitiesRef.current[line.id] ?? "0",
+      increment,
+    );
+    const remaining = subtractQuantity(
+      line.orderedQuantity,
+      line.receivedQuantity,
+    );
+    if (!isAtMostQuantity(nextQuantity, remaining))
+      throw new Error(`${product.name} is already at its outstanding limit.`);
+    updateReceiveQuantities((current) => ({
+      ...current,
+      [line.id]: nextQuantity,
+    }));
+    return {
+      productName: product.name,
+      sku: product.sku,
+      quantity: nextQuantity,
+      unitCode: line.unit.code,
+      detail: `of ${remaining} outstanding; receipt not posted`,
+    };
   }
 
   async function saveDraft() {
@@ -475,7 +575,7 @@ export default function PurchaseOrderDetailPage() {
                               step="0.000001"
                               value={quantities[line.id] ?? ""}
                               onChange={(event) =>
-                                setQuantities((old) => ({
+                                updateReceiveQuantities((old) => ({
                                   ...old,
                                   [line.id]: event.target.value,
                                 }))
@@ -494,6 +594,11 @@ export default function PurchaseOrderDetailPage() {
             {canWrite &&
               ["SUBMITTED", "PARTIALLY_RECEIVED"].includes(order.status) && (
                 <div className="po-receive-action">
+                  <BarcodeScanner
+                    label="Scan items on this purchase order"
+                    buttonLabel="Add received item"
+                    onScan={addScannedReceipt}
+                  />
                   <button
                     className="primary-button"
                     disabled={busy}

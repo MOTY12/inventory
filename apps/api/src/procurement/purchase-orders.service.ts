@@ -32,7 +32,7 @@ const detailInclude = {
       product: {
         select: { id: true, name: true, sku: true, baseUnitId: true },
       },
-      unit: { select: { id: true, code: true, name: true } },
+      unit: { select: { id: true, code: true, name: true, precision: true } },
     },
   },
   receipts: {

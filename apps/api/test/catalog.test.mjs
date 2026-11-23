@@ -42,6 +42,42 @@ test("catalog lists always scope categories and units to active organization", a
   assert.equal(queries[2].where.OR[1].code.contains, "kg");
 });
 
+test("barcode lookup normalizes input and matches one active product in the tenant", async () => {
+  let query;
+  const expected = { id: "product-a", barcodeNormalized: "ABC-123" };
+  const service = new CatalogService({
+    product: {
+      findFirst: async (input) => ((query = input), expected),
+    },
+  });
+
+  assert.equal(
+    await service.getActiveProductByBarcode(context, "  abc-123  "),
+    expected,
+  );
+  assert.deepEqual(query.where, {
+    organizationId: "org-a",
+    status: "ACTIVE",
+    barcodeNormalized: "ABC-123",
+  });
+  assert.deepEqual(query.include.baseUnit.select, {
+    id: true,
+    code: true,
+    name: true,
+    precision: true,
+  });
+});
+
+test("barcode lookup returns not found for a barcode outside the active tenant", async () => {
+  const service = new CatalogService({
+    product: { findFirst: async () => null },
+  });
+  await assert.rejects(
+    service.getActiveProductByBarcode(context, "FOREIGN-123"),
+    (error) => error.getStatus() === 404,
+  );
+});
+
 test("category parent must be active and in the current organization", async () => {
   let parentQuery;
   let categoryCreated = false;

@@ -32,6 +32,7 @@ const detailInclude = {
   lines: {
     include: {
       product: { include: { baseUnit: true } },
+      unit: { select: { precision: true } },
       reservation: {
         include: { history: { orderBy: { occurredAt: "asc" as const } } },
       },

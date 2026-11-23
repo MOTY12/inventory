@@ -244,6 +244,11 @@ test("running API responds with request IDs and Swagger document", async () => {
     const unauthenticated = await fetch(`${baseUrl}/api/v1/auth/me`);
     assert.equal(unauthenticated.status, 401);
 
+    const barcodeLookup = await fetch(
+      `${baseUrl}/api/v1/organizations/current/catalog/products/by-barcode?barcode=ABC-123`,
+    );
+    assert.equal(barcodeLookup.status, 401);
+
     for (const report of [
       "inventory-summary",
       "valuation",
@@ -317,6 +322,9 @@ test("running API responds with request IDs and Swagger document", async () => {
     assert.ok(spec.paths["/api/v1/organizations/current/reports/valuation"]);
     assert.ok(spec.paths["/api/v1/organizations/current/reports/movements"]);
     assert.ok(spec.paths["/api/v1/organizations/current/reports/low-stock"]);
+    assert.ok(
+      spec.paths["/api/v1/organizations/current/catalog/products/by-barcode"],
+    );
 
     for (
       let attempt = 0;

@@ -92,6 +92,35 @@ export class CatalogService {
     return product;
   }
 
+  async getActiveProductByBarcode(
+    context: OrganizationContext,
+    barcode: string,
+  ) {
+    const normalized = barcode.trim().toLocaleUpperCase("en-US");
+    if (!normalized) throw new NotFoundException("Product not found");
+    const product = await this.prisma.product.findFirst({
+      where: {
+        organizationId: context.organizationId,
+        status: CatalogStatus.ACTIVE,
+        barcodeNormalized: normalized,
+      },
+      include: {
+        baseUnit: {
+          select: { id: true, code: true, name: true, precision: true },
+        },
+        unitConversions: {
+          include: {
+            unit: {
+              select: { id: true, code: true, name: true, precision: true },
+            },
+          },
+        },
+      },
+    });
+    if (!product) throw new NotFoundException("Active product not found");
+    return product;
+  }
+
   async listProductConversions(
     context: OrganizationContext,
     productId: string,

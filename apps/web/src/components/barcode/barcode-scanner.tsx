@@ -1,76 +1,123 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { FormEvent, useId, useRef, useState } from "react";
 
-type BarcodeScannerProps = {
-  onScan: (barcode: string) => Promise<void>;
+export type BarcodeScanFeedback = {
+  productName: string;
+  sku: string;
+  quantity?: string;
+  unitCode?: string;
+  detail?: string;
 };
 
-export function BarcodeScanner({ onScan }: BarcodeScannerProps) {
+type BarcodeScannerProps = {
+  onScan: (barcode: string) => Promise<BarcodeScanFeedback | void>;
+  label?: string;
+  buttonLabel?: string;
+};
+
+export function BarcodeScanner({
+  onScan,
+  label = "Scan a product barcode",
+  buttonLabel = "Add scanned product",
+}: BarcodeScannerProps) {
+  const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const queueRef = useRef<string[]>([]);
+  const processingRef = useRef(false);
   const [barcode, setBarcode] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [messageIsError, setMessageIsError] = useState(false);
 
-  async function submit() {
-    const value = barcode.trim();
-    if (!value || busy) return;
+  async function processQueue() {
+    if (processingRef.current) return;
+    processingRef.current = true;
     setBusy(true);
-    setMessage("");
-    setMessageIsError(false);
-    try {
-      await onScan(value);
-      setBarcode("");
-      setMessage(`Scanned ${value}`);
-    } catch (error) {
-      setMessageIsError(true);
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Barcode could not be matched.",
-      );
-    } finally {
-      setBusy(false);
-      inputRef.current?.focus();
+    while (queueRef.current.length > 0) {
+      const nextBarcode = queueRef.current.shift()!;
+      setMessage(`Looking up ${nextBarcode}…`);
+      setMessageIsError(false);
+      try {
+        const result = await onScan(nextBarcode);
+        setMessage(
+          result
+            ? `${result.productName} · ${result.sku}${result.quantity ? ` · ${result.quantity}${result.unitCode ? ` ${result.unitCode}` : ""}` : ""}${result.detail ? ` · ${result.detail}` : ""}`
+            : `Scanned ${nextBarcode}`,
+        );
+      } catch (cause) {
+        setMessageIsError(true);
+        setMessage(
+          cause instanceof Error
+            ? cause.message
+            : "Barcode could not be matched.",
+        );
+      }
     }
+    processingRef.current = false;
+    setBusy(false);
+    inputRef.current?.focus();
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const value = String(form.get("barcode") ?? "").trim();
+    if (!value) return;
+    setBarcode("");
+    setMessageIsError(false);
+    queueRef.current.push(value);
+    void processQueue();
   }
 
   return (
-    <div className="barcode-scanner">
-      <label htmlFor="order-barcode">Scan a product barcode</label>
-      <div className="barcode-scanner-controls">
-        <input
-          ref={inputRef}
-          id="order-barcode"
-          autoComplete="off"
-          inputMode="text"
-          value={barcode}
-          placeholder="Scan or enter barcode, then press Enter"
-          onChange={(event) => setBarcode(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              void submit();
-            }
-          }}
-        />
+    <section className="barcode-scanner" aria-busy={busy}>
+      <label htmlFor={`${id}-barcode`}>{label}</label>
+      <form className="barcode-scanner-controls" onSubmit={submit}>
+        <div className="barcode-input-wrap">
+          <svg
+            className="barcode-scanner-icon"
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+          >
+            <path
+              d="M4 5v14M7 5v14m3-14v14m4-14v14m3-14v14m3-14v14"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+            />
+          </svg>
+          <input
+            ref={inputRef}
+            id={`${id}-barcode`}
+            name="barcode"
+            autoComplete="off"
+            inputMode="text"
+            maxLength={100}
+            value={barcode}
+            placeholder="Scan or enter a barcode"
+            aria-describedby={`${id}-status`}
+            onChange={(event) => setBarcode(event.target.value)}
+          />
+        </div>
         <button
           className="button button-secondary"
-          type="button"
-          disabled={busy || !barcode.trim()}
-          onClick={() => void submit()}
+          type="submit"
+          disabled={!barcode.trim()}
         >
-          {busy ? "Looking up…" : "Add scanned product"}
+          {busy ? "Queue scan" : buttonLabel}
         </button>
-      </div>
+      </form>
       <p
+        id={`${id}-status`}
         className={messageIsError ? "barcode-error" : "barcode-status"}
-        role="status"
+        role={messageIsError ? "alert" : "status"}
+        aria-live={messageIsError ? "assertive" : "polite"}
       >
         {message ||
-          "Keyboard barcode scanners work when this field is focused."}
+          "Use a USB/Bluetooth keyboard scanner or type a barcode and press Enter."}
       </p>
-    </div>
+    </section>
   );
 }

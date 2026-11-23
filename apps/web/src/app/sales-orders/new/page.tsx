@@ -1,9 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { BarcodeScanner } from "../../../components/barcode/barcode-scanner";
+import {
+  addQuantities,
+  divideQuantityExact,
+  matchesQuantityPrecision,
+} from "../../../features/procurement/decimal";
 import { useSession } from "../../../features/auth/session-provider";
 
 type Option = { id: string; name: string };
@@ -12,7 +24,11 @@ type UnitOption = {
   code: string;
   name: string;
   precision?: number;
-  baseQuantity?: string;
+};
+type ProductConversion = {
+  unitId: string;
+  baseQuantity: string;
+  unit: UnitOption;
 };
 type Product = {
   id: string;
@@ -21,8 +37,10 @@ type Product = {
   barcode: string | null;
   defaultSalePrice: string | null;
   saleCurrency: string | null;
+  type: string;
+  trackInventory: boolean;
   baseUnit: UnitOption;
-  unitConversions: UnitOption[];
+  unitConversions: ProductConversion[];
 };
 type Balance = { productId: string; onHand: string; reserved: string };
 type Line = {
@@ -57,6 +75,10 @@ function lineTotal(line: Line) {
 export default function NewSalesOrderPage() {
   const router = useRouter();
   const { organization, authenticatedRequest } = useSession();
+  const organizationIdRef = useRef(organization?.id ?? "");
+  useLayoutEffect(() => {
+    organizationIdRef.current = organization?.id ?? "";
+  }, [organization?.id]);
   const [customers, setCustomers] = useState<Option[]>([]);
   const [warehouses, setWarehouses] = useState<Option[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -72,6 +94,7 @@ export default function NewSalesOrderPage() {
   const [lines, setLines] = useState<Line[]>([
     { productId: "", unitId: "", quantity: "1", unitPrice: "0" },
   ]);
+  const linesRef = useRef(lines);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -99,14 +122,16 @@ export default function NewSalesOrderPage() {
         setProducts(p.data);
         setCustomerId(c.data[0]?.id ?? "");
         setWarehouseId(w.data[0]?.id ?? "");
-        setLines([
+        const initialLines = [
           {
             productId: p.data[0]?.id ?? "",
             unitId: p.data[0]?.baseUnit.id ?? "",
             quantity: "1",
             unitPrice: p.data[0]?.defaultSalePrice ?? "0",
           },
-        ]);
+        ];
+        linesRef.current = initialLines;
+        setLines(initialLines);
         if (p.data[0]?.saleCurrency) setCurrency(p.data[0].saleCurrency);
       } catch (cause) {
         setError(
@@ -149,8 +174,13 @@ export default function NewSalesOrderPage() {
     () => lines.reduce((sum, line) => sum + lineTotal(line), BigInt(0)),
     [lines],
   );
+  function updateLines(update: (current: Line[]) => Line[]) {
+    const next = update(linesRef.current);
+    linesRef.current = next;
+    setLines(next);
+  }
   function updateLine(index: number, changes: Partial<Line>) {
-    setLines((current) =>
+    updateLines((current) =>
       current.map((line, lineIndex) => {
         if (lineIndex !== index) return line;
         const next = { ...line, ...changes };
@@ -170,31 +200,53 @@ export default function NewSalesOrderPage() {
     return display(scaled(balance.onHand, 6) - scaled(balance.reserved, 6), 6);
   }
   async function addScannedProduct(barcode: string) {
-    const matches = await authenticatedRequest<{ data: Product[] }>(
-      `/organizations/current/catalog/products?page=1&page_size=20&status=ACTIVE&q=${encodeURIComponent(barcode)}`,
+    const scannedOrganizationId = organization?.id;
+    const product = await authenticatedRequest<Product>(
+      `/organizations/current/catalog/products/by-barcode?barcode=${encodeURIComponent(barcode)}`,
     );
-    const normalized = barcode.toLocaleUpperCase("en-US");
-    const product = matches.data.find(
-      (item) => item.barcode?.toLocaleUpperCase("en-US") === normalized,
-    );
-    if (!product) throw new Error("No active product matches this barcode.");
+    if (
+      !scannedOrganizationId ||
+      organizationIdRef.current !== scannedOrganizationId
+    ) {
+      throw new Error("Workspace changed; scan the barcode again.");
+    }
+    if (product.type !== "STOCKED" || !product.trackInventory)
+      throw new Error("This barcode is not an active stocked product.");
 
-    setLines((current) => {
-      const existingIndex = current.findIndex(
-        (line) =>
-          line.productId === product.id && line.unitId === product.baseUnit.id,
+    const currentLine = linesRef.current.find(
+      (line) => line.productId === product.id,
+    );
+    let nextQuantity = "1";
+    let unitCode = product.baseUnit.code;
+    if (currentLine) {
+      const conversion = product.unitConversions.find(
+        (item) => item.unitId === currentLine.unitId,
       );
-      if (existingIndex >= 0) {
-        return current.map((line, index) =>
-          index === existingIndex
-            ? {
-                ...line,
-                quantity: display(scaled(line.quantity, 6) + scaled("1", 6), 6),
-              }
-            : line,
+      const increment =
+        currentLine.unitId === product.baseUnit.id
+          ? "1"
+          : conversion
+            ? divideQuantityExact("1", conversion.baseQuantity)
+            : null;
+      const unit = conversion?.unit ?? product.baseUnit;
+      if (
+        !increment ||
+        !matchesQuantityPrecision(increment, unit.precision ?? 0)
+      )
+        throw new Error(
+          `One base unit cannot be represented in ${unit.code}; change the order line to a compatible unit before scanning.`,
         );
-      }
-      return [
+      nextQuantity = addQuantities(currentLine.quantity, increment);
+      unitCode = unit.code;
+      updateLines((current) =>
+        current.map((line) =>
+          line.productId === product.id
+            ? { ...line, quantity: nextQuantity }
+            : line,
+        ),
+      );
+    } else {
+      updateLines((current) => [
         ...current,
         {
           productId: product.id,
@@ -202,9 +254,15 @@ export default function NewSalesOrderPage() {
           quantity: "1",
           unitPrice: product.defaultSalePrice ?? "0",
         },
-      ];
-    });
+      ]);
+    }
     if (product.saleCurrency) setCurrency(product.saleCurrency);
+    return {
+      productName: product.name,
+      sku: product.sku,
+      quantity: nextQuantity,
+      unitCode,
+    };
   }
   async function saveDraft(event: React.FormEvent) {
     event.preventDefault();
@@ -360,7 +418,7 @@ export default function NewSalesOrderPage() {
                 className="button button-secondary"
                 type="button"
                 onClick={() =>
-                  setLines((current) => [
+                  updateLines((current) => [
                     ...current,
                     {
                       productId: "",
@@ -394,7 +452,12 @@ export default function NewSalesOrderPage() {
                       (row) => row.id === line.productId,
                     );
                     const units = product
-                      ? [product.baseUnit, ...product.unitConversions]
+                      ? [
+                          product.baseUnit,
+                          ...product.unitConversions.map(
+                            (conversion) => conversion.unit,
+                          ),
+                        ]
                       : [];
                     return (
                       <tr key={index}>
@@ -475,7 +538,7 @@ export default function NewSalesOrderPage() {
                             aria-label="Remove product"
                             disabled={lines.length === 1}
                             onClick={() =>
-                              setLines((current) =>
+                              updateLines((current) =>
                                 current.filter(
                                   (_, lineIndex) => lineIndex !== index,
                                 ),

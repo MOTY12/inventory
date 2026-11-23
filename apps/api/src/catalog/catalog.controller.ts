@@ -28,6 +28,7 @@ import {
   CreateProductConversionDto,
   CreateProductDto,
   CreateUnitDto,
+  ProductBarcodeQueryDto,
   UpdateProductDto,
 } from "./catalog.dto";
 import { CatalogService } from "./catalog.service";
@@ -47,6 +48,19 @@ export class CatalogController {
     @Req() request: OrganizationRequest,
   ) {
     return this.catalog.listProducts(request.organization!, query);
+  }
+
+  @Get("products/by-barcode")
+  @RequireCapabilities("catalog:read")
+  @ApiOperation({ summary: "Find an active product by exact barcode" })
+  getProductByBarcode(
+    @Query() query: ProductBarcodeQueryDto,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.catalog.getActiveProductByBarcode(
+      request.organization!,
+      query.barcode,
+    );
   }
 
   @Post("products")

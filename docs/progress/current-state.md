@@ -37,16 +37,18 @@
 
 ## Current task: INV-010
 
-- Added an accessible keyboard-scanner input to sales-order creation. It searches the tenant-scoped active product API by barcode, requires an exact normalized barcode match, adds one base unit, and increments an existing base-unit line by exact scaled-integer arithmetic on repeat scans. Post-change typecheck, lint, format, default tests and production build passed.
-- Still pending: focused automated or browser regression verification for repeated scans and Enter-key behavior, and camera-scanning API feasibility. Keep INV-010 IN_PROGRESS until its criteria are evidenced.
+- Added a reusable accessible scanner component with a form submit path (Enter/button), sequential scan queue, loading/status/error announcements, and product/SKU/quantity feedback. Added `GET /organizations/current/catalog/products/by-barcode`, which normalizes and exactly matches active products inside the authenticated organization and includes base-unit/conversion precision.
+- Wired barcode input to new sales orders (add a product or increment its current line using exact decimal unit conversion), PO receiving (match an active PO line and enforce outstanding quantity/precision; scanning does not post), and sales picking (match by product ID, require an active reservation, bound against unpicked quantity and unit precision; existing confirmation/fulfillment still owns posting). Scan handlers reject late lookup results after the active organization/order changes.
+- Focused catalog service tests verify normalization, organization scope and not-found denial; the API contract test verifies barcode lookup authentication and OpenAPI registration. A web decimal regression test verifies large quantities remain parseable through add/subtract/divide/limit checks. Latest checks: typecheck, lint, format, `git diff --check`, default `npm test` (44 passed, 0 failed, 2 opt-in PostgreSQL suites skipped), and production `npm run build` passed. An initial sandboxed test run could not bind its ephemeral port (`EPERM`); the permission-enabled rerun passed. No migration was required.
+- INV-010 remains IN_PROGRESS: browser verification of repeat scans, Enter submission/single processing, fast scans, workspace switching and displayed feedback is outstanding. Camera research found the native Barcode Detection API is experimental/limited availability, requires a secure context and feature detection, and has unreliable iOS Safari support; keep manual/USB/Bluetooth keyboard input as fallback. See blockers and next-session checkpoint.
 
 ## Other gaps and decisions
 
-- Interactive browser bridge is not configured in this environment; prior attempt returned `Trusted RPC service is not configured: browser`. Do not claim browser UAT. Track authenticated interactive workflow UAT under QUALITY-001.
+- Interactive browser bridge/control is not available in this environment; prior attempt returned `Trusted RPC service is not configured: browser`. Do not claim browser UAT. Track authenticated interactive workflow UAT under QUALITY-001.
 - Production email, distributed rate limiting, and other production hardening remain open. Material product, compliance, billing, RLS/support-access, MFA enforcement, and hosting/data-residency decisions remain in `docs/progress/decisions.md`.
 - npm audit could not reach the registry. The previously reported Next build fatal blocker was resolved by upgrading the vulnerable Next.js line; do not suppress security checks.
 
 ## Git
 
 - UI implementation commits: `33fa0a6` (shared system), `f041826` (product list), `43dacf1` (inventory/order UI), `17e4688` (catalog/contact directories), `448c8c8` (purchase receiving), `5092ed4` (sales fulfillment), `d806608` (Reports), `60350d9` (workspace administration), and `b1196e3` (auth password confirmation). Checkpoint commits: `960912d`, `0e42502`, `b2e19f0`, `5908956`, `049e0ac`, `8a1da5b`, `4c3cefb`, and `4f65fb5`. No push.
-- INV-010 remains in progress pending barcode repeat/keyboard acceptance and camera feasibility. Browser UI and API endpoint acceptance remain pending where not evidenced. See `docs/progress/next-session.md` for exact next actions. Do not start SALES-004 until financial policy is approved.
+- INV-010 remains in progress pending barcode repeat/keyboard acceptance in a real browser; camera capability limitations are documented. See `docs/progress/next-session.md` for exact next actions. Do not start SALES-004 until financial policy is approved.
