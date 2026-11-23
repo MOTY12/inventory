@@ -1,6 +1,6 @@
 # Numbered task breakdown
 
-Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001 through FOUNDATION-009, ARCH-001, INV-001 through INV-009, PROCUREMENT-001 through PROCUREMENT-003, SALES-001 through SALES-003, REPORT-001, and REPORT-003 are COMPLETED; PROD-002, ARCH-002, INV-010, and QUALITY-003 are IN_PROGRESS; remaining tasks are NOT_STARTED. Completed count: 29/47, counted from 47 unique task entries. REPORT-003 evidence is dated 2026-11-23. Interactive browser acceptance remains unverified and is tracked under QUALITY-001.
+Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001 through FOUNDATION-009, ARCH-001, INV-001 through INV-009, PROCUREMENT-001 through PROCUREMENT-003, SALES-001 through SALES-003, REPORT-001, and REPORT-003 are COMPLETED; PROD-002, ARCH-002, INV-010, QUALITY-002, and QUALITY-003 are IN_PROGRESS; remaining tasks are NOT_STARTED. Completed count: 29/47, counted from 47 unique task entries. REPORT-003 evidence is dated 2026-11-23. Interactive browser acceptance remains unverified and is tracked under QUALITY-001.
 
 ## Phase 0–2: research, product, architecture
 
@@ -210,7 +210,7 @@ Description: Test receive → stock → transfer → sale → fulfill/payment �
 ### QUALITY-002: Security and tenant isolation review
 
 **Files/modules affected:** tests/e2e/, tests/security/, docs/operations/.
-Description: Threat review, cross-tenant tests, dependency scan, authorization audit. Priority: P0. Dependencies: all core modules. Deliverables: report and resolved findings. Acceptance: no unresolved critical/high findings before pilot. Tests: security suite. Status: NOT_STARTED.
+Description: Threat review, cross-tenant tests, dependency scan, authorization audit. Priority: P0. Dependencies: all core modules. Deliverables: report and resolved findings. Acceptance: no unresolved critical/high findings before pilot. Tests: security suite. Status: IN_PROGRESS (2026-11-23). Reviewed authentication/session lifecycle, tenant context, RBAC, warehouse grants, organization/membership/invitation operations, catalog, locations, inventory, imports, procurement, sales, reporting/export workers, raw SQL, frontend workspace handling, environment/configuration and logging. Added baseline API/Next response security headers (HSTS only in production) and API HTTP regression assertions. No confirmed critical/high authorization bypass found in inspected code; no platform-admin role exists. Full default test suite passed (51 passed, 0 failed, 2 opt-in suites skipped; web 2/2); explicit isolated PostgreSQL suites passed 10/10 auth/organization and 13/13 inventory/report. Typecheck, lint, format and production build passed; Prisma validation passed. Migration status unavailable because configured PostgreSQL at localhost:5433 returned a schema-engine connection error. `npm audit` unavailable due registry DNS; prior install output recorded 3 high advisories without details, so the no-unresolved-high acceptance gate is not yet evidenced. Keep IN_PROGRESS until registry audit/advisories are resolved and migration status/browser security checks are available. Detailed report: `docs/security/tenant-isolation-review.md`.
 
 ### QUALITY-003: Backup/restore and operational runbooks
 

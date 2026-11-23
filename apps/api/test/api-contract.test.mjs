@@ -238,6 +238,12 @@ test("running API responds with request IDs and Swagger document", async () => {
     assert.ok(response, `API failed to start: ${output}`);
     assert.equal(response.status, 200);
     assert.match(response.headers.get("x-request-id") ?? "", /^[0-9a-f-]{36}$/);
+    assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+    assert.equal(response.headers.get("x-frame-options"), "DENY");
+    assert.equal(
+      response.headers.get("referrer-policy"),
+      "strict-origin-when-cross-origin",
+    );
     assert.deepEqual(await response.json(), {
       service: "inventory-api",
       status: "ok",

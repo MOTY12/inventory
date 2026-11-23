@@ -1,5 +1,15 @@
 # Session log
 
+# 2026-11-23 — QUALITY-002 tenant isolation and security review
+
+- Resumed on `develop` at actual HEAD `4486f87`; `git status --short` was clean at start, despite stale checkpoint docs describing earlier uncommitted report changes. No user edits were present at start. No commit, push, deploy, migration or database reset/deletion occurred.
+- Reviewed auth and refresh sessions, active organization membership, workspace selection, role/capability and warehouse guards, invitations/member changes, controllers/services, Prisma tenant filters and tagged raw SQL, inventory/catalog/imports/procurement/sales/report exports/workers, frontend session/workspace state, logging, env and Compose configuration.
+- No confirmed critical/high application authorization bypass found in reviewed code. No `PLATFORM_ADMIN` role exists. Confirmed missing baseline browser security response headers; added conservative API and Next headers, production-only HSTS, and an API HTTP regression assertion. CSP remains deferred pending nonce-aware Next/Swagger design.
+- Added `docs/security/tenant-isolation-review.md`; QUALITY-002 is IN_PROGRESS because the historical installation output reported 3 high dependency advisories and the current `npm audit --omit=dev --audit-level=high` could not reach npm (`ENOTFOUND registry.npmjs.org`). Do not claim dependency scan clean or complete the task until advisory details are known/dispositioned.
+- Verification: typecheck, lint, format, production build, Prisma validation passed. Default `npm test` passed 51/0 with 2 opt-in DB suites skipped; web tests passed 2/2. Explicit isolated PostgreSQL tests passed auth/organization 10/10 and inventory/report 13/13. `prisma migrate status` could not connect to configured PostgreSQL at `localhost:5433`; no migration was applied. First sandboxed API contract test run hit local listener `EPERM`; permission-enabled rerun passed.
+- Updated task ledger, master plan, completed/pending task summaries, current state, checkpoint, blockers and this log. Roadmap remains 29/47.
+- Next: restore npm registry access and audit/remediate any high/critical advisories; restore DB endpoint for read-only migration status; then continue INV-010 interaction acceptance and QUALITY-003 queue/object recovery and approved RPO/RTO. See `docs/progress/next-session.md`.
+
 ## 2026-10-31 — Research and planning baseline
 
 - Verified workspace path and empty Git state: `main` has no commits and `origin/main` is gone; no existing AGENTS/project files found.

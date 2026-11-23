@@ -9,6 +9,8 @@ This summary is subordinate to the task ledger in `docs/implementation/task-brea
 
 ## Current next-stage work
 
+- **QUALITY-002 — IN_PROGRESS:** Security review is documented in `docs/security/tenant-isolation-review.md`; baseline API/Next response headers and an API HTTP regression assertion were added. Default tests passed (51 pass/0 fail/2 opt-in DB suites skipped, web 2/2); explicit isolated PostgreSQL suites passed 10/10 and 13/13; typecheck, lint, format, build and Prisma validation passed. No confirmed critical/high authorization bypass was found in reviewed code. npm audit remains blocked by registry DNS and prior install output reported 3 high advisories; migration status also could not connect to `localhost:5433`. Do not mark complete or increase the count until dependency risk is known and dispositioned.
+
 - **QUALITY-003 — IN_PROGRESS:** Dependencies FOUNDATION-002 and FOUNDATION-005 are complete. Added safe PostgreSQL archive/restore scripts and a runbook; local isolated restore drill passed. Next add queue restart and object storage recovery rehearsal, finish incident steps, and obtain RPO/RTO targets before claiming completion.
 - Do not start SALES-004 or REPORT-002 until invoice/tax/accounting policy is approved.
 

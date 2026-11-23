@@ -4,6 +4,9 @@
 
 ## Active verification gaps
 
+- **QUALITY-002 dependency audit:** `npm audit --omit=dev --audit-level=high` failed because `registry.npmjs.org` resolved as `ENOTFOUND`. Earlier installation output recorded seven lockfile advisories including three high, without details. QUALITY-002 remains IN_PROGRESS until current advisory state is known and dispositioned. Evidence is in `docs/security/tenant-isolation-review.md`.
+- **Prisma migration status:** `npx prisma migrate status --config prisma.config.ts` could not connect to configured `inventory_dev` at `localhost:5433` (schema-engine connection error). Prisma schema validation passed; no migration was applied.
+
 - **INV-010 browser interaction:** Native Enter-key submission, repeat increments, unknown barcode feedback, receiving/picking UI limits, and workspace-switch clearing still need browser/component interaction evidence. Existing queue regression, API lookup tests and database workflow suite pass. Chrome CDP at `127.0.0.1:9222` was unreachable. Do not mark INV-010 complete until keyboard acceptance has automated interaction evidence.
 - **Report performance:** All export types, queue/storage, private service download, retries and expiry passed isolated integration, but a representative large-tenant performance benchmark was not run.
 - **Dependency audit:** Registry-backed `npm audit` could not reach `registry.npmjs.org` in earlier work. Prior installation reported seven lockfile advisories (4 moderate, 3 high) without full advisory detail. No clean audit is claimed.
@@ -19,6 +22,7 @@
 ## Production hardening and policy gates
 
 - Production email and distributed rate limiting remain open.
+- CSP is not configured; add only with a nonce-compatible Next.js plan and verified Swagger behavior. Baseline browser response headers are now configured for the API and web app.
 - Open material decisions are in `docs/progress/decisions.md`: target segment/brand, tax/invoice requirements, pricing/limits, production residency/hosting commitments, MFA enforcement, RLS and privileged support access. Keep dependent work gated.
 - RPO/RTO targets for QUALITY-003 are not approved. Measure local backup/restore behavior but do not invent customer-facing service objectives.
 - Browser E2E, pilot and production release checks remain outstanding.
