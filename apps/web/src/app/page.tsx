@@ -37,15 +37,32 @@ type LowStockResult = {
   total: number;
   summary: { products: number; warehouses: number };
 };
+type InventorySummary = {
+  totals: {
+    inventory_value_by_currency: {
+      cost_currency: string | null;
+      inventory_value: string;
+    }[];
+    uncosted_quantity: string;
+  };
+};
+type CountPage = { total: number };
 
 function Dashboard() {
   const { organization, user, authenticatedRequest } = useSession();
   const [products, setProducts] = useState<Page<Product> | null>(null);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [warehouseCount, setWarehouseCount] = useState(0);
   const [balances, setBalances] = useState<Balance[]>([]);
   const [balanceCount, setBalanceCount] = useState(0);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [inventorySummary, setInventorySummary] =
+    useState<InventorySummary | null>(null);
+  const [pendingPurchaseOrders, setPendingPurchaseOrders] = useState(0);
+  const [pendingSalesOrders, setPendingSalesOrders] = useState(0);
+  const canViewPurchasing = organization?.role !== "SALES";
+  const canViewSales = organization?.role !== "BUYER";
   const [lowStock, setLowStock] = useState<LowStockResult>({
     data: [],
     total: 0,
@@ -58,7 +75,11 @@ function Dashboard() {
     if (!organization) {
       setProducts(null);
       setWarehouses([]);
+      setWarehouseCount(0);
       setOrders([]);
+      setInventorySummary(null);
+      setPendingPurchaseOrders(0);
+      setPendingSalesOrders(0);
       setBalances([]);
       setBalanceCount(0);
       setMovements([]);
@@ -67,32 +88,74 @@ function Dashboard() {
     }
     setProducts(null);
     setWarehouses([]);
+    setWarehouseCount(0);
     setOrders([]);
+    setInventorySummary(null);
+    setPendingPurchaseOrders(0);
+    setPendingSalesOrders(0);
     setBalances([]);
     setBalanceCount(0);
     setMovements([]);
     setLoading(true);
     setError("");
     try {
-      const [productResult, warehouseResult, orderResult, lowStockResult] =
-        await Promise.all([
-          authenticatedRequest<Page<Product>>(
-            "/organizations/current/catalog/products?page=1&page_size=1&status=ACTIVE",
-          ),
-          authenticatedRequest<Page<Warehouse>>(
-            "/organizations/current/warehouses?page=1&page_size=100&status=ACTIVE",
-          ),
-          authenticatedRequest<Page<Order>>(
-            "/organizations/current/procurement/purchase-orders?page=1&page_size=5",
-          ),
-          authenticatedRequest<LowStockResult>(
-            "/organizations/current/inventory/low-stock?page=1&page_size=5",
-          ),
-        ]);
+      const [
+        productResult,
+        warehouseResult,
+        orderResult,
+        lowStockResult,
+        summaryResult,
+        purchaseCounts,
+        salesCounts,
+      ] = await Promise.all([
+        authenticatedRequest<Page<Product>>(
+          "/organizations/current/catalog/products?page=1&page_size=1&status=ACTIVE",
+        ),
+        authenticatedRequest<Page<Warehouse>>(
+          "/organizations/current/warehouses?page=1&page_size=100&status=ACTIVE",
+        ),
+        canViewPurchasing
+          ? authenticatedRequest<Page<Order>>(
+              "/organizations/current/procurement/purchase-orders?page=1&page_size=5",
+            )
+          : Promise.resolve({ data: [], total: 0 }),
+        authenticatedRequest<LowStockResult>(
+          "/organizations/current/inventory/low-stock?page=1&page_size=5",
+        ),
+        authenticatedRequest<InventorySummary>(
+          "/organizations/current/reports/inventory-summary?page=1&page_size=1",
+        ),
+        canViewPurchasing
+          ? Promise.all(
+              ["SUBMITTED", "PARTIALLY_RECEIVED"].map((status) =>
+                authenticatedRequest<CountPage>(
+                  `/organizations/current/procurement/purchase-orders?page=1&page_size=1&status=${status}`,
+                ),
+              ),
+            )
+          : Promise.resolve([]),
+        canViewSales
+          ? Promise.all(
+              ["CONFIRMED", "PARTIALLY_FULFILLED"].map((status) =>
+                authenticatedRequest<CountPage>(
+                  `/organizations/current/sales/orders?page=1&page_size=1&status=${status}`,
+                ),
+              ),
+            )
+          : Promise.resolve([]),
+      ]);
       setProducts(productResult);
       setWarehouses(warehouseResult.data);
+      setWarehouseCount(warehouseResult.total);
       setOrders(orderResult.data);
       setLowStock(lowStockResult);
+      setInventorySummary(summaryResult);
+      setPendingPurchaseOrders(
+        purchaseCounts.reduce((sum, result) => sum + result.total, 0),
+      );
+      setPendingSalesOrders(
+        salesCounts.reduce((sum, result) => sum + result.total, 0),
+      );
       const stock = await Promise.all(
         warehouseResult.data.map(async (warehouse) => {
           const [balanceResult, movementResult] = await Promise.all([
@@ -129,7 +192,7 @@ function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [authenticatedRequest, organization]);
+  }, [authenticatedRequest, canViewPurchasing, canViewSales, organization]);
 
   useEffect(() => {
     void Promise.resolve().then(load);
@@ -220,28 +283,52 @@ function Dashboard() {
                 <small>In your product directory</small>
               </article>
               <article className="metric-card">
-                <span>Tracked balances</span>
-                <strong>{loading ? "—" : balanceCount}</strong>
-                <small>Product and warehouse pairs</small>
+                <span>Inventory value</span>
+                {loading ? (
+                  <strong>—</strong>
+                ) : inventorySummary?.totals.inventory_value_by_currency
+                    .length ? (
+                  <div className="metric-values">
+                    {inventorySummary.totals.inventory_value_by_currency.map(
+                      (item) => (
+                        <strong key={item.cost_currency ?? "unknown"}>
+                          {item.cost_currency ?? "Unspecified"}{" "}
+                          {item.inventory_value}
+                        </strong>
+                      ),
+                    )}
+                  </div>
+                ) : (
+                  <strong>—</strong>
+                )}
+                <small>
+                  {loading
+                    ? "Current stock at weighted average cost"
+                    : Number(inventorySummary?.totals.uncosted_quantity ?? 0) >
+                        0
+                      ? "Some stock has no recorded cost"
+                      : "Current stock at weighted average cost"}
+                </small>
               </article>
               <article className="metric-card">
                 <span>Warehouses</span>
-                <strong>{loading ? "—" : warehouses.length}</strong>
+                <strong>{loading ? "—" : warehouseCount}</strong>
                 <small>Active stock locations</small>
               </article>
-              <article className="metric-card">
-                <span>Open purchase orders</span>
-                <strong>
-                  {loading
-                    ? "—"
-                    : orders.filter((order) =>
-                        ["DRAFT", "SUBMITTED", "PARTIALLY_RECEIVED"].includes(
-                          order.status,
-                        ),
-                      ).length}
-                </strong>
-                <small>Draft, submitted or receiving</small>
-              </article>
+              {canViewPurchasing && (
+                <article className="metric-card">
+                  <span>Pending purchase orders</span>
+                  <strong>{loading ? "—" : pendingPurchaseOrders}</strong>
+                  <small>Submitted or partially received</small>
+                </article>
+              )}
+              {canViewSales && (
+                <article className="metric-card">
+                  <span>Pending sales orders</span>
+                  <strong>{loading ? "—" : pendingSalesOrders}</strong>
+                  <small>Confirmed or partially fulfilled</small>
+                </article>
+              )}
               <article className="metric-card">
                 <span>Low-stock alerts</span>
                 <strong>{loading ? "—" : lowStock.total}</strong>
@@ -260,6 +347,12 @@ function Dashboard() {
                 </small>
               </article>
             </section>
+            {!loading && balanceCount > 0 && (
+              <p className="dashboard-stock-context">
+                Stock is tracked across {balanceCount} product and warehouse
+                balances.
+              </p>
+            )}
             <div className="dashboard-columns">
               <section className="dashboard-panel">
                 <div className="panel-heading">
@@ -364,44 +457,48 @@ function Dashboard() {
                   </div>
                 )}
               </section>
-              <section className="dashboard-panel">
-                <div className="panel-heading">
-                  <div>
-                    <h2>Purchasing activity</h2>
-                    <p>Recent purchase orders</p>
+              {canViewPurchasing && (
+                <section className="dashboard-panel">
+                  <div className="panel-heading">
+                    <div>
+                      <h2>Purchasing activity</h2>
+                      <p>Recent purchase orders</p>
+                    </div>
+                    <Link href="/purchase-orders">View all →</Link>
                   </div>
-                  <Link href="/purchase-orders">View all →</Link>
-                </div>
-                {loading ? (
-                  <p className="panel-message">Loading purchase orders…</p>
-                ) : orders.length ? (
-                  <div className="order-list">
-                    {orders.slice(0, 5).map((order) => (
-                      <Link
-                        href={`/purchase-orders/${order.id}`}
-                        key={order.id}
-                      >
-                        <span>
-                          <strong>{order.number}</strong>
-                          <small>{order.supplier.name}</small>
-                        </span>
-                        <span className="order-meta">
-                          <b>{order.status.replaceAll("_", " ")}</b>
-                          <small>
-                            {order.currency} {order.subtotal}
-                          </small>
-                        </span>
+                  {loading ? (
+                    <p className="panel-message">Loading purchase orders…</p>
+                  ) : orders.length ? (
+                    <div className="order-list">
+                      {orders.slice(0, 5).map((order) => (
+                        <Link
+                          href={`/purchase-orders/${order.id}`}
+                          key={order.id}
+                        >
+                          <span>
+                            <strong>{order.number}</strong>
+                            <small>{order.supplier.name}</small>
+                          </span>
+                          <span className="order-meta">
+                            <b>{order.status.replaceAll("_", " ")}</b>
+                            <small>
+                              {order.currency} {order.subtotal}
+                            </small>
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="empty-state">
+                      <strong>No purchase orders yet</strong>
+                      <p>Create an order to track incoming stock.</p>
+                      <Link href="/purchase-orders">
+                        Create purchase order →
                       </Link>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="empty-state">
-                    <strong>No purchase orders yet</strong>
-                    <p>Create an order to track incoming stock.</p>
-                    <Link href="/purchase-orders">Create purchase order →</Link>
-                  </div>
-                )}
-              </section>
+                    </div>
+                  )}
+                </section>
+              )}
             </div>
             <section className="dashboard-panel attention-panel">
               <div className="panel-heading">

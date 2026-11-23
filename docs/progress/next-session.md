@@ -5,43 +5,41 @@
 ## Repository state
 
 - Workspace: `/Users/newuser/Documents/GitHub/inventory`
-- Branch: `develop`; starting commit for this session was `1d0417e`; worktree was clean at start. Commits: `9714566` (Next.js security patch), `06a521c` (REPORT-001); no push. The INV-010 scanner component/page/styles remain uncommitted. Do not overwrite them.
-- Roadmap: **28/47 complete**; REPORT-001 is newly complete; INV-010 is IN_PROGRESS. Recount from unique task entries before making status changes.
-- PostgreSQL migration status: 19/19 current. No schema migration applied by this session; no data reset/deletion.
-- Dependency: Next.js/eslint-config-next updated to 16.4.6. Production build succeeds. npm advisory audit could not reach registry (`ENOTFOUND registry.npmjs.org`), so audit status is unknown.
+- Branch: `develop`; starting HEAD for this session: `ae44aea` (`UPDARE REPORT`). Worktree was clean at start. No changes from other authors were present.
+- Roadmap: **28/47 complete** by the task ledger. REPORT-001 is complete; INV-010 remains IN_PROGRESS. This UI/UX redesign is tracked as session work, not a new roadmap task; it does not change the roadmap count.
+- No schema, API, database, or migration changes were made in this redesign.
+- No push or production operation occurred. The implementation and progress changes are ready for a focused local commit after review.
 
-## Completed this session
+## Completed this session: shared shell and dashboard milestone
 
-- REPORT-001 backend: tenant-scoped inventory summary, movement, weighted-average valuation and low-stock endpoints with validated filters, stable pagination, authorization and OpenAPI docs.
-- REPORT-001 frontend: responsive `/reports` tabs and real API integration, summary/KPIs, warehouse/category breakdowns, movement details, valuation and reorder alerts with filters, loading, empty, error and pagination states.
-- Historical reports derive on-hand and WAC from the immutable movement ledger ordered by timestamp and ID; historical reservations derive from reservation history. Current low-stock product count is explicitly current. No inventory records are mutated.
-- Report fixture verified 10 @ NGN 2 plus 10 @ NGN 4, historical value NGN 20, current WAC NGN 3/value NGN 60, and 20 on-hand/5-reserved/15-available. Verified filters, low-stock calculation, tenant denial and warehouse grant isolation.
-- API smoke: all report endpoints return 401 unauthenticated and all four appear in generated OpenAPI.
-- Next.js upgraded 16.4.3 → 16.4.6; Webpack production build succeeds.
-- Started INV-010 by adding `apps/web/src/components/barcode/barcode-scanner.tsx` and wiring it into `apps/web/src/app/sales-orders/new/page.tsx`. API lookup is tenant scoped; exact barcode matching is required; repeat scans increment base-unit quantity. Post-change typecheck, lint, format, default tests and production build passed.
+- Grouped existing routes under Overview, Catalog, Inventory, Purchasing, Sales, Reports, and Administration. Fixed `/inventory` active-state overlap with nested inventory routes.
+- Moved organization selection to the top navigation and added a keyboard-operable account menu with identity, role, and sign-out action. Existing organization switch behavior and session APIs are retained.
+- Added a centralized set of enterprise visual tokens and shared responsive styling for shell navigation, page headers, cards, forms, tables, controls, status colors, and small-screen layouts. This applies the restrained Inventory Valuation visual direction across existing pages without replacing their API integrations or business logic.
+- Dashboard now reads inventory value by currency from the existing inventory summary API, counts pending purchase orders by submitted/partially received status, counts pending sales orders by confirmed/partially fulfilled status, and uses the warehouse API's total for its count. The dashboard avoids requesting purchasing or sales data from roles lacking that area’s access.
+- This is a first shared design-system milestone. Individual page-specific layout and workflow review is still outstanding for Catalog/Products, Inventory, Purchasing, Sales, Reports, and Administration.
 
-## Verification evidence
+## Verification performed
 
-- `npm run typecheck`, `npm run lint`, `npm run format:check`: passed for REPORT-001 code.
-- `npm test`: 41 passed, 0 failed, 2 opt-in PostgreSQL suites skipped by default. API contract smoke includes protected-report route and OpenAPI assertions.
-- `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs`: 13 passed, 0 failed, 0 skipped, including report reconciliation and tenant/warehouse scope.
-- `npm run db:validate --workspace=@inventory/api`: passed.
-- `npx prisma migrate status --config prisma.config.ts`: 19 migrations found; schema up to date.
-- `npm run build`: production build passed using Next.js 16.4.6 and Webpack.
-- `npm audit --omit=dev --audit-level=high`: unavailable because DNS/network could not reach `registry.npmjs.org`; no audit result claimed.
-- Interactive browser UAT and authenticated report HTTP workflow were not run. The browser RPC is unavailable. No large-dataset performance benchmark was run.
+- `npm run typecheck`: passed.
+- `npm run lint`: passed with no remaining warnings after the permission-aware dashboard update.
+- `npm run format:check`: passed.
+- `git diff --check`: passed.
+- `npm test`: **41 passed, 0 failed, 2 skipped**. Both skips are opt-in PostgreSQL integration suites; database acceptance was not run in this UI task.
+- `npm run build --workspace=@inventory/web`: passed with Next.js Webpack compiler; build listed all current static and dynamic frontend routes.
+- No interactive browser or responsive visual review was performed. No browser-control tool/runtime was available in this session; do not claim visual UAT. No services or database were started or modified.
+- The build/typecheck generated changes to `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo`; restore these generated-only files before finalizing, then recheck status.
 
 ## Exact next steps
 
-1. Add focused automated coverage for barcode normalization/repeated base-unit scan increments if a suitable existing frontend test harness is available; otherwise keep the keyboard interaction acceptance explicitly pending.
-2. Check if Codex browser control is available; if so, on `/sales-orders/new`, scan/type the same known product barcode twice and verify one base-unit line quantity increases from 1 to 2, plus unknown barcode handling. Do not claim this if not observed.
-3. Evaluate mobile camera feasibility using runtime support/secure-context requirements and document findings; do not request camera permissions unless implementing an explicit camera workflow.
-4. Keep INV-010 IN_PROGRESS until repeated-scan and keyboard criteria are verified. Then take the next dependency-ready task from `task-breakdown.md`; REPORT-003 and other tasks must be evaluated against the actual dependency graph and open decisions.
-5. Inspect `git diff`, run `git diff --check`, and inspect `git status` to preserve the remaining focused code/docs changes. Do not push. Create local focused commits only for coherent verified milestones if permitted.
-6. Update task ledger, current-state, next-session, pending-tasks, blockers, completed-tasks, master-plan, and session-log with actual results before stopping.
+1. Confirm `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo` are clean after their generated changes were restored; preserve the three intentional frontend source files and this documentation.
+2. If browser control becomes available, run responsive visual review at desktop, tablet, and mobile widths. Verify organization switching, account menu, active links, and dashboard metrics for OWNER, BUYER, and SALES roles.
+3. Continue the redesign at Products and Catalog: review the real list/detail/create/edit/archive flows, improve hierarchy and consistency with the shared system, and preserve API behavior. Then review Inventory, Purchasing, Sales, Reports, and Administration in that order.
+4. Do not count this redesign as a roadmap task. Keep INV-010 IN_PROGRESS until its barcode normalization/repeat-scan and Enter-key acceptance is verified; its camera capability question remains open.
+5. Run typecheck, lint, formatting, relevant tests, and the web production build after the next page milestone. Record any database/browser tests that are unavailable as pending, not passing.
+6. Review `git status` and the complete diff before committing. No push without authorization.
 
-## Open gaps
+## Remaining limits and decisions
 
-- Browser UAT, performance/load benchmark, and authenticated live HTTP report queries remain outstanding.
-- npm dependency audit status is unknown due network failure.
-- Production email/shared rate limiting, policy approvals in `decisions.md`, and production deployment review remain pending.
+- No authenticated browser workflow, responsive visual acceptance, or runtime dashboard endpoint check was performed.
+- PostgreSQL and migration state were not checked during this UI session; the prior checkpoint reports 19 migrations current, but this session did not reverify that state.
+- Dependency advisory audit remains unknown because registry access failed in the prior session. Production email, distributed rate limiting, and product/security/compliance decisions remain tracked in `docs/progress/decisions.md`.

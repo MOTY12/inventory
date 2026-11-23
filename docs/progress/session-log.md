@@ -296,3 +296,12 @@
 - Completed REPORT-001; completed task count is now 28/47. No database migration was required or applied; no data reset/deletion. Created local commits `9714566` (Next.js security dependency patch) and `06a521c` (REPORT-001); no push.
 - Began the next eligible dependency-ready task INV-010: added an accessible scanner keyboard input and exact barcode lookup into new sales order creation; repeated scans increment a base-unit quantity. Post-change typecheck, lint, format, default tests and production build passed. This remains IN_PROGRESS pending focused keyboard/repeat verification, browser availability, and camera API feasibility.
 - Current exact follow-up is in `docs/progress/next-session.md`. Docker was not checked. No production deployment or external writes.
+
+# Session 2026-11-23 — Enterprise UI/UX redesign
+
+- Started from `ae44aea` on `develop` with a clean worktree. Read the operating guide, current checkpoint, implementation plan, and attached redesign brief before editing.
+- Completed a shared app-shell/dashboard milestone: reorganized route groups, moved workspace selection into the topbar, added account identity/sign-out menu, established global enterprise design tokens and responsive styling for existing page structures, and added real API-backed dashboard valuation and pending order metrics. Purchase/sales panels and counts respect the current membership role.
+- No backend, API, database, or migration changes. No roadmap task status changed; count remains 28/47. INV-010 remains in progress.
+- Verification passed: typecheck; lint (no warnings); format check; diff whitespace check; `npm test` 41 passed, 0 failed, 2 opt-in PostgreSQL suites skipped; web production build via Webpack with all existing routes generated.
+- No database/runtime endpoint or interactive browser/responsive visual checks were performed. This environment had no configured browser runtime/tool. Do not claim UI UAT.
+- Exact continuation is recorded in `docs/progress/next-session.md`: review diff/generated artifacts, then continue page-specific redesign from Products/Catalog through Administration while preserving existing APIs and workflows.

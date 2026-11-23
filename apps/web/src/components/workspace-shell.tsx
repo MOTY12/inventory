@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
@@ -9,24 +9,28 @@ import { useSession } from "../features/auth/session-provider";
 
 const groups = [
   {
-    label: "WORKSPACE",
+    label: "OVERVIEW",
     links: [{ href: "/", label: "Overview", icon: "overview" }],
+  },
+  {
+    label: "CATALOG",
+    links: [
+      { href: "/products", label: "Products", icon: "products" },
+      { href: "/catalog", label: "Categories & units", icon: "catalog" },
+      { href: "/imports", label: "Import data", icon: "catalog" },
+    ],
   },
   {
     label: "INVENTORY",
     links: [
-      { href: "/products", label: "Products", icon: "products" },
-      { href: "/imports", label: "Import data", icon: "catalog" },
       { href: "/inventory", label: "Stock counts", icon: "counts" },
-      { href: "/inventory/low-stock", label: "Low stock", icon: "counts" },
       {
         href: "/inventory/reorder-rules",
         label: "Reorder rules",
         icon: "counts",
       },
+      { href: "/inventory/low-stock", label: "Low stock", icon: "counts" },
       { href: "/transfers", label: "Transfers", icon: "purchasing" },
-      { href: "/locations", label: "Branches & warehouses", icon: "locations" },
-      { href: "/catalog", label: "Categories & units", icon: "catalog" },
     ],
   },
   {
@@ -52,8 +56,9 @@ const groups = [
     links: [{ href: "/reports", label: "Inventory reports", icon: "reports" }],
   },
   {
-    label: "MANAGEMENT",
+    label: "ADMINISTRATION",
     links: [
+      { href: "/locations", label: "Branches & warehouses", icon: "locations" },
       { href: "/organizations", label: "Workspace settings", icon: "settings" },
     ],
   },
@@ -164,6 +169,8 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
     adoptAccessToken,
   } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountButtonRef = useRef<HTMLButtonElement>(null);
   const [switching, setSwitching] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [orgError, setOrgError] = useState("");
@@ -216,6 +223,12 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
       return "Purchase order";
     if (first === "products" && pathname.split("/").length > 2)
       return "Product details";
+    if (first === "sales-orders" && pathname.split("/").length > 2)
+      return "Sales order details";
+    if (first === "transfers" && pathname.split("/").length > 2)
+      return "Transfer details";
+    if (first === "customers" && pathname.split("/").length > 2)
+      return "Customer details";
     return names[first] ?? "Workspace";
   }, [pathname]);
 
@@ -261,40 +274,12 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
           </span>
           <span className="brand-name">stockroom</span>
         </Link>
-        <label className="workspace-switcher-label" htmlFor="workspace-select">
-          WORKSPACE
-        </label>
-        <div className="workspace-switcher-wrap">
-          <span className="workspace-avatar">
-            {(organization?.name ?? "W").slice(0, 1).toUpperCase()}
-          </span>
-          <select
-            aria-label="Switch organization"
-            className="workspace-select"
-            disabled={switching || organizations.length < 2}
-            id="workspace-select"
-            onChange={(event) => void selectOrganization(event.target.value)}
-            value={organization?.id ?? ""}
-          >
-            <option value="">{organization?.name ?? "Select workspace"}</option>
-            {organizations.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-          {organizations.length < 2 && (
-            <span aria-hidden="true" className="switcher-chevron">
-              ⌄
-            </span>
-          )}
-        </div>
-        {orgError && (
-          <p className="workspace-switch-error" role="alert">
-            {orgError}
-          </p>
-        )}
-        <nav aria-label="Main navigation" className="primary-nav">
+        <nav
+          aria-label="Main navigation"
+          className="primary-nav"
+          id="main-navigation"
+          onClick={() => setAccountOpen(false)}
+        >
           {visibleGroups.map((group) => (
             <section className="nav-group" key={group.label}>
               <h2 className="nav-heading">{group.label}</h2>
@@ -302,8 +287,10 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
                 const active =
                   item.href === "/"
                     ? pathname === "/"
-                    : pathname === item.href ||
-                      pathname.startsWith(`${item.href}/`);
+                    : item.href === "/inventory"
+                      ? pathname === item.href
+                      : pathname === item.href ||
+                        pathname.startsWith(`${item.href}/`);
                 return (
                   <Link
                     aria-current={active ? "page" : undefined}
@@ -366,18 +353,85 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             <strong>{title}</strong>
           </div>
           <div className="topbar-actions">
-            <span className="organization-context">
-              {organization?.name ?? "No workspace selected"}
-            </span>
-            <button
-              className="account-button"
-              onClick={() => void logout()}
-              type="button"
+            <div className="topbar-workspace">
+              <label htmlFor="workspace-select">Workspace</label>
+              <select
+                aria-label="Switch organization"
+                className="workspace-select"
+                disabled={switching || organizations.length < 2}
+                id="workspace-select"
+                onChange={(event) =>
+                  void selectOrganization(event.target.value)
+                }
+                value={organization?.id ?? ""}
+              >
+                <option value="">
+                  {organization?.name ?? "Select workspace"}
+                </option>
+                {organizations.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div
+              className="account-menu-wrap"
+              onBlur={(event) => {
+                if (
+                  !event.relatedTarget ||
+                  !event.currentTarget.contains(event.relatedTarget as Node)
+                ) {
+                  setAccountOpen(false);
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setAccountOpen(false);
+                  accountButtonRef.current?.focus();
+                }
+              }}
             >
-              Sign out
-            </button>
+              <button
+                aria-controls="account-menu"
+                aria-expanded={accountOpen}
+                aria-haspopup="true"
+                className="account-button"
+                onClick={() => setAccountOpen((open) => !open)}
+                ref={accountButtonRef}
+                type="button"
+              >
+                <span aria-hidden="true" className="account-avatar">
+                  {(user?.email ?? "U").slice(0, 1).toUpperCase()}
+                </span>
+                <span className="account-email">
+                  {user?.email ?? "Account"}
+                </span>
+                <span aria-hidden="true" className="account-chevron">
+                  ⌄
+                </span>
+              </button>
+              <div
+                className="account-menu"
+                hidden={!accountOpen}
+                id="account-menu"
+              >
+                <div className="account-menu-identity">
+                  <strong>{organization?.role ?? "Signed in"}</strong>
+                  <span>{user?.email}</span>
+                </div>
+                <button onClick={() => void logout()} type="button">
+                  Sign out
+                </button>
+              </div>
+            </div>
           </div>
         </header>
+        {orgError ? (
+          <p className="workspace-switch-error topbar-error" role="alert">
+            {orgError}
+          </p>
+        ) : null}
         <main className="page-content workspace-content" id="main-content">
           {children}
         </main>
