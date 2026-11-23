@@ -38,5 +38,5 @@
 
 ## Git
 
-- Latest known commit at session start: `ae44aea` (`UPDARE REPORT`); branch `develop`. This session's UI source and progress documentation changes require final diff review and a local commit. Do not push.
+- UI milestone committed locally as `33fa0a6` (`ui: establish enterprise workspace design system`) on `develop`; no push. The commit contains the shared shell/dashboard/styles and progress checkpoint.
 - INV-010 remains in progress pending barcode repeat/keyboard acceptance and camera feasibility. Browser UI and API endpoint acceptance remain pending where not evidenced. See `docs/progress/next-session.md` for exact next actions. Do not start SALES-004 until financial policy is approved.

@@ -8,7 +8,7 @@
 - Branch: `develop`; starting HEAD for this session: `ae44aea` (`UPDARE REPORT`). Worktree was clean at start. No changes from other authors were present.
 - Roadmap: **28/47 complete** by the task ledger. REPORT-001 is complete; INV-010 remains IN_PROGRESS. This UI/UX redesign is tracked as session work, not a new roadmap task; it does not change the roadmap count.
 - No schema, API, database, or migration changes were made in this redesign.
-- No push or production operation occurred. The implementation and progress changes are ready for a focused local commit after review.
+- UI milestone commit: `33fa0a6` (`ui: establish enterprise workspace design system`). No push or production operation occurred.
 
 ## Completed this session: shared shell and dashboard milestone
 
@@ -36,7 +36,7 @@
 3. Continue the redesign at Products and Catalog: review the real list/detail/create/edit/archive flows, improve hierarchy and consistency with the shared system, and preserve API behavior. Then review Inventory, Purchasing, Sales, Reports, and Administration in that order.
 4. Do not count this redesign as a roadmap task. Keep INV-010 IN_PROGRESS until its barcode normalization/repeat-scan and Enter-key acceptance is verified; its camera capability question remains open.
 5. Run typecheck, lint, formatting, relevant tests, and the web production build after the next page milestone. Record any database/browser tests that are unavailable as pending, not passing.
-6. Review `git status` and the complete diff before committing. No push without authorization.
+6. Check `git status` and `git log -1` to confirm the checkpoint commit. No push without authorization.
 
 ## Remaining limits and decisions
 

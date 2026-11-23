@@ -304,4 +304,5 @@
 - No backend, API, database, or migration changes. No roadmap task status changed; count remains 28/47. INV-010 remains in progress.
 - Verification passed: typecheck; lint (no warnings); format check; diff whitespace check; `npm test` 41 passed, 0 failed, 2 opt-in PostgreSQL suites skipped; web production build via Webpack with all existing routes generated.
 - No database/runtime endpoint or interactive browser/responsive visual checks were performed. This environment had no configured browser runtime/tool. Do not claim UI UAT.
+- Committed the verified shared shell/dashboard/styles and progress checkpoint as `33fa0a6` (`ui: establish enterprise workspace design system`); no push.
 - Exact continuation is recorded in `docs/progress/next-session.md`: review diff/generated artifacts, then continue page-specific redesign from Products/Catalog through Administration while preserving existing APIs and workflows.
