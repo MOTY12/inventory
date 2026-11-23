@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { BarcodeScanner } from "../../../components/barcode/barcode-scanner";
 import { useSession } from "../../../features/auth/session-provider";
 
 type Option = { id: string; name: string };
@@ -17,6 +18,7 @@ type Product = {
   id: string;
   name: string;
   sku: string;
+  barcode: string | null;
   defaultSalePrice: string | null;
   saleCurrency: string | null;
   baseUnit: UnitOption;
@@ -166,6 +168,43 @@ export default function NewSalesOrderPage() {
     const balance = balances[line.productId];
     if (!balance) return "0";
     return display(scaled(balance.onHand, 6) - scaled(balance.reserved, 6), 6);
+  }
+  async function addScannedProduct(barcode: string) {
+    const matches = await authenticatedRequest<{ data: Product[] }>(
+      `/organizations/current/catalog/products?page=1&page_size=20&status=ACTIVE&q=${encodeURIComponent(barcode)}`,
+    );
+    const normalized = barcode.toLocaleUpperCase("en-US");
+    const product = matches.data.find(
+      (item) => item.barcode?.toLocaleUpperCase("en-US") === normalized,
+    );
+    if (!product) throw new Error("No active product matches this barcode.");
+
+    setLines((current) => {
+      const existingIndex = current.findIndex(
+        (line) =>
+          line.productId === product.id && line.unitId === product.baseUnit.id,
+      );
+      if (existingIndex >= 0) {
+        return current.map((line, index) =>
+          index === existingIndex
+            ? {
+                ...line,
+                quantity: display(scaled(line.quantity, 6) + scaled("1", 6), 6),
+              }
+            : line,
+        );
+      }
+      return [
+        ...current,
+        {
+          productId: product.id,
+          unitId: product.baseUnit.id,
+          quantity: "1",
+          unitPrice: product.defaultSalePrice ?? "0",
+        },
+      ];
+    });
+    if (product.saleCurrency) setCurrency(product.saleCurrency);
   }
   async function saveDraft(event: React.FormEvent) {
     event.preventDefault();
@@ -335,6 +374,7 @@ export default function NewSalesOrderPage() {
                 Add line
               </button>
             </div>
+            <BarcodeScanner onScan={addScannedProduct} />
             <div className="product-table-wrap">
               <table className="data-table">
                 <thead>

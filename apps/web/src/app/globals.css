@@ -2941,6 +2941,41 @@ select {
   display: flex;
   gap: 8px;
 }
+.barcode-scanner {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--line, #e1e8e2);
+  border-radius: 12px;
+  background: var(--surface-muted, #f7faf7);
+}
+.barcode-scanner > label {
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+.barcode-scanner-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.barcode-scanner-controls input {
+  min-width: 0;
+  flex: 1;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line, #d3ddd5);
+  border-radius: 8px;
+  background: white;
+}
+.barcode-scanner p {
+  margin: 0;
+  color: var(--muted, #637166);
+  font-size: 0.84rem;
+}
+.barcode-scanner .barcode-error {
+  color: #a4342c;
+}
 @media (max-width: 760px) {
   .po-line,
   .po-summary {
@@ -2951,6 +2986,10 @@ select {
   }
   .po-actions,
   .po-receive-action {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .barcode-scanner-controls {
     align-items: stretch;
     flex-direction: column;
   }
