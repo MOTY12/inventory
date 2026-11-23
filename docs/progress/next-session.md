@@ -24,6 +24,7 @@
 - Catalog: API total counts for active categories/units and a retry action for load failures. Supplier/customer directories now have clearer workspace, loading, empty, retry, and pagination states; stale list/detail requests are ignored after workspace/filter changes; customer details clear stale organization data and show distinct unavailable/loading states.
 - Purchase-order detail/receiving: organization changes clear the prior order and stale async responses are ignored; loading/error retry/unavailable states are distinct; receipt quantities use exact-decimal positive and outstanding-bound checks; cancellation asks for confirmation.
 - Sales-order detail: organization changes clear the prior order and stale responses; all entered pick/fulfillment values are validated as positive decimals and bounded by unpicked/picked-outstanding quantities; idempotency keys are reused only for identical retry payloads; fulfillment requires confirmation.
+- Reports: workspace switch clears organization-bound filters/results and stale responses are discarded; unavailable errors have retry; pagination is named navigation.
 - No backend authorization or business rules were changed. Shared CSS restyles all current modules; page-specific review remains for Catalog, supplier/customer details, receiving/fulfillment details, Reports and Administration.
 
 ## Verification
@@ -39,8 +40,8 @@
 
 ## Exact next steps
 
-1. Confirm clean `git status` and read this checkpoint. No additional implementation commit is pending; do not push.
-2. Continue page-by-page with Reports, then Organizations/Locations administration and any remaining auth/registration screens. Preserve existing API calls and RBAC.
+1. Review and commit the verified Reports UI pass with this checkpoint. Do not push.
+2. Continue page-by-page with Organizations/Locations administration and any remaining auth/registration screens. Preserve existing API calls and RBAC.
 3. If browser control becomes available, run desktop/tablet/mobile visual review. Exercise organization switching, role-specific navigation/actions, product conversion, count posting, transfer dispatch/receipt, goods receiving, and sales fulfillment. No browser tool/runtime was available in this session.
 4. Keep INV-010 IN_PROGRESS pending barcode repeat-scan/Enter verification and camera feasibility. Do not count UI work as roadmap completion.
 5. After the next page milestone, run typecheck, lint, formatting, relevant tests and the web production build; document unavailable database/browser checks as pending.

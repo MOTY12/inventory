@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "../auth/session-provider";
 
@@ -134,10 +134,34 @@ export function ReportsPage() {
   >(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const requestVersion = useRef(0);
 
   useEffect(() => {
-    if (!organization) return;
     let cancelled = false;
+    if (!organization) {
+      void Promise.resolve().then(() => {
+        if (cancelled) return;
+        setWarehouses([]);
+        setCategories([]);
+        setProducts([]);
+        setWarehouseId("");
+        setCategoryId("");
+        setProductId("");
+        setResult(null);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+    void Promise.resolve().then(() => {
+      if (cancelled) return;
+      setWarehouses([]);
+      setCategories([]);
+      setProducts([]);
+      setWarehouseId("");
+      setCategoryId("");
+      setProductId("");
+    });
     void Promise.all([
       authenticatedRequest<Page<WarehouseOption>>(
         "/organizations/current/warehouses?page=1&page_size=100&status=ACTIVE",
@@ -169,12 +193,15 @@ export function ReportsPage() {
   }, [authenticatedRequest, organization]);
 
   const load = useCallback(async () => {
+    const version = ++requestVersion.current;
     if (!organization) {
+      setResult(null);
       setLoading(false);
       return;
     }
     setLoading(true);
     setError("");
+    setResult(null);
     try {
       const params = new URLSearchParams({
         page: String(page),
@@ -199,18 +226,19 @@ export function ReportsPage() {
             : view === "valuation"
               ? "valuation"
               : "low-stock";
-      setResult(
-        await authenticatedRequest<
-          Summary | Page<Movement> | Page<LowStockAlert>
-        >(`/organizations/current/reports/${endpoint}?${params}`),
-      );
+      const nextResult = await authenticatedRequest<
+        Summary | Page<Movement> | Page<LowStockAlert>
+      >(`/organizations/current/reports/${endpoint}?${params}`);
+      if (version !== requestVersion.current) return;
+      setResult(nextResult);
     } catch (cause) {
+      if (version !== requestVersion.current) return;
       setError(
         cause instanceof Error ? cause.message : "Could not load this report.",
       );
       setResult(null);
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   }, [
     asOf,
@@ -257,191 +285,224 @@ export function ReportsPage() {
         <span className="date-chip">Live data · tenant scoped</span>
       </header>
 
-      <nav className="report-tabs" aria-label="Inventory reports">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            aria-pressed={view === tab.id}
-            className={view === tab.id ? "report-tab active" : "report-tab"}
-            onClick={() => changeView(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </nav>
+      {!organization ? (
+        <section className="catalog-empty">
+          <h2>Choose a workspace first</h2>
+          <p>
+            Reports are scoped to the active organization and warehouse access.
+          </p>
+          <Link href="/organizations" className="catalog-secondary-link">
+            Manage organizations
+          </Link>
+        </section>
+      ) : (
+        <>
+          <nav className="report-tabs" aria-label="Inventory reports">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                aria-pressed={view === tab.id}
+                className={view === tab.id ? "report-tab active" : "report-tab"}
+                onClick={() => changeView(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
 
-      <section className="report-filters" aria-label="Report filters">
-        <label>
-          Warehouse
-          <select
-            value={warehouseId}
-            onChange={(event) =>
-              resetPage(() => setWarehouseId(event.target.value))
-            }
-          >
-            <option value="">All accessible warehouses</option>
-            {warehouses.map((warehouse) => (
-              <option key={warehouse.id} value={warehouse.id}>
-                {warehouse.name} · {warehouse.code}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Category
-          <select
-            value={categoryId}
-            onChange={(event) =>
-              resetPage(() => setCategoryId(event.target.value))
-            }
-          >
-            <option value="">All categories</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Product
-          <select
-            value={productId}
-            onChange={(event) =>
-              resetPage(() => setProductId(event.target.value))
-            }
-          >
-            <option value="">All products</option>
-            {products.map((product) => (
-              <option key={product.id} value={product.id}>
-                {product.name} · {product.sku}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Search
-          <input
-            value={query}
-            onChange={(event) => resetPage(() => setQuery(event.target.value))}
-            placeholder="Product, SKU, warehouse"
-          />
-        </label>
-        {view === "movements" ? (
-          <>
+          <section className="report-filters" aria-label="Report filters">
             <label>
-              From
-              <input
-                type="date"
-                value={from}
-                onChange={(event) =>
-                  resetPage(() => setFrom(event.target.value))
-                }
-              />
-            </label>
-            <label>
-              Through
-              <input
-                type="date"
-                value={to}
-                onChange={(event) => resetPage(() => setTo(event.target.value))}
-              />
-            </label>
-            <label>
-              Movement type
+              Warehouse
               <select
-                value={movementType}
+                value={warehouseId}
                 onChange={(event) =>
-                  resetPage(() => setMovementType(event.target.value))
+                  resetPage(() => setWarehouseId(event.target.value))
                 }
               >
-                <option value="">All movement types</option>
-                {[
-                  "OPENING_BALANCE",
-                  "RECEIPT",
-                  "SALE_FULFILLMENT",
-                  "TRANSFER_OUT",
-                  "TRANSFER_IN",
-                  "ADJUSTMENT",
-                  "REVERSAL",
-                ].map((type) => (
-                  <option key={type}>{type}</option>
+                <option value="">All accessible warehouses</option>
+                {warehouses.map((warehouse) => (
+                  <option key={warehouse.id} value={warehouse.id}>
+                    {warehouse.name} · {warehouse.code}
+                  </option>
                 ))}
               </select>
             </label>
-          </>
-        ) : null}
-        {view === "summary" || view === "valuation" ? (
-          <label>
-            Valuation cutoff (UTC)
-            <input
-              type="date"
-              value={asOf}
-              onChange={(event) => resetPage(() => setAsOf(event.target.value))}
-            />
-          </label>
-        ) : null}
-      </section>
+            <label>
+              Category
+              <select
+                value={categoryId}
+                onChange={(event) =>
+                  resetPage(() => setCategoryId(event.target.value))
+                }
+              >
+                <option value="">All categories</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Product
+              <select
+                value={productId}
+                onChange={(event) =>
+                  resetPage(() => setProductId(event.target.value))
+                }
+              >
+                <option value="">All products</option>
+                {products.map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.name} · {product.sku}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Search
+              <input
+                value={query}
+                onChange={(event) =>
+                  resetPage(() => setQuery(event.target.value))
+                }
+                placeholder="Product, SKU, warehouse"
+              />
+            </label>
+            {view === "movements" ? (
+              <>
+                <label>
+                  From
+                  <input
+                    type="date"
+                    value={from}
+                    onChange={(event) =>
+                      resetPage(() => setFrom(event.target.value))
+                    }
+                  />
+                </label>
+                <label>
+                  Through
+                  <input
+                    type="date"
+                    value={to}
+                    onChange={(event) =>
+                      resetPage(() => setTo(event.target.value))
+                    }
+                  />
+                </label>
+                <label>
+                  Movement type
+                  <select
+                    value={movementType}
+                    onChange={(event) =>
+                      resetPage(() => setMovementType(event.target.value))
+                    }
+                  >
+                    <option value="">All movement types</option>
+                    {[
+                      "OPENING_BALANCE",
+                      "RECEIPT",
+                      "SALE_FULFILLMENT",
+                      "TRANSFER_OUT",
+                      "TRANSFER_IN",
+                      "ADJUSTMENT",
+                      "REVERSAL",
+                    ].map((type) => (
+                      <option key={type}>{type}</option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            ) : null}
+            {view === "summary" || view === "valuation" ? (
+              <label>
+                Valuation cutoff (UTC)
+                <input
+                  type="date"
+                  value={asOf}
+                  onChange={(event) =>
+                    resetPage(() => setAsOf(event.target.value))
+                  }
+                />
+              </label>
+            ) : null}
+          </section>
 
-      {error ? (
-        <div className="report-message error" role="alert">
-          <strong>Report unavailable</strong>
-          <span>{error}</span>
-        </div>
-      ) : null}
-      {loading ? (
-        <div className="report-message" role="status">
-          Loading report data…
-        </div>
-      ) : null}
-      {!loading && !error && result ? (
-        <>
-          {view === "summary" && "totals" in result ? (
-            <SummaryView data={result} />
+          {error ? (
+            <div className="report-message error" role="alert">
+              <strong>Report unavailable</strong>
+              <span>{error}</span>
+              <button
+                className="catalog-text-button"
+                onClick={() => void load()}
+                type="button"
+              >
+                Try again
+              </button>
+            </div>
           ) : null}
-          {view === "valuation" && "totals" in result ? (
-            <ValuationView data={result} />
+          {loading ? (
+            <div className="report-message" role="status">
+              Loading report data…
+            </div>
           ) : null}
-          {view === "movements" && "data" in result && !("totals" in result) ? (
-            <MovementView data={result as Page<Movement>} />
+          {!loading && !error && result ? (
+            <>
+              {view === "summary" && "totals" in result ? (
+                <SummaryView data={result} />
+              ) : null}
+              {view === "valuation" && "totals" in result ? (
+                <ValuationView data={result} />
+              ) : null}
+              {view === "movements" &&
+              "data" in result &&
+              !("totals" in result) ? (
+                <MovementView data={result as Page<Movement>} />
+              ) : null}
+              {view === "low-stock" &&
+              "data" in result &&
+              !("totals" in result) ? (
+                <LowStockView data={result as Page<LowStockAlert>} />
+              ) : null}
+              {total > 25 ? (
+                <nav className="report-pagination" aria-label="Report pages">
+                  <span>
+                    Showing page {page} of {pages} · {total.toLocaleString()}{" "}
+                    rows
+                  </span>
+                  <div>
+                    <button
+                      type="button"
+                      disabled={page <= 1}
+                      onClick={() => setPage((value) => value - 1)}
+                    >
+                      Previous
+                    </button>
+                    <button
+                      type="button"
+                      disabled={page >= pages}
+                      onClick={() => setPage((value) => value + 1)}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </nav>
+              ) : null}
+            </>
           ) : null}
-          {view === "low-stock" && "data" in result && !("totals" in result) ? (
-            <LowStockView data={result as Page<LowStockAlert>} />
-          ) : null}
-          {total > 25 ? (
-            <div className="report-pagination">
+          {!loading && !error && result && total === 0 && view !== "summary" ? (
+            <div className="report-empty">
+              <strong>No matching records</strong>
               <span>
-                Showing page {page} of {pages} · {total.toLocaleString()} rows
+                Try widening the filters, or check back after inventory
+                activity.
               </span>
-              <div>
-                <button
-                  type="button"
-                  disabled={page <= 1}
-                  onClick={() => setPage((value) => value - 1)}
-                >
-                  Previous
-                </button>
-                <button
-                  type="button"
-                  disabled={page >= pages}
-                  onClick={() => setPage((value) => value + 1)}
-                >
-                  Next
-                </button>
-              </div>
             </div>
           ) : null}
         </>
-      ) : null}
-      {!loading && !error && result && total === 0 && view !== "summary" ? (
-        <div className="report-empty">
-          <strong>No matching records</strong>
-          <span>
-            Try widening the filters, or check back after inventory activity.
-          </span>
-        </div>
-      ) : null}
+      )}
     </main>
   );
 }
