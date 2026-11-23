@@ -8,7 +8,7 @@
 - Branch: `develop`; this redesign session started at `ae44aea` with a clean worktree. No user changes were overwritten.
 - Roadmap: **28/47 complete** according to the existing task ledger. REPORT-001 is complete; INV-010 remains IN_PROGRESS. UI redesign work is not a roadmap task and does not change the count.
 - No API, database, schema, or migration changes were made. Database/migration status was not checked in this session.
-- UI implementation commits: `33fa0a6` (shared design system), `f041826` (product list), `43dacf1` (inventory/order UI), `17e4688` (catalog/contact directories), `448c8c8` (purchase receiving), and `5092ed4` (sales fulfillment). Checkpoint commits: `960912d`, `0e42502`, `b2e19f0`, `5908956`. No push or deploy.
+- UI implementation commits: `33fa0a6` (shared design system), `f041826` (product list), `43dacf1` (inventory/order UI), `17e4688` (catalog/contact directories), `448c8c8` (purchase receiving), `5092ed4` (sales fulfillment), and `d806608` (Reports). Checkpoint commits: `960912d`, `0e42502`, `b2e19f0`, `5908956`, `049e0ac`. No push or deploy.
 
 ## Completed in this session
 
@@ -40,7 +40,7 @@
 
 ## Exact next steps
 
-1. Review and commit the verified Reports UI pass with this checkpoint. Do not push.
+1. Confirm clean `git status` and read this checkpoint. No additional implementation commit is pending; do not push.
 2. Continue page-by-page with Organizations/Locations administration and any remaining auth/registration screens. Preserve existing API calls and RBAC.
 3. If browser control becomes available, run desktop/tablet/mobile visual review. Exercise organization switching, role-specific navigation/actions, product conversion, count posting, transfer dispatch/receipt, goods receiving, and sales fulfillment. No browser tool/runtime was available in this session.
 4. Keep INV-010 IN_PROGRESS pending barcode repeat-scan/Enter verification and camera feasibility. Do not count UI work as roadmap completion.
