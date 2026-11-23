@@ -21,7 +21,12 @@ async function bootstrap(): Promise<void> {
   app.enableCors({
     origin: process.env.WEB_ORIGIN ?? "http://localhost:3000",
     credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-CSRF-Token",
+      "Idempotency-Key",
+    ],
     methods: ["GET", "POST", "PATCH", "OPTIONS"],
   });
   app.use(new RequestIdMiddleware().use);
@@ -48,7 +53,7 @@ async function bootstrap(): Promise<void> {
   );
 
   const port = Number(process.env.PORT ?? 4000);
-  await app.listen(port, "0.0.0.0");
+  await app.listen(port, process.env.HOST ?? "0.0.0.0");
 }
 
 void bootstrap();

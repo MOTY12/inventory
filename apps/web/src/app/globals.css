@@ -1954,6 +1954,76 @@ select {
   color: var(--muted);
   font-size: 12px;
 }
+.report-export-panel,
+.report-export-history {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.report-export-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.report-export-panel h2,
+.report-export-history h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+}
+.report-export-panel p,
+.report-export-empty,
+.report-export-feedback {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.report-export-history ul {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.report-export-history li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-top: 1px solid var(--line);
+  padding: 12px 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.report-export-history li > div {
+  display: grid;
+  gap: 4px;
+}
+.report-export-history li strong {
+  color: var(--ink);
+}
+.report-status.processing {
+  background: #e9f1ff;
+  color: #345f9c;
+}
+.report-status.completed {
+  background: #e6f4ec;
+  color: #236343;
+}
+.report-status.failed {
+  background: #fff0ee;
+  color: #923b35;
+}
+.report-status.expired {
+  background: #f0f1ef;
+  color: #626a64;
+}
+.report-export-feedback.error {
+  color: #923b35;
+}
 .report-message.error {
   border-color: #edc9c7;
   background: #fff9f8;

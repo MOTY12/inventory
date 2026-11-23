@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useId, useRef, useState } from "react";
+import { BarcodeScanQueue, submitBarcodeForm } from "./barcode-scan-queue";
 
 export type BarcodeScanFeedback = {
   productName: string;
@@ -23,51 +24,49 @@ export function BarcodeScanner({
 }: BarcodeScannerProps) {
   const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);
-  const queueRef = useRef<string[]>([]);
-  const processingRef = useRef(false);
+  const queueRef = useRef(new BarcodeScanQueue());
   const [barcode, setBarcode] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [messageIsError, setMessageIsError] = useState(false);
 
-  async function processQueue() {
-    if (processingRef.current) return;
-    processingRef.current = true;
-    setBusy(true);
-    while (queueRef.current.length > 0) {
-      const nextBarcode = queueRef.current.shift()!;
-      setMessage(`Looking up ${nextBarcode}…`);
-      setMessageIsError(false);
-      try {
-        const result = await onScan(nextBarcode);
-        setMessage(
-          result
-            ? `${result.productName} · ${result.sku}${result.quantity ? ` · ${result.quantity}${result.unitCode ? ` ${result.unitCode}` : ""}` : ""}${result.detail ? ` · ${result.detail}` : ""}`
-            : `Scanned ${nextBarcode}`,
-        );
-      } catch (cause) {
-        setMessageIsError(true);
-        setMessage(
-          cause instanceof Error
-            ? cause.message
-            : "Barcode could not be matched.",
-        );
-      }
+  async function processScan(nextBarcode: string) {
+    setMessage(`Looking up ${nextBarcode}…`);
+    setMessageIsError(false);
+    try {
+      const result = await onScan(nextBarcode);
+      setMessage(
+        result
+          ? `${result.productName} · ${result.sku}${result.quantity ? ` · ${result.quantity}${result.unitCode ? ` ${result.unitCode}` : ""}` : ""}${result.detail ? ` · ${result.detail}` : ""}`
+          : `Scanned ${nextBarcode}`,
+      );
+    } catch (cause) {
+      setMessageIsError(true);
+      setMessage(
+        cause instanceof Error
+          ? cause.message
+          : "Barcode could not be matched.",
+      );
     }
-    processingRef.current = false;
-    setBusy(false);
-    inputRef.current?.focus();
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const value = String(form.get("barcode") ?? "").trim();
-    if (!value) return;
+    const value = String(form.get("barcode") ?? "");
+    const queued = submitBarcodeForm(
+      event,
+      value,
+      queueRef.current,
+      processScan,
+    );
+    if (!queued) return;
     setBarcode("");
     setMessageIsError(false);
-    queueRef.current.push(value);
-    void processQueue();
+    setBusy(true);
+    void queued.finally(() => {
+      setBusy(false);
+      inputRef.current?.focus();
+    });
   }
 
   return (

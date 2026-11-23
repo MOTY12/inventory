@@ -37,6 +37,7 @@ type SessionContextValue = {
     method?: "GET" | "POST" | "PATCH" | "PUT",
     headers?: Record<string, string>,
   ) => Promise<T>;
+  authenticatedDownload: (path: string) => Promise<Blob>;
   adoptAccessToken: (token: string) => Promise<void>;
 };
 
@@ -183,6 +184,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const authenticatedDownload = useCallback(async (path: string) => {
+    if (!accessToken.current) throw new Error("Sign in to continue.");
+    const response = await fetch(`${API_URL}${path}`, {
+      credentials: "include",
+      headers: { Authorization: `Bearer ${accessToken.current}` },
+    });
+    if (!response.ok) {
+      const result = (await response.json().catch(() => ({}))) as {
+        message?: string;
+        error?: { message?: string };
+      };
+      throw new Error(
+        result.message ?? result.error?.message ?? "Download failed.",
+      );
+    }
+    return response.blob();
+  }, []);
+
   const adoptAccessToken = useCallback(
     async (token: string) => {
       await loadUser(token);
@@ -281,6 +300,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       resetPassword,
       logout,
       authenticatedRequest,
+      authenticatedDownload,
       adoptAccessToken,
     }),
     [
@@ -296,6 +316,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       resetPassword,
       logout,
       authenticatedRequest,
+      authenticatedDownload,
       adoptAccessToken,
     ],
   );

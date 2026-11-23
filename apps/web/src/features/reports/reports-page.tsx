@@ -94,6 +94,18 @@ type LowStockAlert = {
   product: ProductOption & { baseUnit: { code: string } };
   warehouse: WarehouseOption;
 };
+type ExportJob = {
+  id: string;
+  report_type: string;
+  status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "EXPIRED";
+  requested_at: string;
+  requested_by?: string;
+  completed_at: string | null;
+  expires_at: string | null;
+  row_count: number | null;
+  last_error: string | null;
+  download_url: string | null;
+};
 
 const tabs: { id: View; label: string }[] = [
   { id: "summary", label: "Inventory summary" },
@@ -115,7 +127,8 @@ function displayDate(value: string) {
 }
 
 export function ReportsPage() {
-  const { organization, authenticatedRequest } = useSession();
+  const { organization, authenticatedRequest, authenticatedDownload } =
+    useSession();
   const [view, setView] = useState<View>("summary");
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
@@ -134,7 +147,179 @@ export function ReportsPage() {
   >(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [exports, setExports] = useState<ExportJob[]>([]);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportMessage, setExportMessage] = useState("");
+  const [exportError, setExportError] = useState("");
   const requestVersion = useRef(0);
+  const exportVersion = useRef(0);
+
+  const loadExports = useCallback(async () => {
+    if (!organization) {
+      setExports([]);
+      return;
+    }
+    const version = exportVersion.current;
+    const result = await authenticatedRequest<{ data: ExportJob[] }>(
+      "/organizations/current/reports/exports?page=1&page_size=25",
+    );
+    if (version === exportVersion.current) setExports(result.data);
+  }, [authenticatedRequest, organization]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const version = ++exportVersion.current;
+    void Promise.resolve().then(() => {
+      if (!cancelled) {
+        setExports([]);
+        setExportError("");
+        setExportMessage("");
+        setExportBusy(false);
+      }
+    });
+    if (!organization)
+      return () => {
+        cancelled = true;
+      };
+    const refresh = async () => {
+      try {
+        const result = await authenticatedRequest<{ data: ExportJob[] }>(
+          "/organizations/current/reports/exports?page=1&page_size=25",
+        );
+        if (!cancelled && version === exportVersion.current) {
+          setExports(result.data);
+          setExportError("");
+        }
+      } catch (cause) {
+        if (!cancelled && version === exportVersion.current)
+          setExportError(
+            cause instanceof Error
+              ? cause.message
+              : "Could not load export history.",
+          );
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [authenticatedRequest, organization]);
+
+  const exportCurrentReport = useCallback(async () => {
+    if (!organization) return;
+    const version = exportVersion.current;
+    setExportBusy(true);
+    setExportError("");
+    setExportMessage("");
+    const filters: Record<string, string> = {};
+    if (warehouseId) filters.warehouse_id = warehouseId;
+    if (categoryId) filters.category_id = categoryId;
+    if (productId) filters.product_id = productId;
+    if (query.trim()) filters.q = query.trim();
+    if (view === "movements") {
+      if (from) filters.from = from;
+      if (to) filters.to = to;
+      if (movementType) filters.movement_type = movementType;
+    }
+    if ((view === "summary" || view === "valuation") && asOf)
+      filters.as_of = asOf;
+    const reportType =
+      view === "summary"
+        ? "INVENTORY_SUMMARY"
+        : view === "movements"
+          ? "MOVEMENTS"
+          : view === "valuation"
+            ? "VALUATION"
+            : "LOW_STOCK";
+    try {
+      await authenticatedRequest(
+        "/organizations/current/reports/exports",
+        {
+          report_type: reportType,
+          filters,
+        },
+        "POST",
+        { "Idempotency-Key": crypto.randomUUID() },
+      );
+      if (version !== exportVersion.current) return;
+      setExportMessage(
+        "CSV export queued. You can continue working while it is generated.",
+      );
+      await loadExports();
+    } catch (cause) {
+      if (version !== exportVersion.current) return;
+      setExportError(
+        cause instanceof Error ? cause.message : "Could not queue this export.",
+      );
+    } finally {
+      if (version === exportVersion.current) setExportBusy(false);
+    }
+  }, [
+    asOf,
+    authenticatedRequest,
+    categoryId,
+    from,
+    loadExports,
+    movementType,
+    organization,
+    productId,
+    query,
+    to,
+    view,
+    warehouseId,
+  ]);
+
+  const downloadExport = useCallback(
+    async (job: ExportJob) => {
+      if (!job.download_url) return;
+      const version = exportVersion.current;
+      setExportError("");
+      try {
+        const blob = await authenticatedDownload(job.download_url);
+        if (version !== exportVersion.current) return;
+        const objectUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = objectUrl;
+        anchor.download = `${job.report_type.toLowerCase()}-${job.id}.csv`;
+        anchor.click();
+        URL.revokeObjectURL(objectUrl);
+      } catch (cause) {
+        if (version !== exportVersion.current) return;
+        setExportError(
+          cause instanceof Error
+            ? cause.message
+            : "Could not download this export.",
+        );
+      }
+    },
+    [authenticatedDownload],
+  );
+
+  const retryExport = useCallback(
+    async (job: ExportJob) => {
+      const version = exportVersion.current;
+      setExportError("");
+      try {
+        await authenticatedRequest(
+          `/organizations/current/reports/exports/${job.id}/retry`,
+          {},
+          "POST",
+        );
+        if (version !== exportVersion.current) return;
+        await loadExports();
+      } catch (cause) {
+        if (version !== exportVersion.current) return;
+        setExportError(
+          cause instanceof Error
+            ? cause.message
+            : "Could not retry this export.",
+        );
+      }
+    },
+    [authenticatedRequest, loadExports],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -428,6 +613,97 @@ export function ReportsPage() {
                 />
               </label>
             ) : null}
+          </section>
+
+          <section className="report-export-panel" aria-label="Report export">
+            <div>
+              <h2>Export {tabs.find((tab) => tab.id === view)?.label}</h2>
+              <p>Creates a private CSV using the current report filters.</p>
+            </div>
+            <button
+              type="button"
+              className="button-primary"
+              disabled={exportBusy}
+              onClick={() => void exportCurrentReport()}
+            >
+              {exportBusy ? "Queueing…" : "Export CSV"}
+            </button>
+          </section>
+          {exportMessage ? (
+            <p className="report-export-feedback" role="status">
+              {exportMessage}
+            </p>
+          ) : null}
+          {exportError ? (
+            <p className="report-export-feedback error" role="alert">
+              {exportError}
+            </p>
+          ) : null}
+          <section
+            className="report-export-history"
+            aria-label="Export history"
+          >
+            <div className="report-section-heading">
+              <div>
+                <p className="eyebrow">PRIVATE DOWNLOADS</p>
+                <h2>Export history</h2>
+              </div>
+              <span>Organization scoped</span>
+            </div>
+            {exports.length ? (
+              <ul>
+                {exports.map((job) => (
+                  <li key={job.id}>
+                    <div>
+                      <strong>{job.report_type.replaceAll("_", " ")}</strong>
+                      <span>
+                        Requested {displayDate(job.requested_at)}
+                        {job.requested_by ? ` by ${job.requested_by}` : ""}
+                      </span>
+                    </div>
+                    <span
+                      className={`report-status ${job.status.toLowerCase()}`}
+                      role="status"
+                    >
+                      {job.status.toLowerCase()}
+                    </span>
+                    {job.status === "COMPLETED" && job.download_url ? (
+                      <div>
+                        <span>
+                          {job.row_count?.toLocaleString() ?? 0} rows · Expires{" "}
+                          {job.expires_at
+                            ? displayDate(job.expires_at)
+                            : "soon"}
+                        </span>
+                        <button
+                          type="button"
+                          className="catalog-text-button"
+                          onClick={() => void downloadExport(job)}
+                        >
+                          Download CSV
+                        </button>
+                      </div>
+                    ) : null}
+                    {job.status === "FAILED" ? (
+                      <div>
+                        <span>{job.last_error ?? "Export failed."}</span>
+                        <button
+                          type="button"
+                          className="catalog-text-button"
+                          onClick={() => void retryExport(job)}
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="report-export-empty">
+                No exports have been requested in this workspace.
+              </p>
+            )}
           </section>
 
           {error ? (

@@ -346,6 +346,14 @@ export class ReportingService {
   }
 
   async movements(context: OrganizationContext, query: ReportFilterDto) {
+    return this.movementsAt(context, query);
+  }
+
+  async movementsAt(
+    context: OrganizationContext,
+    query: ReportFilterDto,
+    cutoffAt?: Date,
+  ) {
     this.validateDateRange(query);
     const warehouses = await this.authorizedWarehouses(
       context,
@@ -353,7 +361,11 @@ export class ReportingService {
     );
     if (warehouses?.length === 0) return this.emptyPage(query);
     const from = query.from ? new Date(query.from) : undefined;
-    const to = query.to ? this.endOfUtcDay(query.to) : undefined;
+    const requestedTo = query.to ? this.endOfUtcDay(query.to) : undefined;
+    const to =
+      cutoffAt && requestedTo
+        ? new Date(Math.min(cutoffAt.getTime(), requestedTo.getTime()))
+        : (requestedTo ?? cutoffAt);
     const where: Prisma.StockMovementWhereInput = {
       organizationId: context.organizationId,
       ...(warehouses ? { warehouseId: { in: warehouses } } : {}),
@@ -430,6 +442,30 @@ export class ReportingService {
       page: query.page,
       page_size: query.page_size,
     };
+  }
+
+  async authorizeExport(
+    context: OrganizationContext,
+    query: ReportFilterDto,
+    reportType: "INVENTORY_SUMMARY" | "MOVEMENTS" | "VALUATION" | "LOW_STOCK",
+  ) {
+    this.validateDateRange(query);
+    if (reportType === "LOW_STOCK" && (query.as_of || query.from || query.to)) {
+      throw new BadRequestException(
+        "Low-stock alerts are current snapshots and do not support date cutoffs",
+      );
+    }
+    const authorized = await this.authorizedWarehouses(
+      context,
+      query.warehouse_id,
+    );
+    if (authorized !== null) return authorized;
+    const warehouses = await this.prisma.warehouse.findMany({
+      where: { organizationId: context.organizationId, status: "ACTIVE" },
+      orderBy: { id: "asc" },
+      select: { id: true },
+    });
+    return warehouses.map((warehouse) => warehouse.id);
   }
 
   async lowStock(context: OrganizationContext, query: ReportFilterDto) {

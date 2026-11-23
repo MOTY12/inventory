@@ -207,6 +207,8 @@ test("running API responds with request IDs and Swagger document", async () => {
         process.env.DATABASE_URL ??
         "postgresql://inventory:local-dev-only-change-me@localhost:5432/inventory_dev?schema=public",
       DATABASE_CONNECT_ON_STARTUP: "false",
+      REPORT_EXPORT_WORKER_ENABLED: "false",
+      HOST: "127.0.0.1",
       JWT_ACCESS_SECRET:
         process.env.JWT_ACCESS_SECRET ??
         "local-development-only-secret-change-before-deploy-123456",
@@ -262,6 +264,21 @@ test("running API responds with request IDs and Swagger document", async () => {
         response.status,
         401,
         `${report} must require a bearer token`,
+      );
+    }
+    for (const [path, method] of [
+      ["/api/v1/organizations/current/reports/exports", "GET"],
+      ["/api/v1/organizations/current/reports/exports", "POST"],
+      [
+        "/api/v1/organizations/current/reports/exports/00000000-0000-4000-8000-000000000001/download",
+        "GET",
+      ],
+    ]) {
+      const response = await fetch(`${baseUrl}${path}`, { method });
+      assert.equal(
+        response.status,
+        401,
+        `${method} ${path} must require a bearer token`,
       );
     }
 
@@ -322,6 +339,12 @@ test("running API responds with request IDs and Swagger document", async () => {
     assert.ok(spec.paths["/api/v1/organizations/current/reports/valuation"]);
     assert.ok(spec.paths["/api/v1/organizations/current/reports/movements"]);
     assert.ok(spec.paths["/api/v1/organizations/current/reports/low-stock"]);
+    assert.ok(spec.paths["/api/v1/organizations/current/reports/exports"]);
+    assert.ok(
+      spec.paths[
+        "/api/v1/organizations/current/reports/exports/{exportId}/download"
+      ],
+    );
     assert.ok(
       spec.paths["/api/v1/organizations/current/catalog/products/by-barcode"],
     );

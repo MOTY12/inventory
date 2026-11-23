@@ -19,6 +19,9 @@ import { SalesOrdersService } from "../dist/sales/sales-orders.service.js";
 import { ImportsService } from "../dist/imports/imports.service.js";
 import { ReorderingService } from "../dist/inventory/reordering/reordering.service.js";
 import { ReportingService } from "../dist/reporting/reporting.service.js";
+import { ReportExportsService } from "../dist/reporting/report-exports.service.js";
+import { ReportExportProcessor } from "../dist/reporting/report-export.processor.js";
+import { ReportExportStorage } from "../dist/reporting/report-export-storage.js";
 
 const enabled = process.env.RUN_POSTGRES_INTEGRATION === "1";
 
@@ -169,14 +172,33 @@ test(
               costCurrency: "NGN",
             },
           );
-          await prisma.$transaction((tx) =>
-            inventory.applyReservationDelta(
-              tx,
-              contextA,
-              warehouse.id,
-              reportProduct.id,
-              new Prisma.Decimal("5"),
-            ),
+          const reportCustomer = await customers.create(
+            contextA,
+            ownerA.userId,
+            { name: `Report customer ${randomUUID()}` },
+          );
+          const reportOrder = await salesOrders.create(
+            contextA,
+            ownerA.userId,
+            {
+              customerId: reportCustomer.id,
+              warehouseId: warehouse.id,
+              currency: "NGN",
+              lines: [
+                {
+                  productId: reportProduct.id,
+                  quantity: "5",
+                  unitPrice: "1.0000",
+                },
+              ],
+            },
+            `report-reservation-${randomUUID()}`,
+          );
+          await salesOrders.confirm(
+            contextA,
+            ownerA.userId,
+            reportOrder.id,
+            `report-reservation-confirm-${randomUUID()}`,
           );
 
           const historical = await reports.valuation(contextA, {
@@ -248,6 +270,53 @@ test(
             product_id: reportProduct.id,
           });
           assert.equal(summaryWithAlert.totals.current_low_stock_products, 1);
+
+          const exportStorage = new ReportExportStorage();
+          try {
+            const processor = new ReportExportProcessor(
+              prisma,
+              reports,
+              exportStorage,
+            );
+            const exportService = new ReportExportsService(
+              prisma,
+              reports,
+              processor,
+              exportStorage,
+            );
+            await exportService.onModuleInit();
+            try {
+              const exportJob = await exportService.create(
+                contextA,
+                {
+                  report_type: "INVENTORY_SUMMARY",
+                  filters: { product_id: reportProduct.id },
+                },
+                `integration-export-${randomUUID()}`,
+              );
+              let completed;
+              for (let attempt = 0; attempt < 100; attempt += 1) {
+                completed = await prisma.reportExport.findUniqueOrThrow({
+                  where: { id: exportJob.id },
+                });
+                if (["COMPLETED", "FAILED"].includes(completed.status)) break;
+                await new Promise((resolve) => setTimeout(resolve, 100));
+              }
+              assert.equal(completed.status, "COMPLETED", completed.lastError);
+              assert.equal(completed.rowCount, 1);
+              assert.ok(completed.expiresAt > new Date());
+              const storedFile = await exportStorage.open(completed.objectKey);
+              const csv = await new Response(storedFile.body).text();
+              assert.match(csv, /Report valuation item/);
+              assert.match(csv, /20,5,15,3,"NGN",60/);
+              await exportStorage.delete(completed.objectKey);
+            } finally {
+              await exportService.onModuleDestroy();
+            }
+          } finally {
+            exportStorage.onModuleDestroy();
+          }
+
           await reordering.update(
             contextA,
             ownerA.userId,
