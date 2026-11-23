@@ -100,8 +100,11 @@ export default function SalesOrderDetailPage() {
   const [fulfillmentQuantities, setFulfillmentQuantities] = useState<
     Record<string, string>
   >({});
-  const fulfillmentKey = useRef("");
-  const pickKey = useRef("");
+  const fulfillmentKey = useRef<{ signature: string; key: string } | null>(
+    null,
+  );
+  const pickKey = useRef<{ signature: string; key: string } | null>(null);
+  const requestVersion = useRef(0);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -116,8 +119,18 @@ export default function SalesOrderDetailPage() {
         quantityUnits(line.fulfilledQuantity),
     ) ?? false;
   const load = useCallback(async () => {
-    if (!organization || !id) return;
+    const version = ++requestVersion.current;
+    if (!organization || !id) {
+      setOrder(null);
+      setAudit([]);
+      setFulfillments([]);
+      setPicks([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
+    setError("");
+    setOrder(null);
     try {
       const [result, events, posted, confirmedPicks] = await Promise.all([
         authenticatedRequest<Order>(`${endpoint}/${id}`),
@@ -125,19 +138,21 @@ export default function SalesOrderDetailPage() {
         authenticatedRequest<Fulfillment[]>(`${endpoint}/${id}/fulfillments`),
         authenticatedRequest<Pick[]>(`${endpoint}/${id}/picks`),
       ]);
+      if (version !== requestVersion.current) return;
       setOrder(result);
       setAudit(events);
       setFulfillments(posted);
       setPicks(confirmedPicks);
       setError("");
     } catch (cause) {
+      if (version !== requestVersion.current) return;
       setError(
         cause instanceof Error
           ? cause.message
           : "Sales order could not be loaded.",
       );
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   }, [authenticatedRequest, id, organization]);
   useEffect(() => {
@@ -185,30 +200,74 @@ export default function SalesOrderDetailPage() {
 
   async function fulfillSelected() {
     if (!order) return;
-    const lines = Object.entries(fulfillmentQuantities)
-      .filter(
-        ([, quantity]) =>
-          /^\d+(\.\d{1,6})?$/.test(quantity) &&
-          quantityUnits(quantity) > BigInt(0),
-      )
-      .map(([salesOrderLineId, quantity]) => ({ salesOrderLineId, quantity }));
-    if (!lines.length) {
+    const entered = Object.entries(fulfillmentQuantities).filter(
+      ([, quantity]) => quantity.trim() !== "",
+    );
+    if (!entered.length) {
       setError("Enter a quantity for at least one outstanding line.");
+      return;
+    }
+    if (
+      entered.some(
+        ([, quantity]) =>
+          !/^\d+(\.\d{1,6})?$/.test(quantity) ||
+          quantityUnits(quantity) <= BigInt(0),
+      )
+    ) {
+      setError(
+        "Each fulfillment quantity must be a positive decimal with up to six places.",
+      );
+      return;
+    }
+    if (
+      entered.some(([lineId, quantity]) => {
+        const line = order.lines.find((candidate) => candidate.id === lineId);
+        return (
+          !line ||
+          quantityUnits(quantity) >
+            quantityUnits(line.pickedQuantity) -
+              quantityUnits(line.fulfilledQuantity)
+        );
+      })
+    ) {
+      setError(
+        "A fulfillment quantity cannot exceed the picked quantity that is still unfulfilled.",
+      );
+      return;
+    }
+    const lines = entered.map(([salesOrderLineId, quantity]) => ({
+      salesOrderLineId,
+      quantity,
+    }));
+    if (
+      !window.confirm(
+        `Post fulfillment for ${lines.length} line${lines.length === 1 ? "" : "s"}? This will deduct stock and consume reservations.`,
+      )
+    ) {
       return;
     }
     setBusy(true);
     setError("");
     setNotice("");
-    if (!fulfillmentKey.current)
-      fulfillmentKey.current = `sales-fulfillment-${order.id}-${crypto.randomUUID()}`;
+    const signature = JSON.stringify(
+      [...lines].sort((a, b) =>
+        a.salesOrderLineId.localeCompare(b.salesOrderLineId),
+      ),
+    );
+    if (fulfillmentKey.current?.signature !== signature) {
+      fulfillmentKey.current = {
+        signature,
+        key: `sales-fulfillment-${order.id}-${crypto.randomUUID()}`,
+      };
+    }
     try {
       await authenticatedRequest(
         `${endpoint}/${order.id}/fulfillments`,
         { lines },
         "POST",
-        { "Idempotency-Key": fulfillmentKey.current },
+        { "Idempotency-Key": fulfillmentKey.current.key },
       );
-      fulfillmentKey.current = "";
+      fulfillmentKey.current = null;
       setFulfillmentQuantities({});
       setNotice(
         "Fulfillment posted; stock and reservations have been updated.",
@@ -227,30 +286,67 @@ export default function SalesOrderDetailPage() {
 
   async function confirmPick() {
     if (!order) return;
-    const lines = Object.entries(pickQuantities)
-      .filter(
-        ([, quantity]) =>
-          /^\d+(\.\d{1,6})?$/.test(quantity) &&
-          quantityUnits(quantity) > BigInt(0),
-      )
-      .map(([salesOrderLineId, quantity]) => ({ salesOrderLineId, quantity }));
-    if (!lines.length) {
+    const entered = Object.entries(pickQuantities).filter(
+      ([, quantity]) => quantity.trim() !== "",
+    );
+    if (!entered.length) {
       setError("Enter a quantity to pick for at least one order line.");
       return;
     }
+    if (
+      entered.some(
+        ([, quantity]) =>
+          !/^\d+(\.\d{1,6})?$/.test(quantity) ||
+          quantityUnits(quantity) <= BigInt(0),
+      )
+    ) {
+      setError(
+        "Each pick quantity must be a positive decimal with up to six places.",
+      );
+      return;
+    }
+    if (
+      entered.some(([lineId, quantity]) => {
+        const line = order.lines.find((candidate) => candidate.id === lineId);
+        return (
+          !line ||
+          quantityUnits(quantity) >
+            quantityUnits(line.orderedQuantity) -
+              quantityUnits(line.pickedQuantity)
+        );
+      })
+    ) {
+      setError(
+        "A pick quantity cannot exceed the quantity that remains unpicked.",
+      );
+      return;
+    }
+    const lines = entered.map(([salesOrderLineId, quantity]) => ({
+      salesOrderLineId,
+      quantity,
+    }));
     setBusy(true);
     setError("");
     setNotice("");
-    if (!pickKey.current)
-      pickKey.current = `sales-pick-${order.id}-${crypto.randomUUID()}`;
+    const signature = JSON.stringify(
+      [...lines].sort((a, b) =>
+        a.salesOrderLineId.localeCompare(b.salesOrderLineId),
+      ),
+    );
+    if (pickKey.current?.signature !== signature) {
+      pickKey.current = {
+        signature,
+        key: `sales-pick-${order.id}-${crypto.randomUUID()}`,
+      };
+    }
     try {
       await authenticatedRequest(
         `${endpoint}/${order.id}/picks`,
         { lines },
         "POST",
-        { "Idempotency-Key": pickKey.current },
+        { "Idempotency-Key": pickKey.current.key },
       );
-      pickKey.current = "";
+      pickKey.current = null;
       setPickQuantities({});
       setNotice("Picked quantities confirmed and are ready for fulfillment.");
       await load();
@@ -270,7 +366,9 @@ export default function SalesOrderDetailPage() {
       <header className="page-heading">
         <div>
           <p className="eyebrow">SALES / ORDER DETAILS</p>
-          <h1>{order?.number ?? "Sales order"}</h1>
+          <h1>
+            {organization ? (order?.number ?? "Sales order") : "Sales order"}
+          </h1>
           <p>Review order lines, reservation quantities, and status history.</p>
         </div>
         <div className="dashboard-actions">
@@ -308,22 +406,43 @@ export default function SalesOrderDetailPage() {
         </div>
       </header>
       {error && (
-        <p className="error-banner" role="alert">
-          {error}
-        </p>
+        <div className="error-banner" role="alert">
+          <span>{error}</span>
+          <button
+            className="catalog-text-button"
+            onClick={() => void load()}
+            type="button"
+          >
+            Try again
+          </button>
+        </div>
       )}
       {notice && (
         <p className="success-banner" role="status">
           {notice}
         </p>
       )}
-      {loading ? (
+      {!organization ? (
+        <section className="catalog-empty">
+          <h2>Choose a workspace first</h2>
+          <p>Sales orders belong to the active organization.</p>
+          <Link href="/organizations" className="catalog-secondary-link">
+            Manage organizations
+          </Link>
+        </section>
+      ) : loading ? (
         <section className="panel">
-          <p>Loading order…</p>
+          <p className="catalog-loading" role="status">
+            Loading order…
+          </p>
         </section>
       ) : !order ? (
-        <section className="panel">
-          <p>Sales order not found or unavailable.</p>
+        <section className="catalog-empty">
+          <h2>Sales order unavailable</h2>
+          <p>This order may not belong to the active workspace.</p>
+          <Link href="/sales-orders" className="catalog-secondary-link">
+            Return to sales orders
+          </Link>
         </section>
       ) : (
         <>
@@ -462,8 +581,9 @@ export default function SalesOrderDetailPage() {
                               {unpicked > BigInt(0) ? (
                                 <input
                                   aria-label={`Pick ${line.productName}`}
+                                  max={quantityText(unpicked)}
                                   min="0"
-                                  step="any"
+                                  step="0.000001"
                                   type="number"
                                   value={pickQuantities[line.id] ?? ""}
                                   onChange={(event) =>
@@ -488,7 +608,7 @@ export default function SalesOrderDetailPage() {
                                   aria-label={`Fulfill ${line.productName}`}
                                   max={quantityText(pickedNotFulfilled)}
                                   min="0"
-                                  step="any"
+                                  step="0.000001"
                                   type="number"
                                   value={fulfillmentQuantities[line.id] ?? ""}
                                   onChange={(event) =>
