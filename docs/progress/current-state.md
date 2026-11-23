@@ -30,4 +30,4 @@
 
 ## Git
 
-- No commit or push was made yet. Inspect the final diff, generated files, and coherent ownership before creating focused local commits. Never push without explicit authorization.
+- Local commits: `9714566` (Next.js security dependency patch) and `06a521c` (verified REPORT-001). No push. The INV-010 scanner UI is an uncommitted working change; preserve it and inspect its diff before continuing.

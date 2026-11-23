@@ -5,7 +5,7 @@
 ## Repository state
 
 - Workspace: `/Users/newuser/Documents/GitHub/inventory`
-- Branch: `develop`; starting commit for this session was `1d0417e`; worktree was clean at start. Current changes are uncommitted. Do not overwrite them.
+- Branch: `develop`; starting commit for this session was `1d0417e`; worktree was clean at start. Commits: `9714566` (Next.js security patch), `06a521c` (REPORT-001); no push. The INV-010 scanner component/page/styles remain uncommitted. Do not overwrite them.
 - Roadmap: **28/47 complete**; REPORT-001 is newly complete; INV-010 is IN_PROGRESS. Recount from unique task entries before making status changes.
 - PostgreSQL migration status: 19/19 current. No schema migration applied by this session; no data reset/deletion.
 - Dependency: Next.js/eslint-config-next updated to 16.4.6. Production build succeeds. npm advisory audit could not reach registry (`ENOTFOUND registry.npmjs.org`), so audit status is unknown.
