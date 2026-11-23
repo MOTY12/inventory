@@ -8,6 +8,13 @@ import { Injectable, OnModuleDestroy } from "@nestjs/common";
 import { createReadStream } from "node:fs";
 import { Readable } from "node:stream";
 
+export class MissingReportExportObjectError extends Error {
+  constructor() {
+    super("Report export object is missing");
+    this.name = "MissingReportExportObjectError";
+  }
+}
+
 @Injectable()
 export class ReportExportStorage implements OnModuleDestroy {
   private readonly bucket = process.env.S3_BUCKET ?? "inventory-local";
@@ -49,14 +56,19 @@ export class ReportExportStorage implements OnModuleDestroy {
   }
 
   async open(key: string) {
-    const result = await this.client.send(
-      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
-    );
-    if (!result.Body) throw new Error("Export object has no response body");
-    return {
-      body: Readable.from(result.Body as AsyncIterable<Uint8Array>),
-      contentLength: result.ContentLength,
-    };
+    try {
+      const result = await this.client.send(
+        new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      );
+      if (!result.Body) throw new Error("Export object has no response body");
+      return {
+        body: Readable.from(result.Body as AsyncIterable<Uint8Array>),
+        contentLength: result.ContentLength,
+      };
+    } catch (error) {
+      if (isMissingObject(error)) throw new MissingReportExportObjectError();
+      throw error;
+    }
   }
 
   async delete(key: string) {
@@ -68,4 +80,18 @@ export class ReportExportStorage implements OnModuleDestroy {
   onModuleDestroy() {
     this.client.destroy();
   }
+}
+
+function isMissingObject(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as {
+    name?: unknown;
+    Code?: unknown;
+    $metadata?: { httpStatusCode?: unknown };
+  };
+  return (
+    candidate.name === "NoSuchKey" ||
+    candidate.Code === "NoSuchKey" ||
+    candidate.$metadata?.httpStatusCode === 404
+  );
 }

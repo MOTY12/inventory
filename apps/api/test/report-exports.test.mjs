@@ -8,6 +8,7 @@ import {
 } from "@nestjs/common";
 import { ReportExportsService } from "../dist/reporting/report-exports.service.js";
 import { ReportExportProcessor } from "../dist/reporting/report-export.processor.js";
+import { MissingReportExportObjectError } from "../dist/reporting/report-export-storage.js";
 
 const context = {
   organizationId: "org-a",
@@ -141,6 +142,50 @@ test("download denies expired exports and requesters whose membership was revoke
     revokedService.download(context, base.id),
     ForbiddenException,
   );
+});
+
+test("missing export objects fail safely and remain retryable", async () => {
+  const row = exportRow();
+  let update;
+  const prisma = {
+    reportExport: {
+      findFirst: async () => row,
+      updateMany: async (input) => {
+        update = input;
+        return { count: 1 };
+      },
+    },
+    membership: {
+      findFirst: async () => ({ id: "membership-a", role: "OWNER" }),
+    },
+  };
+  const service = new ReportExportsService(
+    prisma,
+    { authorizeExport: async () => ["warehouse-a"] },
+    {},
+    {
+      open: async () => {
+        throw new MissingReportExportObjectError();
+      },
+    },
+  );
+
+  await assert.rejects(service.download(context, row.id), (error) => {
+    assert.ok(error instanceof NotFoundException);
+    assert.equal(error.message, "The completed export file is unavailable");
+    return true;
+  });
+  assert.deepEqual(update.where, {
+    id: row.id,
+    organizationId: context.organizationId,
+    status: "COMPLETED",
+    objectKey: row.objectKey,
+  });
+  assert.deepEqual(update.data, {
+    status: "FAILED",
+    objectKey: null,
+    lastError: "Export artifact is missing from object storage",
+  });
 });
 
 test("retry only resets failed tenant exports and advances the queue generation", async () => {

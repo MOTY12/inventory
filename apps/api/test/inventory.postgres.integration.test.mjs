@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { execFileSync, spawn } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { Client } from "pg";
 import test from "node:test";
 import "dotenv/config";
+import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
+import { Queue, Worker } from "bullmq";
 import { Prisma } from "../dist/generated/prisma/client.js";
 import { PrismaService } from "../dist/database/prisma.service.js";
 import { CatalogService } from "../dist/catalog/catalog.service.js";
@@ -21,7 +26,10 @@ import { ReorderingService } from "../dist/inventory/reordering/reordering.servi
 import { ReportingService } from "../dist/reporting/reporting.service.js";
 import { ReportExportsService } from "../dist/reporting/report-exports.service.js";
 import { ReportExportProcessor } from "../dist/reporting/report-export.processor.js";
-import { ReportExportStorage } from "../dist/reporting/report-export-storage.js";
+import {
+  MissingReportExportObjectError,
+  ReportExportStorage,
+} from "../dist/reporting/report-export-storage.js";
 
 const enabled = process.env.RUN_POSTGRES_INTEGRATION === "1";
 
@@ -124,7 +132,7 @@ test(
 
       await t.test(
         "reports reconcile historical WAC, current balances, filters, low-stock rules, and tenant scope",
-        async () => {
+        async (testContext) => {
           const reportProduct = await catalog.createProduct(
             contextA,
             ownerA.userId,
@@ -278,7 +286,7 @@ test(
               reports,
               exportStorage,
             );
-            const exportService = new ReportExportsService(
+            let exportService = new ReportExportsService(
               prisma,
               reports,
               processor,
@@ -496,6 +504,311 @@ test(
                 exportService.download(contextA, expiryTarget.id),
                 (error) => error.getStatus() === 404,
               );
+
+              const interruptedId = randomUUID();
+              const interrupted = await prisma.reportExport.create({
+                data: {
+                  id: interruptedId,
+                  organizationId: contextA.organizationId,
+                  requestedByUserId: ownerA.userId,
+                  reportType: "INVENTORY_SUMMARY",
+                  idempotencyKey: `recovery-${interruptedId}`,
+                  payloadHash: createHash("sha256")
+                    .update(interruptedId)
+                    .digest("hex"),
+                  filters: { product_id: reportProduct.id },
+                  warehouseScope: [warehouse.id],
+                  snapshotAt: new Date(),
+                },
+              });
+              const recoveryQueueName = `inventory-recovery-${randomUUID()}`;
+              const recoveryQueue = new Queue(recoveryQueueName, {
+                connection: {
+                  host: process.env.REDIS_HOST ?? "127.0.0.1",
+                  port: Number(process.env.REDIS_PORT ?? 6379),
+                  password: process.env.REDIS_PASSWORD,
+                  maxRetriesPerRequest: null,
+                },
+              });
+              const recoveryTemp = await mkdtemp(
+                join(tmpdir(), "inventory-recovery-drill-"),
+              );
+              const recoveryChild = spawn(
+                process.execPath,
+                [
+                  resolve(
+                    "apps/api/test/helpers/report-export-crash-worker.mjs",
+                  ),
+                  recoveryQueueName,
+                ],
+                {
+                  cwd: process.cwd(),
+                  env: {
+                    ...process.env,
+                    TMPDIR: recoveryTemp,
+                    REPORT_RECOVERY_LOCK_MS: "1500",
+                  },
+                  stdio: ["ignore", "ignore", "ignore", "ipc"],
+                },
+              );
+              let recoveryWorker;
+              let recoveryS3;
+              let recoveryObjectKey;
+              let recoveryBackupKey;
+              try {
+                await recoveryQueue.add(
+                  "generate",
+                  { exportId: interrupted.id, retrySequence: 0 },
+                  {
+                    jobId: `${interrupted.id}-0`,
+                    attempts: 3,
+                    backoff: { type: "exponential", delay: 1_000 },
+                  },
+                );
+                await new Promise((resolveMessage, rejectMessage) => {
+                  const timeout = setTimeout(
+                    () => rejectMessage(new Error("Crash worker timed out")),
+                    20_000,
+                  );
+                  recoveryChild.on("message", (message) => {
+                    if (message?.type === "upload-started") {
+                      clearTimeout(timeout);
+                      resolveMessage();
+                    } else if (message?.type === "worker-error") {
+                      clearTimeout(timeout);
+                      rejectMessage(
+                        new Error(`Crash worker error: ${message.name}`),
+                      );
+                    }
+                  });
+                  recoveryChild.once("exit", (code, signal) => {
+                    clearTimeout(timeout);
+                    rejectMessage(
+                      new Error(
+                        `Crash worker exited before interruption (${code ?? signal})`,
+                      ),
+                    );
+                  });
+                });
+                const processing = await prisma.reportExport.findUniqueOrThrow({
+                  where: { id: interrupted.id },
+                });
+                assert.equal(processing.status, "PROCESSING");
+                assert.equal(processing.attemptCount, 1);
+                const crashRecoveryStartedAt = Date.now();
+                recoveryChild.kill("SIGKILL");
+                await new Promise((resolveExit) =>
+                  recoveryChild.once("exit", resolveExit),
+                );
+
+                recoveryWorker = new Worker(
+                  recoveryQueueName,
+                  (job) => processor.process(job),
+                  {
+                    connection: {
+                      host: process.env.REDIS_HOST ?? "127.0.0.1",
+                      port: Number(process.env.REDIS_PORT ?? 6379),
+                      password: process.env.REDIS_PASSWORD,
+                      maxRetriesPerRequest: null,
+                    },
+                    concurrency: 1,
+                    lockDuration: 1_500,
+                    stalledInterval: 1_500,
+                    maxStalledCount: 2,
+                  },
+                );
+                await recoveryWorker.waitUntilReady();
+                let recovered;
+                for (let attempt = 0; attempt < 300; attempt += 1) {
+                  recovered = await prisma.reportExport.findUniqueOrThrow({
+                    where: { id: interrupted.id },
+                  });
+                  if (
+                    recovered.status === "COMPLETED" ||
+                    recovered.status === "FAILED"
+                  )
+                    break;
+                  await new Promise((resolveWait) =>
+                    setTimeout(resolveWait, 100),
+                  );
+                }
+                assert.equal(
+                  recovered.status,
+                  "COMPLETED",
+                  recovered.lastError,
+                );
+                assert.equal(recovered.attemptCount, 2);
+                testContext.diagnostic(
+                  `Worker crash recovery completed in ${Date.now() - crashRecoveryStartedAt} ms`,
+                );
+                recoveryObjectKey = recovered.objectKey;
+                assert.ok(recoveryObjectKey);
+
+                recoveryS3 = new S3Client({
+                  region: process.env.S3_REGION ?? "us-east-1",
+                  endpoint: process.env.S3_ENDPOINT ?? "http://127.0.0.1:9090",
+                  forcePathStyle: true,
+                  credentials: {
+                    accessKeyId:
+                      process.env.S3_ACCESS_KEY_ID ?? "inventory-local-access",
+                    secretAccessKey:
+                      process.env.S3_SECRET_ACCESS_KEY ??
+                      "inventory-local-secret-change-before-deploy",
+                  },
+                });
+                const listed = await recoveryS3.send(
+                  new ListObjectsV2Command({
+                    Bucket: process.env.S3_BUCKET ?? "inventory-local",
+                    Prefix: `organizations/${contextA.organizationId}/report-exports/${interrupted.id}/`,
+                  }),
+                );
+                assert.deepEqual(
+                  (listed.Contents ?? []).map((item) => item.Key),
+                  [recoveryObjectKey],
+                );
+                const downloaded = await exportService.download(
+                  contextA,
+                  interrupted.id,
+                );
+                const reportBytes = Buffer.from(
+                  await new Response(downloaded.file.body).arrayBuffer(),
+                );
+                assert.match(
+                  reportBytes.toString("utf8"),
+                  /Report valuation item/,
+                );
+
+                const backupDirectory = await mkdtemp(
+                  join(tmpdir(), "inventory-object-backup-"),
+                );
+                const backupPath = join(backupDirectory, "report.csv");
+                recoveryBackupKey = `organizations/${contextA.organizationId}/operations-recovery-drills/${randomUUID()}/report.csv`;
+                try {
+                  const objectRecoveryStartedAt = Date.now();
+                  const digest = createHash("sha256")
+                    .update(reportBytes)
+                    .digest("hex");
+                  await writeFile(backupPath, reportBytes, { mode: 0o600 });
+                  await exportStorage.putFile(
+                    recoveryBackupKey,
+                    backupPath,
+                    reportBytes.length,
+                  );
+                  await exportStorage.delete(recoveryObjectKey);
+                  await assert.rejects(
+                    exportStorage.open(recoveryObjectKey),
+                    MissingReportExportObjectError,
+                  );
+                  await assert.rejects(
+                    exportService.download(contextA, interrupted.id),
+                    (error) => error.getStatus() === 404,
+                  );
+                  const missing = await prisma.reportExport.findUniqueOrThrow({
+                    where: { id: interrupted.id },
+                  });
+                  assert.equal(missing.status, "FAILED");
+                  assert.equal(missing.objectKey, null);
+                  assert.equal(
+                    missing.lastError,
+                    "Export artifact is missing from object storage",
+                  );
+                  const saved = await exportStorage.open(recoveryBackupKey);
+                  const restoredBytes = Buffer.from(
+                    await new Response(saved.body).arrayBuffer(),
+                  );
+                  await writeFile(backupPath, restoredBytes, { mode: 0o600 });
+                  await exportStorage.putFile(
+                    recoveryObjectKey,
+                    backupPath,
+                    restoredBytes.length,
+                  );
+                  assert.equal(
+                    createHash("sha256").update(restoredBytes).digest("hex"),
+                    digest,
+                  );
+                  const restored = await exportStorage.open(recoveryObjectKey);
+                  assert.equal(
+                    createHash("sha256")
+                      .update(
+                        Buffer.from(
+                          await new Response(restored.body).arrayBuffer(),
+                        ),
+                      )
+                      .digest("hex"),
+                    digest,
+                  );
+                  testContext.diagnostic(
+                    `Object backup, missing-object detection, and byte-verified restore completed in ${Date.now() - objectRecoveryStartedAt} ms`,
+                  );
+                } finally {
+                  await exportStorage.delete(recoveryBackupKey);
+                  await exportStorage.delete(recoveryObjectKey);
+                  await rm(backupDirectory, { recursive: true, force: true });
+                }
+              } finally {
+                recoveryChild.kill("SIGKILL");
+                await recoveryWorker?.close(true);
+                await recoveryQueue.obliterate({ force: true });
+                await recoveryQueue.close();
+                recoveryS3?.destroy();
+                if (recoveryObjectKey) {
+                  await exportStorage.delete(recoveryObjectKey).catch(() => {});
+                }
+                if (recoveryBackupKey) {
+                  await exportStorage.delete(recoveryBackupKey).catch(() => {});
+                }
+                await rm(recoveryTemp, { recursive: true, force: true });
+              }
+
+              await exportService.onModuleDestroy();
+              const pendingId = randomUUID();
+              await prisma.reportExport.create({
+                data: {
+                  id: pendingId,
+                  organizationId: contextA.organizationId,
+                  requestedByUserId: ownerA.userId,
+                  reportType: "INVENTORY_SUMMARY",
+                  idempotencyKey: `startup-recovery-${pendingId}`,
+                  payloadHash: createHash("sha256")
+                    .update(pendingId)
+                    .digest("hex"),
+                  filters: { product_id: reportProduct.id },
+                  warehouseScope: [warehouse.id],
+                  snapshotAt: new Date(),
+                },
+              });
+              exportService = new ReportExportsService(
+                prisma,
+                reports,
+                processor,
+                exportStorage,
+              );
+              await exportService.onModuleInit();
+              const pendingRecoveryStartedAt = Date.now();
+              let startupRecovered;
+              for (let attempt = 0; attempt < 300; attempt += 1) {
+                startupRecovered = await prisma.reportExport.findUniqueOrThrow({
+                  where: { id: pendingId },
+                });
+                if (
+                  startupRecovered.status === "COMPLETED" ||
+                  startupRecovered.status === "FAILED"
+                )
+                  break;
+                await new Promise((resolveWait) =>
+                  setTimeout(resolveWait, 100),
+                );
+              }
+              assert.equal(
+                startupRecovered.status,
+                "COMPLETED",
+                startupRecovered.lastError,
+              );
+              assert.equal(startupRecovered.attemptCount, 1);
+              testContext.diagnostic(
+                `Startup recovery of a durable pending export completed in ${Date.now() - pendingRecoveryStartedAt} ms`,
+              );
+              await exportStorage.delete(startupRecovered.objectKey);
             } finally {
               await exportService.onModuleDestroy();
             }

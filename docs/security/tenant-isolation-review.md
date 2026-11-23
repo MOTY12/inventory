@@ -1,7 +1,7 @@
 # Tenant isolation and security review
 
 **Review date:** 2026-11-23  
-**Repository:** `develop` at `4486f87`  
+**Repository:** `develop` at `65c9d6d` (review updates and recovery work are uncommitted)
 **Status:** REVIEW IN PROGRESS — implementation controls and isolated tests reviewed; dependency advisory verification remains blocked.
 
 ## Scope and threat model
@@ -22,10 +22,10 @@ No cross-tenant or warehouse-grant bypass was reproduced. Tenant context is deri
 
 ## Verification evidence
 
-- `npm test`: 51 passed, 0 failed, 2 opt-in PostgreSQL suites skipped in the default run; web suite 2 passed, 0 failed. An initial sandbox run hit local `listen EPERM`; rerunning with loopback listener permission passed, including live API response header assertions.
+- `npm test`: 52 passed, 0 failed, 2 opt-in PostgreSQL suites skipped in the default run; web suite 2 passed, 0 failed. An initial sandbox run hit local `listen EPERM`; rerunning with loopback listener permission passed, including live API response header assertions.
 - `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/postgres.integration.test.mjs`: 10 passed, 0 failed, 0 skipped. Covered refresh concurrency/reuse, logout/expiry, cross-organization selection and context denial, invitation email binding/one-time use/expiry, deactivated membership, warehouse grants, branch/warehouse tenant isolation and catalog hierarchy.
 - `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs`: 13 passed, 0 failed, 0 skipped. Covered product/catalog, CSV imports, suppliers, customers, sales orders/reservations, purchase receiving, immutable movements/balances, stock adjustments, transfers, report scope and export retry/download/expiry. These suites used generated isolated schemas; no database reset or owner data deletion was performed.
-- Typecheck, lint, formatting check and production build passed after the response-header change. Prisma validation passed. `prisma migrate status` could not complete: the configured `inventory_dev` endpoint at `localhost:5433` returned a schema-engine connection error. No migration was applied.
+- Typecheck, lint, formatting check, production build and Prisma validation passed. Read-only `npx prisma migrate status --config prisma.config.ts` confirms 20 migrations found and the configured `inventory_dev` schema is up to date. No migration was applied this session.
 - `npm audit --omit=dev --audit-level=high` could not reach `registry.npmjs.org` (`ENOTFOUND`). Earlier install output recorded 7 lockfile advisories (4 moderate, 3 high) without advisory detail. This review cannot clear those dependency findings; treat them as unverified and resolve them when registry access is restored.
 - No authenticated interactive browser review was possible in this session. No production service, live customer database, external scanner, or production infrastructure was tested.
 
@@ -36,10 +36,10 @@ No cross-tenant or warehouse-grant bypass was reproduced. Tenant context is deri
 - CSP requires a nonce-compatible Next.js strategy and Swagger-specific verification. Current browser headers are defense-in-depth, not a complete CSP policy.
 - PostgreSQL RLS and privileged support access remain deferred decisions in `docs/progress/decisions.md`; do not add a bypass or assume a support role.
 - Production email, TLS/proxy configuration, secret management, object-store IAM, audit alerting, backup encryption/retention, MFA enforcement and Nigerian privacy/compliance review remain deployment/release work.
-- INV-010 still lacks real browser/component event acceptance. QUALITY-003 still lacks queue/object-store recovery drills and approved RPO/RTO objectives.
+- INV-010 still lacks real browser/component event acceptance. QUALITY-003 queue and object recovery drills now pass locally (see `docs/operations/backup-restore.md`), but production off-host replication and approved RPO/RTO/retention/residency/key policy remain unverified/open.
 
 ## Next steps
 
 1. Re-run `npm audit --omit=dev --audit-level=high` once registry access is available; inspect advisory details and apply only compatible fixes with tests.
 2. Keep QUALITY-002 IN_PROGRESS until dependency risk is resolved or explicitly dispositioned and the no-critical/high pilot gate is evidenced.
-3. Add/execute barcode component interaction coverage for real Enter and repeat-scan behavior; then continue QUALITY-003 queue/object-storage recovery work and RPO/RTO approval.
+3. Add/execute barcode component interaction coverage for real Enter and repeat-scan behavior. Keep QUALITY-003 open until production recovery configuration and owner-approved RPO/RTO/retention requirements are demonstrated.

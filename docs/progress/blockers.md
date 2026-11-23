@@ -5,18 +5,18 @@
 ## Active verification gaps
 
 - **QUALITY-002 dependency audit:** `npm audit --omit=dev --audit-level=high` failed because `registry.npmjs.org` resolved as `ENOTFOUND`. Earlier installation output recorded seven lockfile advisories including three high, without details. QUALITY-002 remains IN_PROGRESS until current advisory state is known and dispositioned. Evidence is in `docs/security/tenant-isolation-review.md`.
-- **Prisma migration status:** `npx prisma migrate status --config prisma.config.ts` could not connect to configured `inventory_dev` at `localhost:5433` (schema-engine connection error). Prisma schema validation passed; no migration was applied.
+- **Prisma migration status:** Resolved for this checkpoint. Read-only `npx prisma migrate status --config prisma.config.ts` passed: 20 migrations found; schema up to date. No migration was applied.
 
 - **INV-010 browser interaction:** Native Enter-key submission, repeat increments, unknown barcode feedback, receiving/picking UI limits, and workspace-switch clearing still need browser/component interaction evidence. Existing queue regression, API lookup tests and database workflow suite pass. Chrome CDP at `127.0.0.1:9222` was unreachable. Do not mark INV-010 complete until keyboard acceptance has automated interaction evidence.
 - **Report performance:** All export types, queue/storage, private service download, retries and expiry passed isolated integration, but a representative large-tenant performance benchmark was not run.
-- **Dependency audit:** Registry-backed `npm audit` could not reach `registry.npmjs.org` in earlier work. Prior installation reported seven lockfile advisories (4 moderate, 3 high) without full advisory detail. No clean audit is claimed.
+- **Dependency audit:** Current `npm audit --omit=dev --audit-level=high` could not reach `registry.npmjs.org` (`ENOTFOUND`). Earlier installation reported seven lockfile advisories (4 moderate, 3 high) without full advisory detail. No clean audit is claimed.
 - **Docker CLI:** `docker compose ps` is blocked by access to the Docker daemon socket. PostgreSQL, Redis and S3Mock endpoints were reachable and the isolated integration suites used them successfully; Docker health itself is not claimed for this session.
-- **QUALITY-003:** The PostgreSQL backup/restore script and local isolated drill passed. Off-host backup encryption/retention, object-storage recovery, queue restart rehearsal, incident procedures and approved RPO/RTO targets remain before closure.
+- **QUALITY-003:** PostgreSQL, queue interruption/restart, pending-row dispatch, and generated-object backup/missing/restore rehearsals pass locally; measured timings are recorded in `docs/operations/backup-restore.md`. Production independent-account replication/encryption has not been configured or drilled. RPO/RTO and retention/residency/key policies require owner approval before closure.
 
 ## Completed verification in this session
 
-- Full `npm test` passed: 51 passed, 0 failed, 2 opt-in PostgreSQL suites skipped in that invocation; web tests passed 2/2. Local loopback permission allowed the API contract smoke, so the previously reported `listen EPERM` is no longer an active test blocker under that permission.
-- Opt-in PostgreSQL inventory/report tests passed 13/13; auth/organization tests passed 10/10. Prisma status is 20/20. API `/api/v1/health/ready` returned status `ok`.
+- Full `npm test` passed: 52 passed, 0 failed, 2 opt-in PostgreSQL suites skipped in that invocation; web tests passed 2/2. Local loopback permission allowed the API contract smoke, so the previously reported `listen EPERM` is no longer an active test blocker under that permission.
+- Opt-in PostgreSQL inventory/report tests passed 13/13, including recovery drill timings (worker restart 3,253 ms, pending dispatcher 105 ms, object backup/missing/restore 84 ms); auth/organization tests passed 10/10. Prisma status is 20/20. API `/api/v1/health/ready` returned status `ok` in prior verified session.
 - No application data was reset or deleted. Tests created and dropped only their isolated random schemas and removed the temporary export objects.
 
 ## Production hardening and policy gates

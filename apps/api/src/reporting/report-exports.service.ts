@@ -22,7 +22,10 @@ import {
   ReportExportProcessor,
   type ReportExportJobData,
 } from "./report-export.processor";
-import { ReportExportStorage } from "./report-export-storage";
+import {
+  MissingReportExportObjectError,
+  ReportExportStorage,
+} from "./report-export-storage";
 import { CreateReportExportDto } from "./report-exports.dto";
 import { ReportFilterDto } from "./reporting.dto";
 import { ReportingService } from "./reporting.service";
@@ -304,7 +307,26 @@ export class ReportExportsService implements OnModuleInit, OnModuleDestroy {
       throw new ForbiddenException(
         "You no longer have access to all warehouses in this export",
       );
-    const file = await this.storage.open(record.objectKey);
+    let file: Awaited<ReturnType<ReportExportStorage["open"]>>;
+    try {
+      file = await this.storage.open(record.objectKey);
+    } catch (error) {
+      if (!(error instanceof MissingReportExportObjectError)) throw error;
+      await this.prisma.reportExport.updateMany({
+        where: {
+          id: record.id,
+          organizationId: context.organizationId,
+          status: ReportExportStatus.COMPLETED,
+          objectKey: record.objectKey,
+        },
+        data: {
+          status: ReportExportStatus.FAILED,
+          objectKey: null,
+          lastError: "Export artifact is missing from object storage",
+        },
+      });
+      throw new NotFoundException("The completed export file is unavailable");
+    }
     return {
       file,
       filename: `${record.reportType.toLowerCase()}-${record.id}.csv`,

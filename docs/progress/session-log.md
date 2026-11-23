@@ -1,5 +1,16 @@
 # Session log
 
+# 2026-11-23 — QUALITY-003 queue and object recovery drill
+
+- Resumed on `develop` at `65c9d6d`; worktree clean at start. Preserved all existing work. No commits, pushes, deployments, migrations, database resets, or customer-data deletions.
+- Implemented safe handling for missing report-export objects: explicit S3 not-found classification; tenant-scoped export transitions to FAILED with stale key removed and safe 404 response; focused unit regression.
+- Added isolated PostgreSQL/Redis/BullMQ/S3Mock recovery scenarios. Killed a worker during processing, verified replacement worker completion with one deterministic artifact and authorized download; verified startup dispatch of a durable pending row; copied artifact to isolated private prefix, verified missing-object behavior, restored exact bytes and confirmed SHA-256.
+- Measured local drills: stalled worker recovery 3,253 ms; startup dispatch 105 ms; object backup/missing-object/checksum restore 84 ms. These are test-environment measurements, not RPO/RTO commitments. Existing PostgreSQL restore drill evidence remains 285,871 bytes, one second backup and one second restore rounded, 18 organizations and 36 movements restored.
+- Expanded `docs/operations/backup-restore.md` with private object storage strategy, restore/missing object handling, Redis/worker recovery, incident response, and unapproved retention recommendations. QUALITY-003 remains IN_PROGRESS because no off-host production configuration/drill exists and RPO/RTO, retention, residency and key-management policy require owner approval.
+- Refreshed QUALITY-002 verification: read-only Prisma migration status passed, 20 migrations/schema up to date. Current `npm audit --omit=dev --audit-level=high` remains blocked by `ENOTFOUND registry.npmjs.org`; no clean audit claimed. QUALITY-002 remains IN_PROGRESS.
+- Checks: default `npm test` 52 API/shared passed, 0 failed, 2 opt-in PostgreSQL suites skipped; web 2/2. Explicit inventory PostgreSQL integration: 13/13, 0 skipped. Typecheck, lint, format, build, Prisma validation and migration status passed. No barcode browser UAT; INV-010 remains IN_PROGRESS.
+- Roadmap stays **29/47**; no task met all closure requirements. Exact handoff and uncommitted files are in `docs/progress/next-session.md`.
+
 # 2026-11-23 — QUALITY-002 tenant isolation and security review
 
 - Resumed on `develop` at actual HEAD `4486f87`; `git status --short` was clean at start, despite stale checkpoint docs describing earlier uncommitted report changes. No user edits were present at start. No commit, push, deploy, migration or database reset/deletion occurred.
