@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "../../features/auth/session-provider";
 type Customer = {
   id: string;
@@ -34,23 +34,36 @@ export default function CustomersPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const requestVersion = useRef(0);
   const canWrite = ["OWNER", "ADMIN", "MANAGER", "SALES"].includes(
     organization?.role ?? "",
   );
   const load = useCallback(async () => {
-    if (!organization) return;
+    const version = ++requestVersion.current;
+    if (!organization) {
+      setRows([]);
+      setTotal(0);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     try {
       const p = new URLSearchParams({ page: String(page), page_size: "20" });
       if (query.trim()) p.set("q", query.trim());
       if (statusFilter) p.set("status", statusFilter);
       const result = await authenticatedRequest<Page<Customer>>(`${api}?${p}`);
+      if (version !== requestVersion.current) return;
       setRows(result.data);
       setTotal(result.total);
       setError("");
     } catch (e) {
+      if (version !== requestVersion.current) return;
       setError(
         e instanceof Error ? e.message : "Customers could not be loaded",
       );
+    } finally {
+      if (version === requestVersion.current) setLoading(false);
     }
   }, [authenticatedRequest, organization, page, query, statusFilter]);
   useEffect(() => {
@@ -114,17 +127,33 @@ export default function CustomersPage() {
           </button>
         )}
       </header>
+      {!organization && (
+        <section className="catalog-empty">
+          <h2>Choose a workspace first</h2>
+          <p>Customer records belong to the active organization.</p>
+          <Link className="catalog-secondary-link" href="/organizations">
+            Manage organizations
+          </Link>
+        </section>
+      )}
       {error && (
-        <p className="error-banner" role="alert">
-          {error}
-        </p>
+        <div className="error-banner" role="alert">
+          <span>{error}</span>
+          <button
+            className="catalog-text-button"
+            onClick={() => void load()}
+            type="button"
+          >
+            Try again
+          </button>
+        </div>
       )}
       {notice && (
         <p className="success-banner" role="status">
           {notice}
         </p>
       )}
-      {open && (
+      {open && organization && (
         <section className="panel">
           <form onSubmit={create}>
             <h2>Customer details</h2>
@@ -228,93 +257,105 @@ export default function CustomersPage() {
           </form>
         </section>
       )}
-      <section className="panel">
-        <div className="form-grid">
-          <label>
-            Search
-            <input
-              value={query}
-              onChange={(e) => {
-                setPage(1);
-                setQuery(e.target.value);
-              }}
-              placeholder="Name, contact, email or phone"
-            />
-          </label>
-          <label>
-            Status
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setPage(1);
-                setStatusFilter(e.target.value);
-              }}
-            >
-              <option value="ACTIVE">Active</option>
-              <option value="ARCHIVED">Archived</option>
-              <option value="">All</option>
-            </select>
-          </label>
-        </div>
-        <div className="catalog-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Customer</th>
-                <th>Type</th>
-                <th>Contact</th>
-                <th>Email</th>
-                <th>Phone</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td>
-                    <Link href={`/customers/${row.id}`}>
-                      <strong>{row.name}</strong>
-                    </Link>
-                  </td>
-                  <td>{row.type}</td>
-                  <td>{row.contactName || "—"}</td>
-                  <td>{row.email || "—"}</td>
-                  <td>{row.phone || "—"}</td>
-                  <td>
-                    <span className="status-badge">{row.status}</span>
-                  </td>
-                </tr>
-              ))}
-              {!rows.length && (
-                <tr>
-                  <td colSpan={6}>
-                    No customers found. Add a customer to begin sales workflows.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="action-row">
-          <button
-            className="button button-secondary"
-            disabled={page <= 1}
-            onClick={() => setPage((x) => x - 1)}
-          >
-            Previous
-          </button>
-          <span>
-            Page {page} · {total} customers
-          </span>
-          <button
-            className="button button-secondary"
-            disabled={page * 20 >= total}
-            onClick={() => setPage((x) => x + 1)}
-          >
-            Next
-          </button>
-        </div>
-      </section>
+      {organization && (
+        <section className="panel">
+          <div className="form-grid">
+            <label>
+              Search
+              <input
+                value={query}
+                onChange={(e) => {
+                  setPage(1);
+                  setQuery(e.target.value);
+                }}
+                placeholder="Name, contact, email or phone"
+              />
+            </label>
+            <label>
+              Status
+              <select
+                value={statusFilter}
+                onChange={(e) => {
+                  setPage(1);
+                  setStatusFilter(e.target.value);
+                }}
+              >
+                <option value="ACTIVE">Active</option>
+                <option value="ARCHIVED">Archived</option>
+                <option value="">All</option>
+              </select>
+            </label>
+          </div>
+          {loading ? (
+            <p className="catalog-loading" role="status">
+              Loading customers…
+            </p>
+          ) : (
+            <div className="catalog-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Customer</th>
+                    <th>Type</th>
+                    <th>Contact</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        <Link href={`/customers/${row.id}`}>
+                          <strong>{row.name}</strong>
+                        </Link>
+                      </td>
+                      <td>{row.type}</td>
+                      <td>{row.contactName || "—"}</td>
+                      <td>{row.email || "—"}</td>
+                      <td>{row.phone || "—"}</td>
+                      <td>
+                        <span className="status-badge">{row.status}</span>
+                      </td>
+                    </tr>
+                  ))}
+                  {!rows.length && (
+                    <tr>
+                      <td colSpan={6}>
+                        {query.trim() || statusFilter !== "ACTIVE"
+                          ? "No customers match these filters."
+                          : "No customers yet. Add a customer to begin sales workflows."}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {!loading && (
+            <nav className="action-row" aria-label="Customer pages">
+              <button
+                className="button button-secondary"
+                disabled={page <= 1}
+                onClick={() => setPage((x) => x - 1)}
+              >
+                Previous
+              </button>
+              <span>
+                Page {page} · {total} customers
+              </span>
+              <button
+                className="button button-secondary"
+                disabled={page * 20 >= total}
+                onClick={() => setPage((x) => x + 1)}
+              >
+                Next
+              </button>
+            </nav>
+          )}
+        </section>
+      )}
     </main>
   );
 }

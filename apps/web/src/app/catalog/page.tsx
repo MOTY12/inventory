@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ProtectedContent,
@@ -36,14 +36,20 @@ function CatalogManager() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [categoryTotal, setCategoryTotal] = useState(0);
+  const [unitTotal, setUnitTotal] = useState(0);
+  const requestVersion = useRef(0);
   const canWrite = ["OWNER", "ADMIN", "MANAGER", "BUYER"].includes(
     organization?.role ?? "",
   );
 
   const reload = useCallback(async () => {
+    const version = ++requestVersion.current;
     if (!organization) {
       setCategories([]);
       setUnits([]);
+      setCategoryTotal(0);
+      setUnitTotal(0);
       setLoading(false);
       return;
     }
@@ -59,16 +65,20 @@ function CatalogManager() {
           `/organizations/current/catalog/units?${query}`,
         ),
       ]);
+      if (version !== requestVersion.current) return;
       setCategories(categoryResult.data);
       setUnits(unitResult.data);
+      setCategoryTotal(categoryResult.total);
+      setUnitTotal(unitResult.total);
     } catch (cause) {
+      if (version !== requestVersion.current) return;
       setError(
         cause instanceof Error
           ? cause.message
           : "Could not load catalog setup.",
       );
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   }, [organization, authenticatedRequest]);
 
@@ -149,9 +159,16 @@ function CatalogManager() {
         </p>
       )}
       {error && (
-        <p className="catalog-error" role="alert">
-          {error}
-        </p>
+        <div className="catalog-error" role="alert">
+          <span>{error}</span>
+          <button
+            className="catalog-text-button"
+            onClick={() => void reload()}
+            type="button"
+          >
+            Try again
+          </button>
+        </div>
       )}
 
       {!organization ? (
@@ -174,7 +191,7 @@ function CatalogManager() {
                 <p className="eyebrow">PRODUCT GROUPS</p>
                 <h2 id="categories-title">Categories</h2>
               </div>
-              <span className="catalog-count">{categories.length} active</span>
+              <span className="catalog-count">{categoryTotal} active</span>
             </div>
             {categories.length ? (
               <ul className="catalog-list">
@@ -251,7 +268,7 @@ function CatalogManager() {
                 <p className="eyebrow">MEASUREMENT</p>
                 <h2 id="units-title">Units of measure</h2>
               </div>
-              <span className="catalog-count">{units.length} active</span>
+              <span className="catalog-count">{unitTotal} active</span>
             </div>
             {units.length ? (
               <ul className="catalog-list">

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "../../features/auth/session-provider";
 
@@ -62,13 +62,18 @@ function SuppliersPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const requestVersion = useRef(0);
   const canWrite = ["OWNER", "ADMIN", "MANAGER", "BUYER"].includes(
     organization?.role ?? "",
   );
 
   const reload = useCallback(async () => {
+    const version = ++requestVersion.current;
     if (!organization) {
       setSuppliers([]);
+      setTotal(0);
+      setSelected(null);
+      setAuditHistory(null);
       setLoading(false);
       return;
     }
@@ -84,14 +89,16 @@ function SuppliersPage() {
       const result = await authenticatedRequest<Page<Supplier>>(
         `${endpoint}?${params}`,
       );
+      if (version !== requestVersion.current) return;
       setSuppliers(result.data);
       setTotal(result.total);
     } catch (cause) {
+      if (version !== requestVersion.current) return;
       setError(
         cause instanceof Error ? cause.message : "Could not load suppliers.",
       );
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   }, [authenticatedRequest, organization, page, query, status]);
 
@@ -223,9 +230,16 @@ function SuppliersPage() {
         </p>
       )}
       {error && (
-        <p className="catalog-error" role="alert">
-          {error}
-        </p>
+        <div className="catalog-error" role="alert">
+          <span>{error}</span>
+          <button
+            className="catalog-text-button"
+            onClick={() => void reload()}
+            type="button"
+          >
+            Try again
+          </button>
+        </div>
       )}
       {!organization ? (
         <section className="catalog-empty">
@@ -306,7 +320,11 @@ function SuppliersPage() {
             <div className="catalog-panel-heading">
               <div>
                 <span className="catalog-eyebrow">DIRECTORY</span>
-                <h2>Active suppliers</h2>
+                <h2>
+                  {status === "ACTIVE"
+                    ? "Active suppliers"
+                    : "Archived suppliers"}
+                </h2>
               </div>
               <span className="catalog-count">{total} total</span>
             </div>
@@ -337,7 +355,9 @@ function SuppliersPage() {
               </label>
             </div>
             {loading ? (
-              <p role="status">Loading suppliers…</p>
+              <p role="status" className="catalog-loading">
+                Loading suppliers…
+              </p>
             ) : suppliers.length === 0 ? (
               <div className="catalog-empty">
                 <h3>No suppliers found</h3>
@@ -361,6 +381,8 @@ function SuppliersPage() {
                         <td>
                           <button
                             className="catalog-text-button"
+                            aria-expanded={selected === supplier.id}
+                            aria-label={`${selected === supplier.id ? "Hide" : "Show"} details for ${supplier.name}`}
                             onClick={() =>
                               setSelected(
                                 selected === supplier.id ? null : supplier.id,
@@ -379,6 +401,7 @@ function SuppliersPage() {
                               <button
                                 className="catalog-text-button"
                                 onClick={() => edit(supplier)}
+                                type="button"
                               >
                                 Edit
                               </button>
@@ -386,6 +409,7 @@ function SuppliersPage() {
                                 className="catalog-text-button"
                                 disabled={busy}
                                 onClick={() => void archive(supplier)}
+                                type="button"
                               >
                                 Archive
                               </button>
@@ -435,7 +459,7 @@ function SuppliersPage() {
                     )}
                   </article>
                 ))}
-            <div className="product-pagination">
+            <nav className="product-pagination" aria-label="Supplier pages">
               <button
                 className="catalog-secondary-link"
                 disabled={page <= 1 || loading}
@@ -451,7 +475,7 @@ function SuppliersPage() {
               >
                 Next
               </button>
-            </div>
+            </nav>
           </section>
         </>
       )}

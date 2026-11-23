@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useSession } from "../../../features/auth/session-provider";
 type Customer = {
@@ -82,6 +82,8 @@ export default function CustomerDetailPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const requestVersion = useRef(0);
   const [history, setHistory] = useState<
     {
       id: string;
@@ -94,12 +96,20 @@ export default function CustomerDetailPage() {
     organization?.role ?? "",
   );
   const load = useCallback(async () => {
-    if (!organization) return;
+    const version = ++requestVersion.current;
+    if (!organization) {
+      setRow(null);
+      setHistory([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     try {
       const [customer, events] = await Promise.all([
         authenticatedRequest<Customer>(`${api}/${customerId}`),
         authenticatedRequest<typeof history>(`${api}/${customerId}/audit`),
       ]);
+      if (version !== requestVersion.current) return;
       setRow(customer);
       setName(customer.name);
       setType(customer.type);
@@ -124,7 +134,11 @@ export default function CustomerDetailPage() {
       setHistory(events);
       setError("");
     } catch (e) {
+      if (version !== requestVersion.current) return;
+      setRow(null);
       setError(e instanceof Error ? e.message : "Customer could not be loaded");
+    } finally {
+      if (version === requestVersion.current) setLoading(false);
     }
   }, [authenticatedRequest, customerId, organization]);
   useEffect(() => {
@@ -160,6 +174,7 @@ export default function CustomerDetailPage() {
   }
   async function archive() {
     if (!row) return;
+    if (!window.confirm(`Archive ${row.name}?`)) return;
     setBusy(true);
     try {
       await authenticatedRequest(
@@ -183,12 +198,37 @@ export default function CustomerDetailPage() {
         <Link href="/customers">← Customers</Link>
       </p>
       {error && (
-        <p role="alert" className="error-banner">
-          {error}
-        </p>
+        <div role="alert" className="error-banner">
+          <span>{error}</span>
+          <button
+            className="catalog-text-button"
+            onClick={() => void load()}
+            type="button"
+          >
+            Try again
+          </button>
+        </div>
       )}
-      {!row ? (
-        <p>Loading customer…</p>
+      {!organization ? (
+        <section className="catalog-empty">
+          <h2>Choose a workspace first</h2>
+          <p>Customer records belong to the active organization.</p>
+          <Link className="catalog-secondary-link" href="/organizations">
+            Manage organizations
+          </Link>
+        </section>
+      ) : loading ? (
+        <p className="catalog-loading" role="status">
+          Loading customer…
+        </p>
+      ) : !row ? (
+        <section className="catalog-empty">
+          <h2>Customer not available</h2>
+          <p>This customer may have been removed from the active workspace.</p>
+          <Link className="catalog-secondary-link" href="/customers">
+            Back to customers
+          </Link>
+        </section>
       ) : (
         <>
           <header className="page-heading">

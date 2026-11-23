@@ -8,7 +8,7 @@
 - Branch: `develop`; this redesign session started at `ae44aea` with a clean worktree. No user changes were overwritten.
 - Roadmap: **28/47 complete** according to the existing task ledger. REPORT-001 is complete; INV-010 remains IN_PROGRESS. UI redesign work is not a roadmap task and does not change the count.
 - No API, database, schema, or migration changes were made. Database/migration status was not checked in this session.
-- Prior UI commits: `33fa0a6` (shared design system), `960912d` (checkpoint), `f041826` (product list), `0e42502` (product checkpoint). This session’s module-pass changes are pending commit after final diff review. No push or deploy.
+- Prior UI commits: `33fa0a6` (shared design system), `960912d` (checkpoint), `f041826` (product list), `0e42502` (product checkpoint), and `43dacf1` (inventory/order UI). The catalog/supplier/customer pass is pending commit after final review. No push or deploy.
 
 ## Completed in this session
 
@@ -21,6 +21,7 @@
 - Transfers: role-gated write actions, exact decimal receipt arithmetic, input bounds, stable retry key for an identical receipt request, dispatch/cancel confirmations, and list loading/filter-aware empty/pagination states. Workspace changes reset selections to IDs available in the active organization.
 - Purchase orders: loading, retry, filter-aware empty state, pagination navigation, and uppercase three-letter currency validation.
 - Sales orders: loading/retry states, filter-aware empty state, line-completion vs partial fulfillment display, named pagination navigation.
+- Catalog: API total counts for active categories/units and a retry action for load failures. Supplier/customer directories now have clearer workspace, loading, empty, retry, and pagination states; stale list/detail requests are ignored after workspace/filter changes; customer details clear stale organization data and show distinct unavailable/loading states.
 - No backend authorization or business rules were changed. Shared CSS restyles all current modules; page-specific review remains for Catalog, supplier/customer details, receiving/fulfillment details, Reports and Administration.
 
 ## Verification
@@ -36,8 +37,8 @@
 
 ## Exact next steps
 
-1. Inspect the complete current diff and `git status`; commit only the verified UI source and this checkpoint. Do not push.
-2. Continue page-by-page at Catalog, then supplier/customer directories and details, purchase-order details/receiving, sales-order details/picking/fulfillment, Reports, and Organizations/Locations administration. Preserve existing API calls and RBAC.
+1. Review the catalog/supplier/customer diff, verify generated build files remain clean, and commit only these UI pages plus progress docs after the recorded checks. Do not push.
+2. Continue page-by-page with supplier/customer detail refinements as needed, then purchase-order details/receiving, sales-order details/picking/fulfillment, Reports, and Organizations/Locations administration. Preserve existing API calls and RBAC.
 3. If browser control becomes available, run desktop/tablet/mobile visual review. Exercise organization switching, role-specific navigation/actions, product conversion, count posting, transfer dispatch/receipt, goods receiving, and sales fulfillment. No browser tool/runtime was available in this session.
 4. Keep INV-010 IN_PROGRESS pending barcode repeat-scan/Enter verification and camera feasibility. Do not count UI work as roadmap completion.
 5. After the next page milestone, run typecheck, lint, formatting, relevant tests and the web production build; document unavailable database/browser checks as pending.
