@@ -1,6 +1,13 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import {
   ProtectedContent,
@@ -46,6 +53,8 @@ function LocationsManager() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const requestVersion = useRef(0);
 
   const canManage =
     organization?.role === "OWNER" ||
@@ -59,37 +68,50 @@ function LocationsManager() {
   }, [filter, statusFilter]);
 
   const reload = useCallback(async () => {
+    const version = ++requestVersion.current;
     if (!organization) {
       setBranches([]);
       setWarehouses([]);
+      setWarehouseBranch("");
+      setLoading(false);
       return;
     }
-    const [branchResult, warehouseResult] = await Promise.all([
-      authenticatedRequest<PageResult<Branch>>(
-        `/organizations/current/branches?${queryString}`,
-      ),
-      authenticatedRequest<PageResult<Warehouse>>(
-        `/organizations/current/warehouses?${queryString}`,
-      ),
-    ]);
-    setBranches(branchResult.data);
-    setWarehouses(warehouseResult.data);
-    setWarehouseBranch(
-      (current) =>
-        current ||
-        branchResult.data.find((branch) => branch.status === "ACTIVE")?.id ||
-        "",
-    );
+    setLoading(true);
+    setError("");
+    setBranches([]);
+    setWarehouses([]);
+    try {
+      const [branchResult, warehouseResult] = await Promise.all([
+        authenticatedRequest<PageResult<Branch>>(
+          `/organizations/current/branches?${queryString}`,
+        ),
+        authenticatedRequest<PageResult<Warehouse>>(
+          `/organizations/current/warehouses?${queryString}`,
+        ),
+      ]);
+      if (version !== requestVersion.current) return;
+      setBranches(branchResult.data);
+      setWarehouses(warehouseResult.data);
+      setWarehouseBranch((current) =>
+        branchResult.data.some(
+          (branch) => branch.id === current && branch.status === "ACTIVE",
+        )
+          ? current
+          : (branchResult.data.find((branch) => branch.status === "ACTIVE")
+              ?.id ?? ""),
+      );
+    } catch (cause) {
+      if (version !== requestVersion.current) return;
+      setError(
+        cause instanceof Error ? cause.message : "Could not load locations.",
+      );
+    } finally {
+      if (version === requestVersion.current) setLoading(false);
+    }
   }, [organization, authenticatedRequest, queryString]);
 
   useEffect(() => {
-    void Promise.resolve()
-      .then(reload)
-      .catch((cause: unknown) => {
-        setError(
-          cause instanceof Error ? cause.message : "Could not load locations.",
-        );
-      });
+    void Promise.resolve().then(reload);
   }, [reload]);
 
   async function createBranch(event: FormEvent<HTMLFormElement>) {
@@ -140,6 +162,11 @@ function LocationsManager() {
   }
 
   async function setBranchStatus(branch: Branch) {
+    if (
+      branch.status === "ACTIVE" &&
+      !window.confirm(`Archive branch ${branch.name}?`)
+    )
+      return;
     setBusy(true);
     setError("");
     try {
@@ -191,6 +218,11 @@ function LocationsManager() {
   }
 
   async function setWarehouseStatus(warehouse: Warehouse) {
+    if (
+      warehouse.status === "ACTIVE" &&
+      !window.confirm(`Archive warehouse ${warehouse.name}?`)
+    )
+      return;
     setBusy(true);
     setError("");
     try {
@@ -265,7 +297,18 @@ function LocationsManager() {
           each member’s assigned scope.
         </p>
         {message && <p role="status">{message}</p>}
-        {error && <p role="alert">{error}</p>}
+        {error && (
+          <div role="alert" className="error-banner">
+            <span>{error}</span>
+            <button
+              className="catalog-text-button"
+              onClick={() => void reload()}
+              type="button"
+            >
+              Try again
+            </button>
+          </div>
+        )}
         {!organization && (
           <p>Select an organization before managing locations.</p>
         )}
@@ -299,7 +342,11 @@ function LocationsManager() {
               </div>
             </div>
             <h2>Branches</h2>
-            {branches.length === 0 ? (
+            {loading ? (
+              <p className="catalog-loading" role="status">
+                Loading branches and warehouses…
+              </p>
+            ) : branches.length === 0 ? (
               <p>No branches match these filters.</p>
             ) : (
               <ul className="locations-list">
@@ -423,7 +470,7 @@ function LocationsManager() {
               </>
             )}
             <h2>Warehouses</h2>
-            {warehouses.length === 0 ? (
+            {loading ? null : warehouses.length === 0 ? (
               <p>No warehouses match these filters.</p>
             ) : (
               <ul className="locations-list">

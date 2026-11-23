@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ProtectedContent,
@@ -58,50 +58,77 @@ function OrganizationManager() {
   >({});
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<string>("MEMBER");
+  const [loading, setLoading] = useState(true);
+  const requestVersion = useRef(0);
 
   const reloadOrganization = useCallback(async () => {
+    const version = ++requestVersion.current;
     if (!organization) {
       setMembers([]);
       setInvitations([]);
       setWarehouses([]);
       setWarehouseGrants({});
+      setMemberRolesById({});
+      setLoading(false);
       return;
     }
-    const nextMembers = await authenticatedRequest<Member[]>(
-      "/organizations/current/members",
-    ).catch(() => []);
-    setMembers(nextMembers);
-    setMemberRolesById(
-      Object.fromEntries(nextMembers.map((member) => [member.id, member.role])),
-    );
-    if (organization.role === "OWNER" || organization.role === "ADMIN") {
-      const [nextInvitations, nextWarehouses] = await Promise.all([
-        authenticatedRequest<Invitation[]>(
-          "/organizations/current/invitations",
-        ).catch(() => []),
-        authenticatedRequest<{ data: Warehouse[] }>(
-          "/organizations/current/warehouses",
-        ).catch(() => ({ data: [] })),
-      ]);
-      setInvitations(nextInvitations);
-      setWarehouses(nextWarehouses.data);
-      const grantEntries = await Promise.all(
-        nextMembers
-          .filter(
-            (member) => member.role !== "OWNER" && member.status === "ACTIVE",
-          )
-          .map(async (member) => {
-            const grants = await authenticatedRequest<Warehouse[]>(
-              `/organizations/current/members/${member.id}/warehouse-grants`,
-            ).catch(() => []);
-            return [member.id, grants.map(({ id }) => id)] as const;
-          }),
+    setLoading(true);
+    setError("");
+    setMembers([]);
+    setInvitations([]);
+    setWarehouses([]);
+    setWarehouseGrants({});
+    try {
+      const nextMembers = await authenticatedRequest<Member[]>(
+        "/organizations/current/members",
       );
-      setWarehouseGrants(Object.fromEntries(grantEntries));
-    } else {
-      setInvitations([]);
-      setWarehouses([]);
-      setWarehouseGrants({});
+      let nextInvitations: Invitation[] = [];
+      let nextWarehouses: Warehouse[] = [];
+      let nextGrants: Record<string, string[]> = {};
+      if (organization.role === "OWNER" || organization.role === "ADMIN") {
+        const [invitationsResult, warehousesResult] = await Promise.all([
+          authenticatedRequest<Invitation[]>(
+            "/organizations/current/invitations",
+          ),
+          authenticatedRequest<{ data: Warehouse[] }>(
+            "/organizations/current/warehouses",
+          ),
+        ]);
+        nextInvitations = invitationsResult;
+        nextWarehouses = warehousesResult.data;
+        const grantEntries = await Promise.all(
+          nextMembers
+            .filter(
+              (member) => member.role !== "OWNER" && member.status === "ACTIVE",
+            )
+            .map(async (member) => {
+              const grants = await authenticatedRequest<Warehouse[]>(
+                `/organizations/current/members/${member.id}/warehouse-grants`,
+              );
+              return [member.id, grants.map(({ id }) => id)] as const;
+            }),
+        );
+        nextGrants = Object.fromEntries(grantEntries);
+      }
+      if (version !== requestVersion.current) return;
+      setMembers(nextMembers);
+      setMemberRolesById(
+        Object.fromEntries(
+          nextMembers.map((member) => [member.id, member.role]),
+        ),
+      );
+      setInvitations(nextInvitations);
+      setWarehouses(nextWarehouses);
+      setWarehouseGrants(nextGrants);
+    } catch (cause) {
+      if (version !== requestVersion.current) return;
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not load organization settings.",
+      );
+    } finally {
+      if (version === requestVersion.current) setLoading(false);
     }
   }, [organization, authenticatedRequest]);
 
@@ -178,6 +205,8 @@ function OrganizationManager() {
   }
 
   async function deactivate(memberId: string) {
+    if (!window.confirm("Deactivate this member and end their active access?"))
+      return;
     setBusy(true);
     setError("");
     try {
@@ -242,6 +271,7 @@ function OrganizationManager() {
   }
 
   async function revoke(invitationId: string) {
+    if (!window.confirm("Revoke this pending invitation?")) return;
     setBusy(true);
     setError("");
     try {
@@ -276,7 +306,18 @@ function OrganizationManager() {
           is scoped to active membership.
         </p>
         {message && <p role="status">{message}</p>}
-        {error && <p role="alert">{error}</p>}
+        {error && (
+          <div role="alert" className="error-banner">
+            <span>{error}</span>
+            <button
+              className="catalog-text-button"
+              onClick={() => void reloadOrganization()}
+              type="button"
+            >
+              Try again
+            </button>
+          </div>
+        )}
         <section
           className="organization-section"
           aria-labelledby="choose-org-title"
@@ -365,110 +406,118 @@ function OrganizationManager() {
               aria-labelledby="members-title"
             >
               <h2 id="members-title">Members</h2>
-              <ul className="organization-list organization-members">
-                {members.map((member) => (
-                  <li key={member.id}>
-                    <strong>{member.user.email}</strong> · {member.role} ·{" "}
-                    {member.status}
-                    {(organization.role === "OWNER" ||
-                      organization.role === "ADMIN") &&
-                      member.role !== "OWNER" &&
-                      member.status === "ACTIVE" && (
-                        <div className="organization-member-controls">
-                          <label htmlFor={`role-${member.id}`}>Role</label>
-                          <select
-                            id={`role-${member.id}`}
-                            value={memberRolesById[member.id] ?? member.role}
-                            onChange={(event) =>
-                              setMemberRolesById((current) => ({
-                                ...current,
-                                [member.id]: event.target.value,
-                              }))
-                            }
-                          >
-                            {memberRoles
-                              .filter(
-                                (role) =>
-                                  organization.role === "OWNER" ||
-                                  (role !== "ADMIN" && role !== "MANAGER"),
-                              )
-                              .map((role) => (
-                                <option key={role} value={role}>
-                                  {role.replaceAll("_", " ")}
-                                </option>
-                              ))}
-                          </select>
+              {loading ? (
+                <p className="catalog-loading" role="status">
+                  Loading members and access settings…
+                </p>
+              ) : (
+                <ul className="organization-list organization-members">
+                  {members.map((member) => (
+                    <li key={member.id}>
+                      <strong>{member.user.email}</strong> · {member.role} ·{" "}
+                      {member.status}
+                      {(organization.role === "OWNER" ||
+                        organization.role === "ADMIN") &&
+                        member.role !== "OWNER" &&
+                        member.status === "ACTIVE" && (
+                          <div className="organization-member-controls">
+                            <label htmlFor={`role-${member.id}`}>Role</label>
+                            <select
+                              id={`role-${member.id}`}
+                              value={memberRolesById[member.id] ?? member.role}
+                              onChange={(event) =>
+                                setMemberRolesById((current) => ({
+                                  ...current,
+                                  [member.id]: event.target.value,
+                                }))
+                              }
+                            >
+                              {memberRoles
+                                .filter(
+                                  (role) =>
+                                    organization.role === "OWNER" ||
+                                    (role !== "ADMIN" && role !== "MANAGER"),
+                                )
+                                .map((role) => (
+                                  <option key={role} value={role}>
+                                    {role.replaceAll("_", " ")}
+                                  </option>
+                                ))}
+                            </select>
+                            <button
+                              className="text-button"
+                              disabled={
+                                busy ||
+                                memberRolesById[member.id] === member.role
+                              }
+                              onClick={() => void updateRole(member.id)}
+                              type="button"
+                            >
+                              Save role
+                            </button>
+                            <fieldset>
+                              <legend>Warehouse access</legend>
+                              {warehouses.length === 0 ? (
+                                <p>
+                                  Create a warehouse in Locations to assign
+                                  access.
+                                </p>
+                              ) : (
+                                warehouses.map((warehouse) => (
+                                  <label key={warehouse.id}>
+                                    <input
+                                      type="checkbox"
+                                      checked={(
+                                        warehouseGrants[member.id] ?? []
+                                      ).includes(warehouse.id)}
+                                      onChange={(event) =>
+                                        setWarehouseGrants((current) => ({
+                                          ...current,
+                                          [member.id]: event.target.checked
+                                            ? [
+                                                ...(current[member.id] ?? []),
+                                                warehouse.id,
+                                              ]
+                                            : (current[member.id] ?? []).filter(
+                                                (id) => id !== warehouse.id,
+                                              ),
+                                        }))
+                                      }
+                                    />
+                                    {warehouse.name} ({warehouse.code})
+                                  </label>
+                                ))
+                              )}
+                              {warehouses.length > 0 && (
+                                <button
+                                  className="text-button"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    void saveWarehouseGrants(member.id)
+                                  }
+                                  type="button"
+                                >
+                                  Save access
+                                </button>
+                              )}
+                            </fieldset>
+                          </div>
+                        )}
+                      {member.role !== "OWNER" &&
+                        member.status === "ACTIVE" && (
                           <button
                             className="text-button"
-                            disabled={
-                              busy || memberRolesById[member.id] === member.role
-                            }
-                            onClick={() => void updateRole(member.id)}
+                            disabled={busy}
+                            onClick={() => void deactivate(member.id)}
                             type="button"
                           >
-                            Save role
+                            Deactivate
                           </button>
-                          <fieldset>
-                            <legend>Warehouse access</legend>
-                            {warehouses.length === 0 ? (
-                              <p>
-                                Create a warehouse in Locations to assign
-                                access.
-                              </p>
-                            ) : (
-                              warehouses.map((warehouse) => (
-                                <label key={warehouse.id}>
-                                  <input
-                                    type="checkbox"
-                                    checked={(
-                                      warehouseGrants[member.id] ?? []
-                                    ).includes(warehouse.id)}
-                                    onChange={(event) =>
-                                      setWarehouseGrants((current) => ({
-                                        ...current,
-                                        [member.id]: event.target.checked
-                                          ? [
-                                              ...(current[member.id] ?? []),
-                                              warehouse.id,
-                                            ]
-                                          : (current[member.id] ?? []).filter(
-                                              (id) => id !== warehouse.id,
-                                            ),
-                                      }))
-                                    }
-                                  />
-                                  {warehouse.name} ({warehouse.code})
-                                </label>
-                              ))
-                            )}
-                            {warehouses.length > 0 && (
-                              <button
-                                className="text-button"
-                                disabled={busy}
-                                onClick={() =>
-                                  void saveWarehouseGrants(member.id)
-                                }
-                                type="button"
-                              >
-                                Save access
-                              </button>
-                            )}
-                          </fieldset>
-                        </div>
-                      )}
-                    {member.role !== "OWNER" && member.status === "ACTIVE" && (
-                      <button
-                        className="text-button"
-                        disabled={busy}
-                        onClick={() => void deactivate(member.id)}
-                        type="button"
-                      >
-                        Deactivate
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
+                        )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
             {(organization.role === "OWNER" ||
               organization.role === "ADMIN") && (
@@ -526,23 +575,31 @@ function OrganizationManager() {
                   aria-labelledby="pending-title"
                 >
                   <h2 id="pending-title">Pending invitations</h2>
-                  <ul className="organization-list">
-                    {invitations.map((invitation) => (
-                      <li key={invitation.id}>
-                        {invitation.emailNormalized} · {invitation.role} ·
-                        expires{" "}
-                        {new Date(invitation.expiresAt).toLocaleDateString()}{" "}
-                        <button
-                          className="text-button"
-                          disabled={busy}
-                          onClick={() => void revoke(invitation.id)}
-                          type="button"
-                        >
-                          Revoke
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                  {loading ? (
+                    <p className="catalog-loading" role="status">
+                      Loading invitations…
+                    </p>
+                  ) : invitations.length ? (
+                    <ul className="organization-list">
+                      {invitations.map((invitation) => (
+                        <li key={invitation.id}>
+                          {invitation.emailNormalized} · {invitation.role} ·
+                          expires{" "}
+                          {new Date(invitation.expiresAt).toLocaleDateString()}{" "}
+                          <button
+                            className="text-button"
+                            disabled={busy}
+                            onClick={() => void revoke(invitation.id)}
+                            type="button"
+                          >
+                            Revoke
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>No pending invitations.</p>
+                  )}
                 </section>
               </>
             )}
