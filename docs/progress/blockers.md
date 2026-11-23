@@ -1,24 +1,28 @@
 # Blockers and constraints
 
-**Current status as of 2026-11-23 (Africa/Lagos).** Older environment statements in the session log are historical and superseded by this checkpoint.
+**Updated 2026-11-23 (Africa/Lagos).** Historical environment blockers below are superseded by the latest evidence where noted.
 
 ## Active verification gaps
 
-- **Browser workflow:** Interactive browser RPC/control is unavailable (`Trusted RPC service is not configured: browser` in the prior attempt; no local browser-control package/API was available during this run). INV-010 scanner interactions are implemented and build-verified, not browser-verified. Keep authenticated UAT under QUALITY-001 and do not claim UI acceptance.
-- **API contract listener:** `apps/api/test/api-contract.test.mjs` cannot bind its local HTTP test server in this execution environment (`listen EPERM` on both `0.0.0.0` and `127.0.0.1`). Thus full `npm test` remains blocked; the test was not removed or counted as passing. Focused API/shared tests excluding this listener test and opt-in PostgreSQL+Redis+S3 integration tests were run separately.
-- **REPORT-003 coverage:** Live queue/storage integration currently covers Inventory Summary only. Movement, Valuation, Low Stock, expiry cleanup, authenticated HTTP download/retry, and browser history/download remain unverified. REPORT-003 stays IN_PROGRESS.
-- **Dependency audit:** `npm audit --omit=dev --audit-level=high` could not resolve `registry.npmjs.org` (`ENOTFOUND`). Next.js and eslint-config-next are updated to 16.4.6 and production build passes, but a complete registry audit remains pending.
-- The BullMQ/S3 SDK install reported 7 vulnerabilities across the lockfile (4 moderate, 3 high) without advisory details in the install output. No remediation or clean audit is claimed; inspect with `npm audit` when registry access is available.
-- **Report performance:** Fixture reconciliation and query behavior were verified against isolated PostgreSQL; a representative large-tenant performance benchmark has not been run.
-- **INV-010 camera workflow:** The Barcode Detection API is not a cross-browser baseline; it is limited/experimental, needs HTTPS and runtime feature detection, and iOS Safari support is not dependable. Chrome documents API support in supported Chrome builds (Chrome 83+), but that does not establish device-level camera availability. Camera scanning was not added without target-device verification. Manual entry or a USB/Bluetooth keyboard-emulating scanner is the fallback. Sources: [MDN](https://developer.mozilla.org/en-US/docs/Web/API/Barcode_Detection_API), [Chrome Developers](https://developer.chrome.com/docs/capabilities/shape-detection), [WebKit](https://bugs.webkit.org/show_bug.cgi?id=198174). Reassess camera support only with target browser/device coverage and an explicit dependency/maintenance decision.
+- **INV-010 browser interaction:** Native Enter-key submission, repeat increments, unknown barcode feedback, receiving/picking UI limits, and workspace-switch clearing still need browser/component interaction evidence. Existing queue regression, API lookup tests and database workflow suite pass. Chrome CDP at `127.0.0.1:9222` was unreachable. Do not mark INV-010 complete until keyboard acceptance has automated interaction evidence.
+- **Report performance:** All export types, queue/storage, private service download, retries and expiry passed isolated integration, but a representative large-tenant performance benchmark was not run.
+- **Dependency audit:** Registry-backed `npm audit` could not reach `registry.npmjs.org` in earlier work. Prior installation reported seven lockfile advisories (4 moderate, 3 high) without full advisory detail. No clean audit is claimed.
+- **Docker CLI:** `docker compose ps` is blocked by access to the Docker daemon socket. PostgreSQL, Redis and S3Mock endpoints were reachable and the isolated integration suites used them successfully; Docker health itself is not claimed for this session.
+- **QUALITY-003:** The PostgreSQL backup/restore script and local isolated drill passed. Off-host backup encryption/retention, object-storage recovery, queue restart rehearsal, incident procedures and approved RPO/RTO targets remain before closure.
+
+## Completed verification in this session
+
+- Full `npm test` passed: 51 passed, 0 failed, 2 opt-in PostgreSQL suites skipped in that invocation; web tests passed 2/2. Local loopback permission allowed the API contract smoke, so the previously reported `listen EPERM` is no longer an active test blocker under that permission.
+- Opt-in PostgreSQL inventory/report tests passed 13/13; auth/organization tests passed 10/10. Prisma status is 20/20. API `/api/v1/health/ready` returned status `ok`.
+- No application data was reset or deleted. Tests created and dropped only their isolated random schemas and removed the temporary export objects.
 
 ## Production hardening and policy gates
 
-- Production email provider and delivery operations are pending.
-- Authentication rate limiting is process-local; shared storage is required before horizontally scaling API replicas.
-- Open material decisions are recorded in `docs/progress/decisions.md`: target segment/brand, tax/invoice requirements, pricing/limits, production residency/hosting commitments, MFA enforcement, RLS and privileged support access. Keep dependent work gated.
-- Browser E2E/session restore, role/grant workflows, pilot and production release checks remain outstanding.
+- Production email and distributed rate limiting remain open.
+- Open material decisions are in `docs/progress/decisions.md`: target segment/brand, tax/invoice requirements, pricing/limits, production residency/hosting commitments, MFA enforcement, RLS and privileged support access. Keep dependent work gated.
+- RPO/RTO targets for QUALITY-003 are not approved. Measure local backup/restore behavior but do not invent customer-facing service objectives.
+- Browser E2E, pilot and production release checks remain outstanding.
 
-## Database/runtime evidence
+## Barcode capability constraints
 
-- This session connected to local PostgreSQL at `localhost:5433`; `docker compose ps` reported PostgreSQL, Redis and S3Mock healthy. Applied the additive `20261123160000_report_exports` migration without reset or deletion. Prisma reports 20 migrations and the configured `inventory_dev` schema up to date. The export integration test created and cleaned up a separate random schema and one unique S3Mock object; no production database was touched.
+Camera scanning remains deferred. Barcode Detection API support is limited/experimental, requires HTTPS and feature detection, and is not dependable on iOS Safari. Manual input or a USB/Bluetooth keyboard-emulating scanner remains the fallback. Sources: [MDN](https://developer.mozilla.org/en-US/docs/Web/API/Barcode_Detection_API), [Chrome Developers](https://developer.chrome.com/docs/capabilities/shape-detection), [WebKit](https://bugs.webkit.org/show_bug.cgi?id=198174).

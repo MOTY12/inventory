@@ -286,30 +286,216 @@ test(
             );
             await exportService.onModuleInit();
             try {
-              const exportJob = await exportService.create(
+              const createAndDownload = async (reportType, filters, key) => {
+                const exportJob = await exportService.create(
+                  contextA,
+                  { report_type: reportType, filters },
+                  `integration-export-${key}-${randomUUID()}`,
+                );
+                let completed;
+                for (let attempt = 0; attempt < 300; attempt += 1) {
+                  completed = await prisma.reportExport.findUniqueOrThrow({
+                    where: { id: exportJob.id },
+                  });
+                  if (["COMPLETED", "FAILED"].includes(completed.status)) break;
+                  await new Promise((resolve) => setTimeout(resolve, 100));
+                }
+                assert.equal(
+                  completed.status,
+                  "COMPLETED",
+                  completed.lastError,
+                );
+                assert.ok(completed.expiresAt > new Date());
+                const { file } = await exportService.download(
+                  contextA,
+                  exportJob.id,
+                );
+                const csv = await new Response(file.body).text();
+                assert.equal(
+                  completed.rowCount,
+                  csv.trim().split("\r\n").length - 1,
+                );
+                return { completed, csv };
+              };
+
+              const summaryExport = await createAndDownload(
+                "INVENTORY_SUMMARY",
+                { product_id: reportProduct.id, warehouse_id: warehouse.id },
+                "summary",
+              );
+              assert.match(summaryExport.csv, /Report valuation item/);
+              assert.match(summaryExport.csv, /20,5,15,3,"NGN",60/);
+
+              const exportSecondWarehouse = await locations.createWarehouse(
+                contextA,
+                ownerA.userId,
+                {
+                  branchId: branch.id,
+                  name: "Report export ordering warehouse",
+                  code: `EXP-${randomUUID().slice(0, 8)}`,
+                },
+              );
+              await inventory.postWarehouseMovement(
+                contextA,
+                ownerA.userId,
+                `report-export-order-${randomUUID()}`,
+                {
+                  warehouseId: exportSecondWarehouse.id,
+                  productId: reportProduct.id,
+                  documentType: "OPENING_BALANCE",
+                  documentId: randomUUID(),
+                  movementType: "OPENING_BALANCE",
+                  quantityDelta: "1",
+                  costPerBaseUnit: "5.0000",
+                  costCurrency: "NGN",
+                },
+              );
+              const usdProduct = await catalog.createProduct(
+                contextA,
+                ownerA.userId,
+                {
+                  name: "Report USD item",
+                  sku: `REPORT-USD-${randomUUID()}`,
+                  baseUnitId: unit.id,
+                },
+              );
+              await inventory.postWarehouseMovement(
+                contextA,
+                ownerA.userId,
+                `report-export-usd-${randomUUID()}`,
+                {
+                  warehouseId: exportSecondWarehouse.id,
+                  productId: usdProduct.id,
+                  documentType: "OPENING_BALANCE",
+                  documentId: randomUUID(),
+                  movementType: "OPENING_BALANCE",
+                  quantityDelta: "2",
+                  costPerBaseUnit: "1.2500",
+                  costCurrency: "USD",
+                },
+              );
+              const movementsExport = await createAndDownload(
+                "MOVEMENTS",
+                { product_id: reportProduct.id },
+                "movements",
+              );
+              const matchingMovements = await reports.movements(contextA, {
+                page: 1,
+                page_size: 100,
+                product_id: reportProduct.id,
+              });
+              assert.equal(matchingMovements.total, 3);
+              assert.equal(
+                movementsExport.completed.rowCount,
+                matchingMovements.total,
+              );
+              const movementIdsFromCsv = movementsExport.csv
+                .trim()
+                .split("\r\n")
+                .slice(1)
+                .map((line) => line.slice(1, line.indexOf(",") - 1));
+              assert.deepEqual(
+                movementIdsFromCsv,
+                matchingMovements.data.map((movement) => movement.id),
+              );
+              assert.match(movementsExport.csv, /Quantity in/);
+              assert.match(movementsExport.csv, /Quantity out/);
+              assert.match(movementsExport.csv, /,10,0,10,/);
+
+              const valuationExport = await createAndDownload(
+                "VALUATION",
+                {},
+                "valuation",
+              );
+              const currentValuation = await reports.valuation(contextA, {
+                page: 1,
+                page_size: 100,
+              });
+              assert.equal(
+                valuationExport.completed.rowCount,
+                currentValuation.total,
+              );
+              assert.match(valuationExport.csv, /20,3,"NGN",60/);
+              assert.match(valuationExport.csv, /2,1\.25,"USD",2\.5/);
+              assert.deepEqual(
+                currentValuation.totals.inventory_value_by_currency.map(
+                  (item) => [
+                    item.cost_currency,
+                    item.inventory_value.toString(),
+                  ],
+                ),
+                [
+                  ["NGN", "65"],
+                  ["USD", "2.5"],
+                ],
+              );
+              const historicalValuationExport = await createAndDownload(
+                "VALUATION",
+                {
+                  product_id: reportProduct.id,
+                  warehouse_id: warehouse.id,
+                  as_of: opening.occurredAt.toISOString(),
+                },
+                "valuation-historical",
+              );
+              assert.match(historicalValuationExport.csv, /10,2,"NGN",20/);
+
+              const lowStockExport = await createAndDownload(
+                "LOW_STOCK",
+                { product_id: reportProduct.id, warehouse_id: warehouse.id },
+                "low-stock",
+              );
+              assert.match(lowStockExport.csv, /18,30,15/);
+
+              // Exercise retry through the real queue: one transient upload
+              // failure must not duplicate the export or leave it terminal.
+              const originalPutFile = exportStorage.putFile.bind(exportStorage);
+              let failFirstUpload = true;
+              exportStorage.putFile = async (...args) => {
+                if (failFirstUpload) {
+                  failFirstUpload = false;
+                  throw new Error("integration transient upload failure");
+                }
+                return originalPutFile(...args);
+              };
+              const retryJob = await exportService.create(
                 contextA,
                 {
                   report_type: "INVENTORY_SUMMARY",
                   filters: { product_id: reportProduct.id },
                 },
-                `integration-export-${randomUUID()}`,
+                `integration-retry-${randomUUID()}`,
               );
-              let completed;
-              for (let attempt = 0; attempt < 100; attempt += 1) {
-                completed = await prisma.reportExport.findUniqueOrThrow({
-                  where: { id: exportJob.id },
+              let retried;
+              for (let attempt = 0; attempt < 300; attempt += 1) {
+                retried = await prisma.reportExport.findUniqueOrThrow({
+                  where: { id: retryJob.id },
                 });
-                if (["COMPLETED", "FAILED"].includes(completed.status)) break;
+                if (
+                  retried.status === "COMPLETED" ||
+                  retried.status === "FAILED"
+                )
+                  break;
                 await new Promise((resolve) => setTimeout(resolve, 100));
               }
-              assert.equal(completed.status, "COMPLETED", completed.lastError);
-              assert.equal(completed.rowCount, 1);
-              assert.ok(completed.expiresAt > new Date());
-              const storedFile = await exportStorage.open(completed.objectKey);
-              const csv = await new Response(storedFile.body).text();
-              assert.match(csv, /Report valuation item/);
-              assert.match(csv, /20,5,15,3,"NGN",60/);
-              await exportStorage.delete(completed.objectKey);
+              assert.equal(retried.status, "COMPLETED", retried.lastError);
+              assert.equal(retried.attemptCount, 2);
+
+              const expiryTarget = summaryExport.completed;
+              await prisma.reportExport.update({
+                where: { id: expiryTarget.id },
+                data: { expiresAt: new Date(Date.now() - 1_000) },
+              });
+              await processor.expireCompleted();
+              const expired = await prisma.reportExport.findUniqueOrThrow({
+                where: { id: expiryTarget.id },
+              });
+              assert.equal(expired.status, "EXPIRED");
+              assert.equal(expired.objectKey, null);
+              await assert.rejects(
+                exportService.download(contextA, expiryTarget.id),
+                (error) => error.getStatus() === 404,
+              );
             } finally {
               await exportService.onModuleDestroy();
             }
@@ -444,6 +630,7 @@ test(
           const alerts = await reordering.listAlerts(contextA, {
             page: 1,
             page_size: 10,
+            productId: item.id,
           });
           assert.deepEqual(alerts.summary, { products: 1, warehouses: 1 });
           const alert = alerts.data.find(

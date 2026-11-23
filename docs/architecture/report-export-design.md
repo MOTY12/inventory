@@ -1,6 +1,6 @@
 # Asynchronous report export design
 
-**Status:** Implemented in progress; acceptance is not closed. Updated 2026-11-23.
+**Status:** REPORT-003 acceptance completed 2026-11-23. Browser UI UAT and large-tenant performance benchmarking remain broader quality work.
 
 ## Workflow and ownership
 
@@ -35,5 +35,6 @@ See `.env.example` for local values. The API contract test may set `REPORT_EXPOR
 
 ## Verification still required
 
-- Isolated PostgreSQL + Redis/BullMQ + S3Mock currently verifies Inventory Summary queueing, generation, scoped result values, private object read, and cleanup.
-- Movement, Valuation, Low Stock, expiry cleanup, queue recovery after process restart, authenticated HTTP download/retry, and browser flows need integration acceptance before REPORT-003 can be marked complete.
+- Isolated PostgreSQL + Redis/BullMQ + S3Mock integration verifies all four report types, service-authenticated private download, scoped values, movement order across two warehouses, current/historical weighted average, currency separation, low-stock fields, transient queue retry, object expiry/deletion, and expired-download denial.
+- Unit coverage verifies tenant/warehouse/requester denial, conflicting idempotency payload, terminal/retry failures, formula injection and bounded 100-row pages. The full API contract smoke and both opt-in PostgreSQL suites pass when run with local loopback/database permission.
+- Chrome CDP was unreachable in this session, so Reports UI interaction and controller response headers have not had browser UAT. Large-tenant performance and process-restart queue recovery remain unbenchmarked/unrehearsed; these are tracked as QUALITY-001/operational hardening and are not claimed.

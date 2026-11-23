@@ -1,26 +1,26 @@
 # Pending work
 
-This summary is subordinate to the unique task statuses and dependencies in `docs/implementation/task-breakdown.md`.
+This summary is subordinate to the task ledger in `docs/implementation/task-breakdown.md`.
 
 ## Current implementation
 
-- **INV-010 — IN_PROGRESS:** Existing scanner workflows now have a focused submit/queue regression (one scan once, repeated rapid scans sequentially). Browser acceptance remains for native Enter-key behavior, workspace switching and UI feedback; keep open until that evidence exists.
-- **REPORT-003 — IN_PROGRESS:** Async CSV exports now have persisted jobs, BullMQ, private S3 storage, authenticated history/retry/download, and Reports UI. Inventory Summary passed isolated PostgreSQL + Redis/BullMQ + S3Mock integration. Verify Movement, Valuation and Low Stock exports, expiry cleanup and authenticated/browser workflows before closure.
+- **INV-010 — IN_PROGRESS:** Scanner lookup and workflows are implemented for sales-order creation, PO receiving, and sales picking. Unit tests cover one submit exactly once and sequential repeated scans. Native Enter-key behavior, live quantity increment, unknown-barcode feedback, limits in the UI, and workspace-switch clearing still need browser/component interaction evidence.
+- **REPORT-003 — COMPLETED:** All four CSV exports, queue/storage integration, service-authenticated downloads, multi-warehouse movement ordering, historical/current WAC, NGN/USD separation, low-stock values, transient retry, expiry object deletion and expired-download denial passed isolated tests. See task ledger and next-session checkpoint.
 
-## Product/architecture approvals and production follow-up
+## Current next-stage work
 
-- **PROD-002 — IN_PROGRESS:** Validate target segment/brand, statutory tax and invoice obligations, pricing/subscription limits before customer commitments.
-- **ARCH-002 — IN_PROGRESS:** Decide RLS and privileged support access. Do not expand tenant security boundary without approval.
-- **FOUNDATION-006 hardening:** Production email provider, distributed/shared rate limiting, and automated browser E2E remain follow-up work.
-- Product, legal/accounting, hosting/data-residency, MFA enforcement, and billing decisions remain documented in `docs/progress/decisions.md`.
+- **QUALITY-003 — IN_PROGRESS:** Dependencies FOUNDATION-002 and FOUNDATION-005 are complete. Added safe PostgreSQL archive/restore scripts and a runbook; local isolated restore drill passed. Next add queue restart and object storage recovery rehearsal, finish incident steps, and obtain RPO/RTO targets before claiming completion.
+- Do not start SALES-004 or REPORT-002 until invoice/tax/accounting policy is approved.
 
-## Roadmap tasks not yet started
+## Other pending work
 
-- After REPORT-003, check dependencies and approval gates in `docs/implementation/task-breakdown.md` before selecting another task. Do not implement tax/invoice/payment behavior that depends on unresolved decisions.
-- QUALITY-001 interactive end-to-end UAT remains unverified because browser RPC is unavailable.
+- PROD-002: owner validation of target segment, statutory obligations, pricing and limits.
+- ARCH-002: approval of RLS and privileged support-access boundaries.
+- Production email delivery, distributed rate limiting and comprehensive browser E2E remain hardening work.
+- Registry-backed dependency audit remains unknown; prior audit could not reach npm registry and install output reported seven advisories (4 moderate, 3 high).
+- Large-export performance benchmark and authenticated browser Reports UAT remain broader hardening/UAT gaps.
 
-## Environment/verification gaps
+## Environment evidence
 
-- npm advisory audit could not connect to the registry in this environment. Next.js is now 16.4.6 and production build passed, but dependency audit status remains unknown.
-- No report performance benchmark or manual authenticated report UI session was conducted.
-- The default API contract test requires a local listener and fails with `listen EPERM` in the current environment; focused tests were run without that test and it is not counted as passing.
+- The full `npm test` command passed 51 tests, with two opt-in PostgreSQL suites skipped in that invocation; web tests passed 2/2. Both database suites were explicitly run separately and passed 13/13 and 10/10.
+- The API contract smoke passed when local loopback permission was granted; prior `listen EPERM` was environmental. Docker daemon socket itself remains inaccessible, but the configured PostgreSQL, Redis and S3Mock endpoints were used successfully by integration tests.

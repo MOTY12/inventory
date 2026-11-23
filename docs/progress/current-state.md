@@ -2,10 +2,18 @@
 
 **Updated:** 2026-11-23 (Africa/Lagos)
 
+## Latest verified checkpoint
+
+- Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`, base HEAD `b1719d2`; initial worktree was clean. Current uncommitted implementation files: `apps/api/src/reporting/report-export.processor.ts`, `apps/api/src/reporting/reporting.service.ts`, and the two PostgreSQL integration test files. No commit/push/deploy.
+- Completed roadmap count is **29/47**. REPORT-003 moved to COMPLETED based on live isolated PostgreSQL + Redis/BullMQ + S3Mock evidence for all four export types, download, retry and expiry cleanup. INV-010 remains IN_PROGRESS pending real browser keyboard/workspace-switch acceptance.
+- `npm test`: 51 passed, 0 failed, 2 opt-in PostgreSQL suites skipped in the default invocation; web suite 2 passed. The two opt-in suites were then explicitly run: `inventory.postgres.integration.test.mjs` 13/13 and `postgres.integration.test.mjs` 10/10. Thus the historical `listen EPERM` blocker was environmental and cleared by running the requested checks with local loopback permission; no tests were disabled.
+- Prisma validation passed; `npx prisma migrate status --config prisma.config.ts` reports 20 migrations and schema up to date. No migration was applied this session. API `/api/v1/health/ready` returned `{"service":"inventory-api","status":"ok"}`. Docker CLI socket inspection itself remains permission-denied; PostgreSQL, Redis and S3Mock endpoints were reachable and exercised by opt-in integration tests.
+- `npm run typecheck`, `npm run lint`, `npm run format:check`, `git diff --check`, and `npm run build` passed. Chrome CDP endpoint `127.0.0.1:9222` was unreachable; no interactive scanner UAT is claimed.
+- QUALITY-003 is IN_PROGRESS: backup/restore scripts and runbook were added; final local PostgreSQL 18 drill restored 18 organizations and 36 stock movements from a 285,871-byte archive in measured 1-second backup/restore intervals; migration status remained 20/20. Archive and created scratch database were removed. Queue/object-storage recovery, off-host encryption policy, incident steps, and approved RPO/RTO targets remain.
+
 ## Repository and roadmap
 
-- Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; this session started at `4d75ea0` with a clean worktree. Generated Next.js build files were restored; other edits listed in `docs/progress/next-session.md` are this session's implementation.
-- Completed task count: **28/47**, computed from the 47 unique ledger entries. REPORT-001 is complete; INV-010 and REPORT-003 are IN_PROGRESS. See `docs/implementation/task-breakdown.md` for criteria and gaps.
+- Earlier checkpoint details below are historical. The latest repository/task state is summarized above and in `docs/progress/next-session.md`.
 - Applied the additive `20261123160000_report_exports` migration without reset or deletion. Local PostgreSQL migration status reports 20 migrations found and schema up to date. Docker Compose reported PostgreSQL, Redis and S3Mock healthy.
 - Next.js and eslint-config-next were updated from 16.4.3 to 16.4.6 after verifying the compatible patched version and successful production build. `npm audit --omit=dev` could not reach the npm advisory endpoint (`ENOTFOUND registry.npmjs.org`), so no audit result is claimed.
 
@@ -43,14 +51,12 @@
 - Added a pure scanner form-submit/queue regression: one submit is processed once; three fast repeat submits are drained sequentially; blank input is ignored. Web scanner tests pass. This exercises the shared submit path but does not emulate a native Enter key in a browser.
 - INV-010 remains IN_PROGRESS: browser verification of the real Enter event, workspace switching and displayed feedback is outstanding. Camera research found the native Barcode Detection API is experimental/limited availability, requires a secure context and feature detection, and has unreliable iOS Safari support; keep manual/USB/Bluetooth keyboard input as fallback. See blockers and next-session checkpoint.
 
-## Current task: REPORT-003
+## Completed task: REPORT-003 (verified 2026-11-23)
 
 - Added persisted organization/requester scoped report export jobs, idempotent queueing, BullMQ worker with bounded retries, restart dispatch of pending rows, expiry cleanup, private S3-compatible file storage, CSV formula-injection defense, authenticated download streaming, and report history/retry/download APIs and Reports UI controls.
 - CSV output reuses REPORT-001 calculations. Worker fetches pages of 100 rows and streams CSV through a temporary file to private object storage. Summary/valuation exports use a request-time or user-selected cutoff; movement exports use a request-time cutoff; low-stock exports are worker-time current snapshots. Decimal quantities and money remain exact strings.
 - Consistency semantics, scope, storage lifecycle, environment variables and historical-dimension limits are documented in `docs/architecture/report-export-design.md`.
-- Migration `20261123160000_report_exports` was reviewed as additive and applied without reset or data deletion. Migration status: **20/20**. Docker Compose services PostgreSQL, Redis and S3Mock reported healthy. Isolated PostgreSQL + live BullMQ/Redis + S3Mock integration queued, generated and read an Inventory Summary CSV; its 20 on hand, 5 reserved, 15 available, WAC 3 NGN and value 60 NGN reconcile to REPORT-001. The test deleted its S3 object and temporary schema.
-- Focused tests cover idempotent creation/conflict, retry generation, transient/terminal failure, tenant/warehouse/revoked-user/expiry denial, formula injection, CSV escaping, exact decimals and bounded 100-row paging. Isolated PostgreSQL integration: **13 passed, 0 failed, 0 skipped**. API tests excluding the local-listener contract test: **41 passed, 0 failed, 2 opt-in PostgreSQL suites skipped**. Web tests: **2 passed, 0 failed**. Typecheck, lint, format check, API build, web production build and `git diff --check` passed.
-- REPORT-003 remains IN_PROGRESS: only Inventory Summary export has full database/queue/storage integration evidence. Movement, Valuation and Low Stock export integration, expiry-object cleanup integration, and authenticated browser/API workflow remain. Full `npm test`'s API contract smoke fails because the environment denies binding a local listener (`listen EPERM`) even on loopback; the focused suites and opt-in export integration were run separately. The opt-in auth/tenant PostgreSQL suite was not run.
+- Integration covered Summary, Movements, Valuation and Low Stock with real isolated PostgreSQL + Redis/BullMQ + S3Mock; authenticated service downloads, all values/row counts, cross-warehouse movement ordering, historical/current valuation, NGN/USD totals, retry after transient upload failure, expiry object deletion, and expired-download denial passed. Inventory/report suite 13/13; auth/organization suite 10/10. `npm test` passed 51/0 with two opt-in suites skipped during that command; both suites were run separately. Organization listing was verified to expose active memberships only. REPORT-003 is COMPLETED; browser Reports UI remains broader UAT.
 
 ## Other gaps and decisions
 

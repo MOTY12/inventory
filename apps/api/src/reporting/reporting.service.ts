@@ -353,12 +353,21 @@ export class ReportingService {
     context: OrganizationContext,
     query: ReportFilterDto,
     cutoffAt?: Date,
+    exportWarehouseScope?: string[],
   ) {
     this.validateDateRange(query);
-    const warehouses = await this.authorizedWarehouses(
+    const authorized = await this.authorizedWarehouses(
       context,
       query.warehouse_id,
     );
+    // Export workers pass the warehouse IDs captured when the export was
+    // requested. Intersect that snapshot with current authorization so a
+    // worker cannot gain access to warehouses added or granted later.
+    const warehouses = exportWarehouseScope
+      ? authorized === null
+        ? exportWarehouseScope
+        : exportWarehouseScope.filter((id) => authorized.includes(id))
+      : authorized;
     if (warehouses?.length === 0) return this.emptyPage(query);
     const from = query.from ? new Date(query.from) : undefined;
     const requestedTo = query.to ? this.endOfUtcDay(query.to) : undefined;

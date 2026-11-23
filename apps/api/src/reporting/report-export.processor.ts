@@ -306,10 +306,15 @@ export class ReportExportProcessor {
       exportHeaders[reportType].map((value) => csvText(value)),
     );
     let count = 0;
-    for (const warehouseId of warehouseScope) {
+    // Movements have a global occurredAt/id ordering. Fetch against the
+    // complete saved scope in one paged query instead of concatenating each
+    // warehouse's independently paged results (which reorders the ledger).
+    const pageScopes =
+      reportType === ReportExportType.MOVEMENTS ? [undefined] : warehouseScope;
+    for (const warehouseId of pageScopes) {
       for (let page = 1; ; page += 1) {
         const query = Object.assign(new ReportFilterDto(), filters, {
-          warehouse_id: warehouseId,
+          ...(warehouseId ? { warehouse_id: warehouseId } : {}),
           page,
           page_size: BATCH_SIZE,
           ...(reportType !== ReportExportType.MOVEMENTS &&
@@ -323,6 +328,9 @@ export class ReportExportProcessor {
           context,
           query,
           snapshotAt,
+          reportType === ReportExportType.MOVEMENTS
+            ? warehouseScope
+            : undefined,
         );
         for (const row of result.data) {
           count += 1;
@@ -345,6 +353,7 @@ export class ReportExportProcessor {
     context: OrganizationContext,
     query: ReportFilterDto,
     snapshotAt: Date,
+    warehouseScope?: string[],
   ): Promise<{ data: Record<string, unknown>[]; total: number }> {
     switch (type) {
       case ReportExportType.INVENTORY_SUMMARY:
@@ -353,10 +362,12 @@ export class ReportExportProcessor {
           total: number;
         }>;
       case ReportExportType.MOVEMENTS:
-        return this.reports.movementsAt(context, query, snapshotAt) as Promise<{
-          data: Record<string, unknown>[];
-          total: number;
-        }>;
+        return this.reports.movementsAt(
+          context,
+          query,
+          snapshotAt,
+          warehouseScope,
+        ) as Promise<{ data: Record<string, unknown>[]; total: number }>;
       case ReportExportType.VALUATION:
         return this.reports.valuation(context, query) as Promise<{
           data: Record<string, unknown>[];

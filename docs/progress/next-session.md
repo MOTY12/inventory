@@ -4,63 +4,57 @@
 
 ## Repository state
 
-- Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; starting HEAD was `4d75ea0`. The worktree was clean at session start. No commit or push was created.
-- Roadmap remains **28/47 completed**, counted from 47 unique task entries. REPORT-001 is complete. INV-010 and REPORT-003 are both IN_PROGRESS; neither is counted as complete. See `docs/implementation/task-breakdown.md`.
-- Applied additive migration `apps/api/prisma/migrations/20261123160000_report_exports/migration.sql` to the existing local database using `npm run db:migrate:deploy --workspace=@inventory/api`; no reset or data deletion. `npx prisma migrate status --config prisma.config.ts` reports 20 migrations and schema up to date.
-- `docker compose ps` reported PostgreSQL, Redis and S3Mock healthy. An isolated integration schema and one unique S3Mock object were created by the export integration test and removed afterward.
-- `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo` changed during builds and were restored. No unrelated files were modified intentionally. All remaining modified/untracked paths are listed below.
+- Workspace: `/Users/newuser/Documents/GitHub/inventory`, branch `develop`.
+- Base HEAD at start: `b1719d2 report csv`; worktree was clean at start. No commit, push, or deploy this session.
+- Completed roadmap: **29/47**. REPORT-003 is COMPLETED; INV-010 remains IN_PROGRESS. Counts are from the 47 unique entries in `docs/implementation/task-breakdown.md`.
+- Current modified code/test files: `apps/api/src/reporting/report-export.processor.ts`, `apps/api/src/reporting/reporting.service.ts`, `apps/api/test/inventory.postgres.integration.test.mjs`, `apps/api/test/postgres.integration.test.mjs`.
+- Current operations files: `scripts/backup-postgres.sh`, `scripts/restore-postgres.sh`, `docs/operations/backup-restore.md`.
+- No database reset or migration occurred. Prisma status is 20/20 and up to date.
+- QUALITY-003 is IN_PROGRESS (FOUNDATION-002 and FOUNDATION-005 are complete). Safe backup/restore scripts and runbook were added; final local PostgreSQL 18 restore drill passed with a 285,871-byte archive, measured 1-second backup and restore, 20/20 migrations and restored counts of 18 organizations/36 movements. Temporary archive and newly created scratch database were removed. RPO/RTO, off-host encryption, object-storage recovery and queue recovery remain open.
 
-## Implemented this session
+## Work completed and verified
 
-### INV-010 focused acceptance
+### REPORT-003 — completed
 
-- Extracted a reusable scanner form submission helper and kept the single `form onSubmit` path. The queue regression verifies one submitted barcode runs once, three rapid repeats are drained sequentially, whitespace is trimmed and empty input is ignored.
-- Existing barcode workflows, API exact tenant lookup, and catalog/decimal tests remain as documented in the task ledger. No browser control was available, so native Enter-key interaction, workspace-switch rendering and live workflow feedback remain unverified. INV-010 stays IN_PROGRESS.
+- Fixed movement export pagination so it queries the full saved authorized warehouse scope and preserves the report API's global `occurredAt DESC, id DESC` order. `ReportingService.movementsAt` intersects the export's saved warehouse list with current authorization before querying.
+- Expanded isolated integration test to run actual BullMQ/Redis and S3Mock for Summary, Movements, Valuation, and Low Stock; download each through `ReportExportsService.download`; compare row counts and values with the report APIs; verify movement order over two warehouses; verify current and historical WAC, exact decimal values, NGN/USD currency separation, low-stock minimum/target/suggestion; inject one temporary S3 upload failure and verify queue retry completes on attempt 2; expire a completed export and verify its stored object is deleted and download returns 404.
+- Verified organization listing code filters active memberships; added database integration assertion that a user in Organization A lists only Organization A. Existing tenant selection test denies Organization B.
+- REPORT-003 task acceptance passes: formula injection, authenticated tenant-scoped download, retry safety, all export formats, expiry. UI/browser UAT and large-tenant benchmark remain broader QUALITY/security/performance hardening and are not claimed.
 
-### REPORT-003 implementation
+### INV-010 — still in progress
 
-- Added report export Prisma enums/model and additive migration. Persisted job metadata includes organization, requester, report type/filters, authorized warehouse scope, idempotency hash/key, snapshot time, retry generation, status, counts, object key and expiry.
-- Added authenticated export create/list/retry/download APIs. The API revalidates the requester membership and role, active organization, and warehouse access on processing/download; downloads stream through the API with `private, no-store` headers and no public URL.
-- Added BullMQ producer and worker, pending-job dispatch after startup, bounded retries, retry-generation checks, structured error logging, and hourly expired-object cleanup. Local Redis password/host/port are configured from environment.
-- Added CSV exports that reuse REPORT-001 report methods, page in batches of 100, stream to a temporary file, and upload into private S3-compatible storage. CSV text handles formula-prefix injection and CSV delimiters/quotes/newlines; numeric cells preserve validated exact decimal strings. Request-time snapshot/cutoff is stored; low-stock uses a worker-time current snapshot.
-- Reports UI now queues the selected report with active filters, polls export history, shows status/requester/date/failure/expiry, retries failed jobs, and downloads with the active bearer token. Organization changes clear history.
-- Integration verified Inventory Summary only: isolated PostgreSQL + actual Redis/BullMQ worker + S3Mock generated a private CSV, confirmed 20 on hand / 5 reserved / 15 available / WAC 3 NGN / value 60 NGN against REPORT-001, downloaded and removed the object. Other report types and cleanup/revocation over live HTTP are not yet integration-tested.
-
-## Files changed this session
-
-- `.env.example`, `packages/shared/src/index.ts`
-- `apps/api/package.json`, `package-lock.json`
-- `apps/api/prisma/schema.prisma`, `apps/api/prisma/migrations/20261123160000_report_exports/migration.sql`
-- `apps/api/src/main.ts`
-- `apps/api/src/reporting/reporting.controller.ts`, `reporting.module.ts`, `reporting.service.ts`, `report-csv.ts`, `report-export-storage.ts`, `report-export.processor.ts`, `report-exports.dto.ts`, `report-exports.service.ts`
-- `apps/api/test/api-contract.test.mjs`, `report-csv.test.mjs`, `report-exports.test.mjs`, `inventory.postgres.integration.test.mjs`
-- `apps/web/src/app/globals.css`, `apps/web/src/components/barcode/barcode-scanner.tsx`, `apps/web/src/components/barcode/barcode-scan-queue.ts`, `apps/web/src/features/auth/session-provider.tsx`, `apps/web/src/features/reports/reports-page.tsx`, `apps/web/test/barcode-scan-queue.test.mjs`
-- Progress: `docs/implementation/task-breakdown.md`, `docs/implementation/master-plan.md`, `docs/progress/current-state.md`, `next-session.md`, `completed-tasks.md`, `pending-tasks.md`, `blockers.md`, `session-log.md`.
-- Architecture: `docs/architecture/report-export-design.md` documents queue ownership, consistency cutoffs, CSV safety, storage and verification gaps.
+- Existing exact tenant barcode lookup, sales-order/receiving/picking integrations and scanner submit queue remain. Unit regression verifies one submit is processed once, empty input ignored, and repeated rapid scans run sequentially. PostgreSQL integration verifies catalog tenant isolation and workflow test suite remains green.
+- No browser control was available: REA could not reach Chrome CDP at `127.0.0.1:9222`. Native Enter-key event, quantity increment in live component state, unknown-code UI feedback, workspace-switch clearing, receive/pick limits in the UI, and no-auto-post UI acceptance remain unverified. Do not mark INV-010 complete until browser or equivalent component-level interaction coverage is added and passes.
+- Camera scanning stays deferred; manual/USB/Bluetooth keyboard input remains the fallback due inconsistent browser/device support.
 
 ## Verification evidence
 
-- `npm run db:validate --workspace=@inventory/api`: passed before the migration; `npm run db:generate --workspace=@inventory/api`: passed.
-- `npm run db:migrate:deploy --workspace=@inventory/api`: applied `20261123160000_report_exports`; migration status subsequently reported **20/20**.
-- Opt-in isolated integration command: `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs` — **13 passed, 0 failed, 0 skipped**, including real Redis/BullMQ and S3Mock for Inventory Summary CSV.
-- Focused API/shared tests excluding the listener-dependent `api-contract.test.mjs`: **41 passed, 0 failed, 2 opt-in PostgreSQL tests skipped**. Web test command `node --experimental-strip-types --test apps/web/test/*.test.mjs`: **2 passed, 0 failed**.
-- `npm run typecheck`, `npm run lint`, `npm run format:check`, `git diff --check`, and `npm run build` passed. Build produced optimized Next.js Webpack routes including `/reports`.
-- Full `npm test` did not pass: the API contract child process fails with `listen EPERM` in this environment, including when configured to bind `127.0.0.1`; the first attempt also surfaced sandbox-blocked Redis connection. Do not report the full suite as passing. The two default-skipped PostgreSQL suites are not counted as passed.
-- No interactive browser session was available. No authenticated HTTP export UI flow, Movement/Valuation/Low Stock live export, expiry cleanup, or export-load benchmark was run.
+- `npm run build`: passed (shared, API, and production Next.js Webpack build).
+- `npm run typecheck`: passed.
+- `npm run lint`: passed.
+- `npm run format:check`: passed.
+- `git diff --check`: passed before final progress-document edits; rerun after docs edits.
+- `npm run db:validate --workspace=@inventory/api`: passed.
+- `npx prisma migrate status --config prisma.config.ts`: 20 migrations found, database schema up to date.
+- `npm test`: **51 passed, 0 failed, 2 opt-in PostgreSQL suites skipped** in that invocation; web tests **2 passed, 0 failed**. This run used local loopback permission; API contract smoke passed, so the previous `listen EPERM` is not an active blocker when run with that permission.
+- `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs`: **13 passed, 0 failed, 0 skipped**, including all four report export types, live queue/storage, retry, expiry and deletion.
+- `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/postgres.integration.test.mjs`: **10 passed, 0 failed, 0 skipped**, including refresh rotation, organization tenant isolation/listing, warehouse grants and catalog isolation.
+- API readiness `http://127.0.0.1:4000/api/v1/health/ready` returned HTTP 200 and `{"service":"inventory-api","status":"ok"}`. Local Next.js frontend was already listening on port 3000. API process started by this session remains running in exec session 28533.
+- Docker daemon socket query itself is permission-denied, so no current `docker compose ps` claim is made. PostgreSQL, Redis, and S3Mock endpoints were reachable and successfully used by explicit integration tests.
 
-## Exact next steps
+## Next exact steps
 
-1. Confirm current status: run `git status --short`, inspect the remaining diff, and verify no generated build files are present. Do not commit/push without an explicit instruction.
-2. Re-run focused report unit tests after any changes: `npm run build --workspace=@inventory/api`, then `node --test apps/api/test/report-csv.test.mjs apps/api/test/report-exports.test.mjs`.
-3. Extend the isolated PostgreSQL + Redis + S3Mock integration coverage for `MOVEMENTS`, `VALUATION`, and `LOW_STOCK`; verify filters, cutoff, currency and low-stock values match their existing REPORT-001 APIs. Add duplicate/retry and expiry cleanup assertions without touching the normal database data.
-4. When the environment permits a local listener or browser bridge, run the API contract smoke and authenticated browser workflow: create export, poll status, download, retry failure, switch organization, and deny other tenant/ungranted warehouse/revoked requester/expired object. Also exercise INV-010 Enter, 1/3 repeat scans, unknown barcode, receiving limits, picking limits and workspace switching.
-5. Record each result, then update the task ledger and progress docs. Keep REPORT-003 and INV-010 IN_PROGRESS until their remaining acceptance evidence passes; current task count remains 28/47. Once REPORT-003 is complete, inspect dependencies before choosing the next milestone. Do not start invoice/payment work while required financial policy approvals remain open.
+1. Re-read `AGENTS.md`, current-state, this checkpoint, master plan and task ledger; inspect `git status` and preserve these four code/test modifications.
+2. Run `git diff --check` after the progress edits and verify generated Next build files remain absent from status.
+3. Continue INV-010 acceptance: establish a usable authenticated browser session or add a component interaction harness; verify Enter exactly once, one and three repeated scans, unknown barcode feedback, cross-workspace stale response clearing, receiving outstanding limits, picking reservation/unpicked limits, and that scanning never posts inventory.
+4. Once INV-010 criteria have sufficient evidence, mark it complete only if its documented keyboard acceptance is actually covered. Recount task entries.
+5. Continue **QUALITY-003**: add a safe queue-restart recovery rehearsal and object-storage backup/restore coverage, plus incident steps. The local database backup/restore slice is implemented and its isolated drill passed, but RPO/RTO targets are unapproved, so keep the task IN_PROGRESS.
+6. Keep SALES-004 and REPORT-002 gated by the unresolved statutory invoice/tax/accounting policy in `docs/progress/decisions.md`. Do not start those while the policy remains unapproved.
+7. Update task ledger, current state, next-session, completed/pending task lists, blockers, session log, master plan and report export design with final evidence. No commit/push/deploy was made.
 
-## Blockers and outstanding decisions
+## Blockers and open decisions
 
-- Browser control is unavailable (`Trusted RPC service is not configured: browser` in the previous attempt). This prevents real scanner and authenticated Reports UI acceptance; full user-facing UAT remains under QUALITY-001.
-- The `api-contract.test.mjs` local HTTP smoke cannot bind in this environment (`listen EPERM`) and therefore the full `npm test` command remains red. Report this as blocked rather than changing/omitting the test.
-- Dependency installation reported 7 lockfile vulnerabilities (4 moderate, 3 high) without advisory detail. Previous `npm audit` could not reach the registry; rerun and review advisories when network access permits.
-- Export integration currently validates Inventory Summary only. Movement/Valuation/Low Stock, cleanup, live authenticated API, and browser paths remain unverified.
-- Local Docker services and migration are healthy/applied; there is no database infrastructure blocker. No database reset or production operation occurred.
-- Product/legal/financial/security/deployment approvals remain in `docs/progress/decisions.md`; no new business policy was inferred.
+- Real browser scanner interactions are unverified because the Chrome CDP endpoint was unavailable and no existing browser automation package is installed.
+- Large-export performance/load benchmark and registry-backed npm audit remain pending. The dependency advisory endpoint was unavailable in prior work; no clean audit is claimed.
+- Docker CLI socket is inaccessible in this environment, despite its PostgreSQL/Redis/S3Mock endpoints being available for tests.
+- RPO/RTO targets, target-segment validation, tax/invoice obligations, pricing, production data residency/hosting, MFA enforcement, and RLS/support access remain open in `docs/progress/decisions.md`.

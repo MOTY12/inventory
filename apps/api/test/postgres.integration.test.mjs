@@ -222,6 +222,13 @@ test(
           organizationA.organization.id,
           organizationB.organization.id,
         );
+        const visibleOrganizations = await organizations.listForUser(
+          ownerA.userId,
+        );
+        assert.deepEqual(
+          visibleOrganizations.map((entry) => entry.organization.id),
+          [organizationA.organization.id],
+        );
 
         const guard = new OrganizationContextGuard(prisma);
         const request = {
