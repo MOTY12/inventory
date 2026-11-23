@@ -8,7 +8,7 @@
 - Branch: `develop`; this redesign session started at `ae44aea` with a clean worktree. No user changes were overwritten.
 - Roadmap: **28/47 complete** according to the existing task ledger. REPORT-001 is complete; INV-010 remains IN_PROGRESS. UI redesign work is not a roadmap task and does not change the count.
 - No API, database, schema, or migration changes were made. Database/migration status was not checked in this session.
-- UI implementation commits: `33fa0a6` (shared design system), `f041826` (product list), `43dacf1` (inventory/order UI), `17e4688` (catalog/contact directories), `448c8c8` (purchase receiving), `5092ed4` (sales fulfillment), `d806608` (Reports), and `60350d9` (workspace administration). Checkpoint commits: `960912d`, `0e42502`, `b2e19f0`, `5908956`, `049e0ac`, `8a1da5b`. No push or deploy.
+- UI implementation commits: `33fa0a6` (shared design system), `f041826` (product list), `43dacf1` (inventory/order UI), `17e4688` (catalog/contact directories), `448c8c8` (purchase receiving), `5092ed4` (sales fulfillment), `d806608` (Reports), `60350d9` (workspace administration), and `b1196e3` (auth password confirmation). Checkpoint commits: `960912d`, `0e42502`, `b2e19f0`, `5908956`, `049e0ac`, `8a1da5b`, `4c3cefb`, and `4f65fb5`. No push or deploy.
 
 ## Completed in this session
 

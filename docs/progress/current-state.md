@@ -48,5 +48,5 @@
 
 ## Git
 
-- UI implementation commits: `33fa0a6` (shared system), `f041826` (product list), `43dacf1` (inventory/order UI), `17e4688` (catalog/contact directories), `448c8c8` (purchase receiving), `5092ed4` (sales fulfillment), `d806608` (Reports), `60350d9` (workspace administration), and `b1196e3` (auth password confirmation). Checkpoint commits: `960912d`, `0e42502`, `b2e19f0`, `5908956`, `049e0ac`, `8a1da5b`, `4c3cefb`. No push.
+- UI implementation commits: `33fa0a6` (shared system), `f041826` (product list), `43dacf1` (inventory/order UI), `17e4688` (catalog/contact directories), `448c8c8` (purchase receiving), `5092ed4` (sales fulfillment), `d806608` (Reports), `60350d9` (workspace administration), and `b1196e3` (auth password confirmation). Checkpoint commits: `960912d`, `0e42502`, `b2e19f0`, `5908956`, `049e0ac`, `8a1da5b`, `4c3cefb`, and `4f65fb5`. No push.
 - INV-010 remains in progress pending barcode repeat/keyboard acceptance and camera feasibility. Browser UI and API endpoint acceptance remain pending where not evidenced. See `docs/progress/next-session.md` for exact next actions. Do not start SALES-004 until financial policy is approved.
