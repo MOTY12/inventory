@@ -1,5 +1,15 @@
 # Session log
 
+# 2026-11-23 — INV-010 barcode component acceptance
+
+- Resumed on `develop` at `4a6dbde`; worktree clean. No production code changes were needed. Used a temporary page to render the existing scanner; removed the page and its temporary public-route exception afterward.
+- Headless Chrome interaction drove real keyboard events over CDP. Passed: Enter submits once; three repeated scans increment 1 → 2 → 3; rapid scans preserve order; unknown barcode gives an accessible error without changing quantity; the scanner remains usable after error; input focus returns; the form submit event is default-prevented.
+- Source-reviewed actual sales-order, purchase-receiving and sales-picking callbacks: active exact tenant barcode lookup; stale org/order response guard; receive only matching PO line and enforce outstanding/precision limits without posting; pick only reserved order line and enforce unpicked/precision limits without posting. API tests cover exact normalization, unknown/foreign denial, auth/OpenAPI. Explicit inventory PostgreSQL suite passed 13/13.
+- Full authenticated browser journeys on the actual sales order, receiving and picking pages were not run; retain those page-level UAT steps under QUALITY-001. No new camera workflow or test framework was added.
+- A read-only migration status confirmed configured schema 20/20 current. All 20 existing migrations were also applied to a newly created random isolated schema for a safe migration check; only migration artifacts were present and that schema was dropped after the check. Configured `public` schema received no migration.
+- Checks: `npm test` 52 API/shared passed, 0 failed, 2 opt-in PostgreSQL skipped; web 2/2. Explicit inventory PostgreSQL suite 13/13, zero skips. Typecheck, lint, format check and production build passed. API readiness and web login returned HTTP 200 while services ran; services stopped afterward.
+- Marked INV-010 COMPLETED from the task ledger's keyboard/repeat acceptance. Roadmap count is **30/47**. QUALITY-002 and QUALITY-003 remain IN_PROGRESS. Updated task ledger, master plan, current state, checkpoint, completed/pending summaries and blockers. No commit/push/deploy.
+
 # 2026-11-23 — QUALITY-003 queue and object recovery drill
 
 - Resumed on `develop` at `65c9d6d`; worktree clean at start. Preserved all existing work. No commits, pushes, deployments, migrations, database resets, or customer-data deletions.

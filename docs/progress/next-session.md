@@ -2,71 +2,51 @@
 
 **Updated:** 2026-11-23 (Africa/Lagos)
 
-## Repository state
+## Repository and roadmap
 
-- Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; start HEAD `65c9d6d`.
-- Worktree was clean at start. Current uncommitted changes are the QUALITY-003 report-export missing-object handling, recovery integration drill/runbook, and progress updates listed below. No commit, push, deploy, migration, DB reset, or customer-data deletion occurred.
-- Roadmap: **29/47 completed** from 47 unique task entries. QUALITY-002, QUALITY-003, and INV-010 remain IN_PROGRESS; none qualify to increment the count this session.
+- Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; start HEAD `4a6dbde` (`update the mds`). Worktree was clean at start.
+- Application code is unchanged by this session. Only progress/roadmap documentation is now modified. No commit, push, deployment, production migration, configured-schema reset, or deletion of existing data occurred.
+- Roadmap is **30/47 complete**, recalculated from the 47 task entries. INV-010 moved to COMPLETED based on its documented acceptance criterion and browser evidence below. QUALITY-002 and QUALITY-003 remain IN_PROGRESS.
 
-## Completed during this session
+## INV-010 acceptance completed
 
-### QUALITY-003 recovery work
+- Reviewed the scanner component, barcode API, new sales order handler, purchase receiving handler, and reserved sales-picking handler. The handlers use exact tenant barcode lookup; guard late results after organization/order changes; bound receiving to outstanding quantity and unit precision; bound picking to active reservations, unpicked quantity and unit precision; and do not post stock during scanning.
+- Rendered the actual `BarcodeScanner` React component on a temporary local Next page and drove it with native keyboard events in installed headless Chrome over CDP. Seven checks passed:
+  - Enter submitted exactly once.
+  - Three identical scans showed quantity 1 → 2 → 3.
+  - Rapid different codes kept submission order.
+  - An unknown code produced an accessible error without changing quantity.
+  - The scanner accepted another scan after the error.
+  - Focus returned to the input after processing.
+  - The scanner form submit event was default-prevented.
+- The temporary route and its WorkspaceShell public-route exception were removed. No app page or route was added to the product.
+- Existing API tests cover normalized exact tenant lookup, unknown/foreign barcode denial, auth and OpenAPI. The inventory PostgreSQL suite passed 13/13. Full authenticated browser journeys through the actual new-sales-order, PO-receiving and sales-picking pages were not executed; retain that broader UAT under QUALITY-001. No inventory posting claim is based on the temporary component harness.
 
-- `apps/api/src/reporting/report-export-storage.ts`: explicit safe missing-object error classification for S3 `NoSuchKey`/404.
-- `apps/api/src/reporting/report-exports.service.ts`: missing artifacts now transition the scoped export row to FAILED, clear the stale key, and return a safe 404 so supported retry can regenerate.
-- `apps/api/test/report-exports.test.mjs`: regression coverage for the missing-object failure path.
-- `apps/api/test/helpers/report-export-crash-worker.mjs` and `apps/api/test/inventory.postgres.integration.test.mjs`: isolated real PostgreSQL/Redis/S3Mock recovery coverage. Killed an export worker during processing; replacement worker recovered the stalled job; verified one deterministic artifact and authorized download. Also tested durable pending-row dispatch after service restart, object backup to a private isolated prefix, missing artifact behavior, and byte restoration by SHA-256.
-- `docs/operations/backup-restore.md`: private object storage protection/backup/restore, missing-object process, Redis/BullMQ restart steps, incident response, and retention recommendations. Recommendations are explicitly unapproved; no RPO/RTO, residency, retention duration, or key region was assumed.
-- Measured local integration timings: worker recovery **3,253 ms**, pending-row startup dispatch **105 ms**, object backup/missing detection/checksum-verified restoration **84 ms**. Local PostgreSQL archive drill documented earlier: 285,871 bytes, backup and restore each rounded to 1 second, restored 18 organizations and 36 movements. These measurements are not production commitments.
-- QUALITY-003 stays IN_PROGRESS: actual off-host replication/encryption is not configured or drilled, and RPO/RTO plus retention/residency/key policy need owner approval.
+## Verification results
 
-### QUALITY-002 verification refresh
-
-- Read-only `npx prisma migrate status --config prisma.config.ts`: **20 migrations found; database schema up to date**. No migration applied.
-- `npm audit --omit=dev --audit-level=high` failed because `registry.npmjs.org` DNS lookup returned `ENOTFOUND`; previous installation output noted three high advisories without advisory details. No clean audit is claimed. QUALITY-002 stays IN_PROGRESS.
-- Security review and baseline security-header changes are preserved. No confirmed critical/high application authorization bypass was found in reviewed code; this is source/test review, not a penetration test or production configuration audit.
-
-## Checks run
-
-- `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs`: **13 passed, 0 failed, 0 skipped** (including the recovery drill).
-- `npm test`: **52 API/shared passed, 0 failed, 2 opt-in DB suites skipped**; web **2 passed, 0 failed**.
+- `npm test`: API/shared **52 passed, 0 failed, 2 opt-in PostgreSQL suites skipped**; web **2 passed, 0 failed**.
+- `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs`: **13 passed, 0 failed, 0 skipped**.
 - `npm run typecheck`: passed.
 - `npm run lint`: passed.
 - `npm run format:check`: passed.
 - `npm run build`: passed (shared, Nest API, Next.js Webpack production build).
-- `npm run db:validate --workspace=@inventory/api`: passed.
-- `npx prisma migrate status --config prisma.config.ts`: passed, 20/20 up to date.
-- `git diff --check`: passed after final documentation edits.
-- No browser scanner acceptance. Chrome CDP `127.0.0.1:9222` was unreachable and local web/API ports were not running. Existing barcode tests cover the reusable submit queue, not a rendered UI/native Enter event; INV-010 stays open.
+- `npm run db:validate --workspace=@inventory/api`: passed in previous checkpoint.
+- Read-only `npx prisma migrate status --config prisma.config.ts`: **20 migrations found; configured development schema up to date**.
+- API readiness returned HTTP 200 and the local web login returned HTTP 200 while services were running. Services and isolated Chrome were stopped afterward.
+- For an isolated migration check, all existing migrations were applied to a new random schema; that schema contained only migration artifacts and was dropped at the end. The configured `public` schema was not modified by migrations.
+- No application test framework was added. An offline npm install attempt could not resolve cached package metadata; the actual rendered component was verified in Chrome instead.
 
-## Current uncommitted files
+## Remaining work and exact next steps
 
-- `apps/api/src/reporting/report-export-storage.ts`
-- `apps/api/src/reporting/report-exports.service.ts`
-- `apps/api/test/report-exports.test.mjs`
-- `apps/api/test/inventory.postgres.integration.test.mjs`
-- `apps/api/test/helpers/report-export-crash-worker.mjs` (new)
-- `docs/operations/backup-restore.md`
-- `docs/security/tenant-isolation-review.md`
-- `docs/implementation/task-breakdown.md`
-- `docs/progress/current-state.md`
-- `docs/progress/next-session.md`
-- `docs/progress/pending-tasks.md`
-- `docs/progress/blockers.md`
-- `docs/progress/session-log.md`
-- `docs/implementation/master-plan.md`
+1. Continue QUALITY-002: rerun `npm audit --omit=dev --audit-level=high` when npm registry DNS works; inspect advisories and remediate only confirmed compatible risks. Keep the task IN_PROGRESS until the no-unresolved-high gate is evidenced or formally dispositioned.
+2. Continue QUALITY-003: obtain owner-approved RPO/RTO, retention, residency and encryption/key-management policy; configure and drill independent off-host recovery. Local test timings do not establish production recovery commitments.
+3. Keep full authenticated browser UAT for actual sales order scanning, PO receipt limits/post confirmation, sales picking reservation limits, and organization switching under QUALITY-001. Do not count the temporary component harness as full workflow UAT.
+4. QUALITY-001 is not dependency-ready until REPORT-002 is complete; REPORT-002 remains gated by SALES-004/accounting/tax decisions. Do not invent those approvals.
+5. Preserve current progress-document edits; no commits were created. No app changes remain from the temporary browser test.
 
-## Exact next steps
+## Current open blockers
 
-1. Run a final `git diff --check`, inspect `git status` and the complete diff; ensure generated build artifacts are not included.
-2. For INV-010, use browser interaction tooling if available; otherwise add focused component interaction tests with already installed compatible tooling (do not add a large unrelated framework). Cover native Enter once, one/three repeated scans, order preservation, unknown barcode feedback, org switch/stale lookup, PO outstanding amount, reservation/pick limit, and no inventory post on scan. Keep open if event-level evidence remains absent.
-3. When npm registry access is restored, run `npm audit --omit=dev --audit-level=high`, inspect each advisory and apply only compatible, reviewed remediations. Keep QUALITY-002 open until findings are resolved/dispositioned under approved pilot policy.
-4. QUALITY-003: obtain owner approval for RPO/RTO, retention, residency and encryption/key management; configure and drill independent off-host encrypted backups before closure. Do not invent targets or claim production recovery from local drills.
-5. Maintain the no-reset/no-data-deletion/no-push/no-deploy constraints. No commits were created in this session.
-
-## Open issues and decisions
-
-- npm registry DNS prevents audit advisory resolution.
-- Browser interaction acceptance remains unavailable; no scanner UAT is claimed.
-- Production independent-account/object replication, encryption and retention have not been configured or verified.
-- RPO/RTO, data residency, retention, encryption key region, CSP nonce/Swagger strategy, distributed rate limiting, RLS/support access, production email, tax/accounting, and MFA enforcement remain open per `docs/progress/decisions.md`.
+- npm audit registry DNS previously returned `ENOTFOUND registry.npmjs.org`; earlier install output reported three high advisories without details.
+- Production independent-account/off-site encrypted backup configuration and drill are not complete; owner approval for RPO/RTO and retention/residency/key policy is pending.
+- Authenticated full-page browser UAT is not complete, although INV-010's scanner component acceptance passed.
+- Other unresolved decisions remain in `docs/progress/decisions.md`: tax/accounting, RLS/support access, MFA enforcement and hosting/data residency.

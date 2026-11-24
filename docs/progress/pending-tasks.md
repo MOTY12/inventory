@@ -4,7 +4,7 @@ This summary is subordinate to the task ledger in `docs/implementation/task-brea
 
 ## Current implementation
 
-- **INV-010 — IN_PROGRESS:** Scanner lookup and workflows are implemented for sales-order creation, PO receiving, and sales picking. Unit tests cover one submit exactly once and sequential repeated scans. Native Enter-key behavior, live quantity increment, unknown-barcode feedback, limits in the UI, and workspace-switch clearing still need browser/component interaction evidence.
+- **QUALITY-001 browser UAT gap:** INV-010 is complete after real Enter/scan component acceptance in Chrome and existing API/DB checks. Still schedule authenticated browser UAT on the actual new sales order, PO receiving, and sales picking pages, including warehouse permissions and no-post-until-confirm behavior.
 - **REPORT-003 — COMPLETED:** All four CSV exports, queue/storage integration, service-authenticated downloads, multi-warehouse movement ordering, historical/current WAC, NGN/USD separation, low-stock values, transient retry, expiry object deletion and expired-download denial passed isolated tests. See task ledger and next-session checkpoint.
 
 ## Current next-stage work
@@ -24,5 +24,5 @@ This summary is subordinate to the task ledger in `docs/implementation/task-brea
 
 ## Environment evidence
 
-- The full `npm test` command passed 51 tests, with two opt-in PostgreSQL suites skipped in that invocation; web tests passed 2/2. Both database suites were explicitly run separately and passed 13/13 and 10/10.
+- Latest `npm test` passed 52 API/shared tests, 0 failed, with 2 opt-in PostgreSQL suites skipped in that invocation; web tests passed 2/2. Inventory PostgreSQL suite was explicitly run this session and passed 13/13; auth/organization integration previously passed 10/10.
 - The API contract smoke passed when local loopback permission was granted; prior `listen EPERM` was environmental. Docker daemon socket itself remains inaccessible, but the configured PostgreSQL, Redis and S3Mock endpoints were used successfully by integration tests.
