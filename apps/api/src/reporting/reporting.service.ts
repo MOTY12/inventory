@@ -830,7 +830,8 @@ export class ReportingService {
       ), combined AS (
         SELECT COALESCE(o.customer_id,i.customer_id,r.customer_id,pm.customer_id) AS customer_id,
           COALESCE(o.currency,i.currency,r.currency,pm.currency) AS currency,o.sales_order_count,o.confirmed_order_count,o.fulfilled_order_count,o.order_value,o.last_order_date,
-          i.invoiced_value,pm.effective_payments,r.outstanding,r.overdue
+          COALESCE(i.invoiced_value,0::numeric) AS invoiced_value,COALESCE(pm.effective_payments,0::numeric) AS effective_payments,
+          COALESCE(r.outstanding,0::numeric) AS outstanding,COALESCE(r.overdue,0::numeric) AS overdue
         FROM order_metrics o FULL OUTER JOIN invoice_metrics i ON i.customer_id=o.customer_id AND i.currency=o.currency
         FULL OUTER JOIN receivable_metrics r ON r.customer_id=COALESCE(o.customer_id,i.customer_id) AND r.currency=COALESCE(o.currency,i.currency)
         FULL OUTER JOIN payment_metrics pm ON pm.customer_id=COALESCE(o.customer_id,i.customer_id,r.customer_id) AND pm.currency=COALESCE(o.currency,i.currency,r.currency)
@@ -1312,6 +1313,7 @@ export class ReportingService {
       {
         currency: string;
         no_due_date: bigint;
+        no_due_date_outstanding: Prisma.Decimal;
         not_yet_due: Prisma.Decimal;
         days_1_30: Prisma.Decimal;
         days_31_60: Prisma.Decimal;
@@ -1328,6 +1330,7 @@ export class ReportingService {
       WHERE i.organization_id=${context.organizationId}::uuid AND i.status='ISSUED' AND i.total_amount>COALESCE(e.paid,0::numeric)
         ${warehouseFilter} ${customerFilter} ${currencyFilter} ${from ? Prisma.sql`AND i.issue_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND i.issue_date<=${to}::date` : Prisma.empty}
     ) SELECT currency,COUNT(*) FILTER (WHERE due_date IS NULL) AS no_due_date,
+      COALESCE(SUM(outstanding) FILTER (WHERE due_date IS NULL),0::numeric) AS no_due_date_outstanding,
       COALESCE(SUM(outstanding) FILTER (WHERE due_date IS NOT NULL AND due_date>=CURRENT_DATE),0::numeric) AS not_yet_due,
       COALESCE(SUM(outstanding) FILTER (WHERE due_date<CURRENT_DATE AND due_date>=CURRENT_DATE-30),0::numeric) AS days_1_30,
       COALESCE(SUM(outstanding) FILTER (WHERE due_date<CURRENT_DATE-30 AND due_date>=CURRENT_DATE-60),0::numeric) AS days_31_60,

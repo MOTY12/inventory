@@ -326,6 +326,164 @@ test(
                 return { completed, csv };
               };
 
+              const reportSupplier = await suppliers.create(
+                contextA,
+                ownerA.userId,
+                { name: `Report supplier ${randomUUID()}` },
+              );
+              const purchasingReportProduct = await catalog.createProduct(
+                contextA,
+                ownerA.userId,
+                {
+                  name: "Report purchasing item",
+                  sku: `REPORT-PURCHASE-${randomUUID()}`,
+                  baseUnitId: unit.id,
+                },
+              );
+              const reportPurchaseOrder = await purchaseOrders.create(
+                contextA,
+                ownerA.userId,
+                {
+                  supplierId: reportSupplier.id,
+                  warehouseId: warehouse.id,
+                  currency: "NGN",
+                  lines: [
+                    {
+                      productId: purchasingReportProduct.id,
+                      unitId: unit.id,
+                      quantity: "10",
+                      unitCost: "2.5000",
+                    },
+                  ],
+                },
+              );
+              await purchaseOrders.submit(
+                contextA,
+                ownerA.userId,
+                reportPurchaseOrder.id,
+              );
+              await purchaseOrders.receive(
+                contextA,
+                ownerA.userId,
+                reportPurchaseOrder.id,
+                `report-purchase-first-${randomUUID()}`,
+                {
+                  lines: [
+                    {
+                      purchaseOrderLineId: reportPurchaseOrder.lines[0].id,
+                      quantity: "4",
+                    },
+                  ],
+                },
+              );
+              await purchaseOrders.receive(
+                contextA,
+                ownerA.userId,
+                reportPurchaseOrder.id,
+                `report-purchase-second-${randomUUID()}`,
+                {
+                  lines: [
+                    {
+                      purchaseOrderLineId: reportPurchaseOrder.lines[0].id,
+                      quantity: "6",
+                    },
+                  ],
+                },
+              );
+
+              const reportFilters = {
+                page: 1,
+                page_size: 25,
+                product_id: reportProduct.id,
+                warehouse_id: warehouse.id,
+                currency: "NGN",
+              };
+              const purchaseRows = await reports.purchaseProductPerformance(
+                contextA,
+                {
+                  ...reportFilters,
+                  product_id: purchasingReportProduct.id,
+                  supplier_id: reportSupplier.id,
+                },
+              );
+              assert.equal(purchaseRows.total, 1);
+              assert.deepEqual(
+                [
+                  String(purchaseRows.data[0].ordered_quantity),
+                  String(purchaseRows.data[0].received_quantity),
+                  String(purchaseRows.data[0].outstanding_quantity),
+                  String(purchaseRows.data[0].order_value),
+                  String(purchaseRows.data[0].received_value),
+                  String(purchaseRows.data[0].outstanding_value),
+                ],
+                ["10", "10", "0", "25", "25", "0"],
+              );
+              const supplierRows = await reports.supplierPerformance(contextA, {
+                page: 1,
+                page_size: 25,
+                supplier_id: reportSupplier.id,
+                warehouse_id: warehouse.id,
+                currency: "NGN",
+              });
+              assert.equal(supplierRows.total, 1);
+              assert.deepEqual(
+                [
+                  supplierRows.data[0].purchase_order_count,
+                  supplierRows.data[0].fully_received_purchase_orders,
+                  String(supplierRows.data[0].ordered_value),
+                  String(supplierRows.data[0].received_value),
+                  String(supplierRows.data[0].outstanding_order_value),
+                ],
+                [1, 1, "25", "25", "0"],
+              );
+
+              const salesProductsCsv = await createAndDownload(
+                "SALES_PRODUCTS",
+                reportFilters,
+                "sales-products",
+              );
+              assert.match(salesProductsCsv.csv, /"NGN","PCS",1,5,0,0,5,0,0,0/);
+              const salesCustomersCsv = await createAndDownload(
+                "SALES_CUSTOMERS",
+                {
+                  page: 1,
+                  page_size: 25,
+                  customer_id: reportCustomer.id,
+                  warehouse_id: warehouse.id,
+                  currency: "NGN",
+                },
+                "sales-customers",
+              );
+              assert.match(salesCustomersCsv.csv, /"NGN",1,1,0,5,0,0,0,0,/);
+              const purchaseProductsCsv = await createAndDownload(
+                "PURCHASE_PRODUCTS",
+                {
+                  ...reportFilters,
+                  product_id: purchasingReportProduct.id,
+                  supplier_id: reportSupplier.id,
+                },
+                "purchase-products",
+              );
+              assert.match(
+                purchaseProductsCsv.csv,
+                /"NGN","PCS",1,10,10,0,25,25,0/,
+              );
+              const purchaseSuppliersCsv = await createAndDownload(
+                "PURCHASE_SUPPLIERS",
+                {
+                  page: 1,
+                  page_size: 25,
+                  supplier_id: reportSupplier.id,
+                  warehouse_id: warehouse.id,
+                  currency: "NGN",
+                },
+                "purchase-suppliers",
+              );
+              assert.match(
+                purchaseSuppliersCsv.csv,
+                /"NGN",1,0,0,1,0,25,25,0,/,
+              );
+
               const summaryExport = await createAndDownload(
                 "INVENTORY_SUMMARY",
                 { product_id: reportProduct.id, warehouse_id: warehouse.id },
@@ -424,6 +582,7 @@ test(
                 currentValuation.total,
               );
               assert.match(valuationExport.csv, /20,3,"NGN",60/);
+              assert.match(valuationExport.csv, /10,2\.5,"NGN",25/);
               assert.match(valuationExport.csv, /2,1\.25,"USD",2\.5/);
               assert.deepEqual(
                 currentValuation.totals.inventory_value_by_currency.map(
@@ -433,7 +592,7 @@ test(
                   ],
                 ),
                 [
-                  ["NGN", "65"],
+                  ["NGN", "90"],
                   ["USD", "2.5"],
                 ],
               );
@@ -551,11 +710,49 @@ test(
                   stdio: ["ignore", "ignore", "ignore", "ipc"],
                 },
               );
+              const waitForCrashWorkerMessage = (expectedType) =>
+                new Promise((resolveMessage, rejectMessage) => {
+                  const timeout = setTimeout(
+                    () =>
+                      rejectMessage(
+                        new Error(
+                          `Crash worker timed out waiting for ${expectedType}`,
+                        ),
+                      ),
+                    20_000,
+                  );
+                  const onMessage = (message) => {
+                    if (message?.type === expectedType) {
+                      clearTimeout(timeout);
+                      recoveryChild.off("message", onMessage);
+                      resolveMessage(message);
+                    } else if (message?.type === "worker-error") {
+                      clearTimeout(timeout);
+                      recoveryChild.off("message", onMessage);
+                      rejectMessage(
+                        new Error(`Crash worker error: ${message.name}`),
+                      );
+                    }
+                  };
+                  recoveryChild.on("message", onMessage);
+                  recoveryChild.once("exit", (code, signal) => {
+                    clearTimeout(timeout);
+                    rejectMessage(
+                      new Error(
+                        `Crash worker exited before ${expectedType} (${code ?? signal})`,
+                      ),
+                    );
+                  });
+                });
+              const workerReady = waitForCrashWorkerMessage("worker-ready");
               let recoveryWorker;
               let recoveryS3;
               let recoveryObjectKey;
               let recoveryBackupKey;
               try {
+                await workerReady;
+                const uploadStarted =
+                  waitForCrashWorkerMessage("upload-started");
                 await recoveryQueue.add(
                   "generate",
                   { exportId: interrupted.id, retrySequence: 0 },
@@ -565,31 +762,7 @@ test(
                     backoff: { type: "exponential", delay: 1_000 },
                   },
                 );
-                await new Promise((resolveMessage, rejectMessage) => {
-                  const timeout = setTimeout(
-                    () => rejectMessage(new Error("Crash worker timed out")),
-                    20_000,
-                  );
-                  recoveryChild.on("message", (message) => {
-                    if (message?.type === "upload-started") {
-                      clearTimeout(timeout);
-                      resolveMessage();
-                    } else if (message?.type === "worker-error") {
-                      clearTimeout(timeout);
-                      rejectMessage(
-                        new Error(`Crash worker error: ${message.name}`),
-                      );
-                    }
-                  });
-                  recoveryChild.once("exit", (code, signal) => {
-                    clearTimeout(timeout);
-                    rejectMessage(
-                      new Error(
-                        `Crash worker exited before interruption (${code ?? signal})`,
-                      ),
-                    );
-                  });
-                });
+                await uploadStarted;
                 const processing = await prisma.reportExport.findUniqueOrThrow({
                   where: { id: interrupted.id },
                 });
@@ -2542,6 +2715,7 @@ test(
               where: {
                 organizationId: contextA.organizationId,
                 eventType: "procurement.goods-receipt.posted",
+                aggregateId: { in: [firstReceipt.id, secondReceipt.id] },
               },
             }),
             2,

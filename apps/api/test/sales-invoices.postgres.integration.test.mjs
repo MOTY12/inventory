@@ -177,10 +177,10 @@ test(
         }),
       );
 
-      async function makeDraft(context, actor, customerName) {
-        const nextCustomer = await customers.create(context, actor, {
-          name: customerName,
-        });
+      async function makeDraft(context, actor, customerName, options = {}) {
+        const nextCustomer =
+          options.customer ??
+          (await customers.create(context, actor, { name: customerName }));
         const nextOrder = await salesOrders.create(
           context,
           actor,
@@ -188,7 +188,13 @@ test(
             customerId: nextCustomer.id,
             warehouseId: warehouse.id,
             currency: "NGN",
-            lines: [{ productId: product.id, quantity: "1", unitPrice: "100" }],
+            lines: [
+              {
+                productId: options.productId ?? product.id,
+                quantity: "1",
+                unitPrice: "100",
+              },
+            ],
           },
           `invoice-order-${randomUUID()}`,
         );
@@ -203,6 +209,7 @@ test(
           actor,
           {
             salesOrderId: nextOrder.id,
+            ...(options.dueDate ? { dueDate: options.dueDate } : {}),
             lines: [{ salesOrderLineId: nextOrder.lines[0].id }],
           },
           `invoice-create-${randomUUID()}`,
@@ -460,9 +467,6 @@ test(
         (error) => error.getStatus() === 404,
       );
 
-      const movementsBeforeFinancialActions = await prisma.stockMovement.count({
-        where: { organizationId: owner.context.organizationId },
-      });
       async function pay(amount, key) {
         return invoices.recordPayment(
           owner.context,
@@ -552,9 +556,115 @@ test(
         (await invoices.get(owner.context, draft.id)).amountPaid.toString(),
         "37250",
       );
+      const reconciledCustomer = await reportQueries.customerPerformance(
+        owner.context,
+        Object.assign(new ReportFilterDto(), {
+          customer_id: customer.id,
+          currency: "NGN",
+          page: 1,
+          page_size: 25,
+        }),
+      );
+      assert.equal(reconciledCustomer.data.length, 1);
+      assert.equal(String(reconciledCustomer.data[0].invoiced_value), "47250");
+      assert.equal(
+        String(reconciledCustomer.data[0].effective_payments),
+        "37250",
+      );
+      assert.equal(String(reconciledCustomer.data[0].outstanding), "10000");
+      assert.equal(String(reconciledCustomer.data[0].overdue), "0");
       await assert.rejects(
         pay("20000", `invoice-overpay-${randomUUID()}`),
         (error) => error.getStatus() === 409,
+      );
+
+      const agingCustomer = await customers.create(
+        owner.context,
+        owner.userId,
+        {
+          name: "Aging boundary customer",
+        },
+      );
+      const agingProduct = await catalog.createProduct(
+        owner.context,
+        owner.userId,
+        {
+          name: "Aging report item",
+          sku: `AGING-${randomUUID()}`,
+          baseUnitId: unit.id,
+        },
+      );
+      await posting.postWarehouseMovement(
+        owner.context,
+        owner.userId,
+        `aging-opening-${randomUUID()}`,
+        {
+          warehouseId: warehouse.id,
+          productId: agingProduct.id,
+          documentType: "OPENING_BALANCE",
+          documentId: randomUUID(),
+          movementType: "OPENING_BALANCE",
+          quantityDelta: "20",
+          costPerBaseUnit: "1.0000",
+          costCurrency: "NGN",
+        },
+      );
+      const movementsBeforeFinancialActions = await prisma.stockMovement.count({
+        where: { organizationId: owner.context.organizationId },
+      });
+      const databaseDate =
+        await prisma.$queryRaw`SELECT CURRENT_DATE::text AS today`;
+      const today = new Date(`${databaseDate[0].today}T00:00:00.000Z`);
+      const dateOffset = (days) => {
+        const date = new Date(today);
+        date.setUTCDate(date.getUTCDate() - days);
+        return date.toISOString().slice(0, 10);
+      };
+      for (const daysOverdue of [0, 1, 30, 31, 60, 61, 90, 91, null]) {
+        const agingDraft = await makeDraft(
+          owner.context,
+          owner.userId,
+          "Aging boundary customer",
+          {
+            customer: agingCustomer,
+            productId: agingProduct.id,
+            ...(daysOverdue === null
+              ? {}
+              : { dueDate: dateOffset(daysOverdue) }),
+          },
+        );
+        await invoices.issue(
+          owner.context,
+          owner.userId,
+          agingDraft.id,
+          `aging-issue-${randomUUID()}`,
+        );
+      }
+      const aging = await reportQueries.receivablesAging(
+        owner.context,
+        Object.assign(new ReportFilterDto(), {
+          customer_id: agingCustomer.id,
+          currency: "NGN",
+        }),
+      );
+      const agingRow = aging.data[0];
+      assert.equal(Number(agingRow.no_due_date), 1);
+      assert.equal(String(agingRow.no_due_date_outstanding), "100");
+      assert.equal(String(agingRow.not_yet_due), "100");
+      assert.equal(String(agingRow.days_1_30), "200");
+      assert.equal(String(agingRow.days_31_60), "200");
+      assert.equal(String(agingRow.days_61_90), "200");
+      assert.equal(String(agingRow.over_90), "100");
+      assert.equal(
+        [
+          "no_due_date_outstanding",
+          "not_yet_due",
+          "days_1_30",
+          "days_31_60",
+          "days_61_90",
+          "over_90",
+        ].reduce((total, key) => total + Number(agingRow[key]), 0),
+        900,
       );
 
       const financeEmail = `finance-${randomUUID()}@example.test`;

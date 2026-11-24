@@ -8,8 +8,9 @@
 - **Prisma migration status:** Resolved. The additive SALES-004 migration was applied to local `inventory_dev`; `npx prisma migrate status --config prisma.config.ts` reports 21 migrations and database schema up to date. No reset or deletion occurred.
 
 - **QUALITY-001 authenticated workflow UAT:** INV-010's scanner component acceptance passed in headless Chrome: native Enter once, repeated quantity increment, rapid order, unknown-code feedback/no quantity change, recovery, focus, and no parent submit. The authenticated new-sales-order, PO-receiving, and sales-picking pages were not exercised end-to-end; track that broader manual/browser workflow evidence under QUALITY-001. INV-010's documented acceptance is complete.
-- **SALES-004 acceptance:** DEC-010 is approved; expanded isolated PostgreSQL and authenticated HTTP/controller coverage passed 3/3, including numbering, void/tax/reversal, immutability, auth/tenant/warehouse scope and non-mutation. Interactive authenticated browser UAT remains unverified because no local inventory UI was available in the browser. SALES-004 remains IN_PROGRESS and is not counted complete.
-- **REPORT-002 acceptance:** Sales/purchase/receivables summary, aging, daily/weekly/monthly trends and a live-data UI are implemented; authenticated API queries pass in the temporary PostgreSQL suite. Product/customer/supplier performance, expanded test fixtures, CSV export integration, query performance evidence and browser UAT remain. REPORT-002 is IN_PROGRESS; completed count remains 30/47.
+- **SALES-004 acceptance:** DEC-010 is approved; isolated PostgreSQL and authenticated HTTP/controller coverage passes, including numbering, void/tax/reversal, immutability, auth/tenant/warehouse scope, non-mutation and customer metrics after payment reversal. Interactive authenticated browser UAT is unverified because Chrome is logged out. SALES-004 remains IN_PROGRESS and is not counted complete.
+- **REPORT-002 acceptance:** Sales/purchase/receivables summaries, trends, paginated performance APIs, live UI and four detail export types are implemented. Isolated PostgreSQL acceptance now verifies populated purchase receipts, four CSV worker outputs via S3Mock, customer reversal balances, and all documented aging boundaries including no-due-date reconciliation. Remaining: full filter/security matrix, multi-currency pagination, query plan/performance evidence, and authenticated browser UAT. REPORT-002 remains IN_PROGRESS; completed count remains 30/47.
+- **QUALITY-001 dependency:** NOT_STARTED until REPORT-002 acceptance is complete.
 - **Report performance:** All export types, queue/storage, private service download, retries and expiry passed isolated integration, but a representative large-tenant performance benchmark was not run.
 - **Dependency audit:** Current `npm audit --omit=dev --audit-level=high` could not reach `registry.npmjs.org` (`ENOTFOUND`). Earlier installation reported seven lockfile advisories (4 moderate, 3 high) without full advisory detail. No clean audit is claimed.
 - **Docker CLI:** `docker compose ps` is blocked by access to the Docker daemon socket. PostgreSQL, Redis and S3Mock endpoints were reachable and the isolated integration suites used them successfully; Docker health itself is not claimed for this session.
@@ -19,12 +20,12 @@
 ## 2026-11-24 REPORT-002 checkpoint correction
 
 - Four report detail APIs, UI sections/dashboard metrics, and four export types are implemented; additive migration `20261124150000_business_performance_exports` is applied, and local migration status is 22/22. Explicit isolated PostgreSQL/API suite passed 3/3. This supersedes earlier statements that no REPORT-002 rankings/export support or migration existed.
-- Remaining evidence gaps: new purchase analytics on non-empty PO/receipt fixtures; customer effective collections and reversal reconciliation; boundary/filter/security matrix; worker CSV value and revoked-finance download tests; EXPLAIN ANALYZE; authenticated browser acceptance.
-- Browser remains a real blocker for SALES-004 and REPORT-002 UAT: no local application/session was available in the current browser. Do not claim the workflow verified.
+- Remaining evidence gaps: complete filter/security matrix, multi-currency pagination, EXPLAIN ANALYZE, and authenticated browser acceptance.
+- Latest browser session reached the local Stockroom login page but was logged out; no credentials were changed. Do not claim authenticated workflow verification.
 
 ## Completed verification in this session
 
-- Current explicit SALES-004 plus REPORT-002 PostgreSQL suite: 3 passed, 0 failed, 0 skipped; it uses a uniquely named temporary schema. Workspace checks passed: `npm test` 59 API/shared pass, 0 fail, 3 opt-in suites skipped, web 2/2; typecheck, lint, format, production build, Prisma validation and diff check passed. Read-only migration status is 21/21. Migration deploy succeeded in prior work; no application data was reset or deleted.
+- All three opt-in PostgreSQL suites together: 26 passed, 0 failed, 0 skipped using disposable schemas. Workspace checks passed: `npm test` 59 API/shared pass, 0 fail, 3 opt-in suites skipped, web 2/2; typecheck, lint, format, production build, Prisma validation. Read-only migration status: 22 migrations found, schema up to date. No application data was reset or deleted.
 
 ## Production hardening and policy gates
 
