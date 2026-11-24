@@ -1,6 +1,6 @@
 # Numbered task breakdown
 
-Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001 through FOUNDATION-009, ARCH-001, INV-001 through INV-010, PROCUREMENT-001 through PROCUREMENT-003, SALES-001 through SALES-003, REPORT-001, and REPORT-003 are COMPLETED; PROD-002, ARCH-002, QUALITY-002, and QUALITY-003 are IN_PROGRESS; remaining tasks are NOT_STARTED. Completed count: 30/47, counted from 47 unique task entries. REPORT-003 and INV-010 evidence is dated 2026-11-23. Full authenticated page UAT remains tracked under QUALITY-001.
+Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001 through FOUNDATION-009, ARCH-001, INV-001 through INV-010, PROCUREMENT-001 through PROCUREMENT-003, SALES-001 through SALES-003, REPORT-001, and REPORT-003 are COMPLETED; PROD-002, ARCH-002, QUALITY-002, and QUALITY-003 are IN_PROGRESS; SALES-004 is BLOCKED pending explicit tax/invoice/accounting policy approval; remaining tasks are NOT_STARTED. Completed count: 30/47, counted from 47 unique task entries. REPORT-003 and INV-010 evidence is dated 2026-11-23. Full authenticated page UAT remains tracked under QUALITY-001.
 
 ## Phase 0–2: research, product, architecture
 
@@ -176,7 +176,7 @@ Description: Pick/fulfill quantities; preserve backorder; commit stock outflow. 
 ### SALES-004: Invoice and payment records
 
 **Files/modules affected:** apps/api/src/sales/, apps/web/src/features/sales/, Prisma sales schema.
-Description: Invoice numbering/rendering and manual full/partial/multiple payment allocations. Priority: P0. Dependencies: SALES-002. Deliverables: invoice/payment APIs and printable PDF. Acceptance: totals and balances use Decimal; paid amount cannot exceed due without credit/refund workflow. Tests: rounding/allocation/audit tests. Status: NOT_STARTED.
+Description: Invoice numbering/rendering and manual full/partial/multiple payment allocations. Priority: P0. Dependencies: SALES-003 and PROD-002 financial/tax policy approval. Deliverables: invoice/payment APIs and printable PDF. Acceptance: totals and balances use Decimal; issued records are immutable; paid amount cannot exceed due without an approved credit workflow. Tests: numbering concurrency, rounding/allocation/idempotency/audit/tenant tests and inventory non-mutation. Status: BLOCKED (2026-11-24): decisions remain open in `docs/progress/decisions.md`; a concise owner decision proposal is recorded there. The execution brief's recommended MVP scope is not treated as approval. No SALES-004 financial functionality has been implemented.
 
 ### SALES-005: Returns and credits
 

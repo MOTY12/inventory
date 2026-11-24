@@ -1,8 +1,11 @@
 # Current state
 
-**Updated:** 2026-11-23 (Africa/Lagos)
+**Updated:** 2026-11-24 (Africa/Lagos)
 
 ## Latest verified checkpoint
+
+- Reconciled against repository on 2026-11-24: `develop` HEAD is `dfd26fe`, not the prior checkpoint's `4a6dbde`; worktree was clean at start. Roadmap remains 30/47. SALES-004 is BLOCKED on explicit financial/tax policy approval, now recorded as a decision proposal in `docs/progress/decisions.md`; no code or migration was added. See `docs/progress/next-session.md` for exact next actions.
+- Current-session `npm test` passed 52 API/shared and 2 web tests; 2 opt-in DB tests were skipped. Explicit inventory PostgreSQL run failed to connect to configured port 5433 (`EPERM`), Docker daemon access was denied, and npm audit failed on registry DNS (`ENOTFOUND`). These are failed/unavailable checks, not passes. Prior 2026-11-23 integration/build evidence below is historical and does not replace current-session verification.
 
 - Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`, start HEAD `4a6dbde`; worktree was clean at start. The temporary barcode acceptance route and WorkspaceShell public-route exception were removed after use. Remaining changes this session are progress documentation only; no commit/push/deploy.
 - Completed roadmap count is **30/47**. REPORT-003 is COMPLETED based on isolated PostgreSQL + Redis/BullMQ + S3Mock export evidence. INV-010 is now COMPLETED based on rendered scanner browser acceptance, existing API tests, and source review of sales/receiving/picking handlers. QUALITY-002 and QUALITY-003 remain IN_PROGRESS.

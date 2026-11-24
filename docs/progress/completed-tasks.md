@@ -1,6 +1,6 @@
 # Completed tasks
 
-**Latest status (2026-11-23): 30/47 complete.** REPORT-003 and INV-010 are completed based on isolated export recovery checks and rendered Chrome scanner acceptance, respectively. QUALITY-002 and QUALITY-003 remain in progress. QUALITY-002 dependency audit is unresolved, so it is not counted complete. See `docs/security/tenant-isolation-review.md` and the latest `docs/progress/next-session.md`.
+**Latest status (2026-11-24): 30/47 complete.** No task became newly complete this session. SALES-004 is BLOCKED pending financial/tax policy approval; QUALITY-002 and QUALITY-003 remain in progress. The npm audit and configured PostgreSQL integration attempt were unavailable/failed this session; details are in `docs/progress/next-session.md`.
 
 Historical baseline: FOUNDATION-002 was completed on 2026-11-01 after live Docker, PostgreSQL migration, env and health verification. FOUNDATION-006 through FOUNDATION-009 are COMPLETED after migration, PostgreSQL integration coverage, and code/UI checks passed. INV-005/006 were completed on 2026-11-06 after disposable PostgreSQL acceptance tests. SALES-002 was completed on 2026-11-08 against its documented backend acceptance. The earlier 15/47 count was superseded on 2026-11-22; REPORT-001 was completed on 2026-11-23. Current completed count is **30/47** (verified 2026-11-23). Production email, shared rate limiting, authenticated end-to-end browser UAT, and open product/security decisions remain follow-ups.
 

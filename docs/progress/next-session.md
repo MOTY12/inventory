@@ -1,52 +1,50 @@
 # Next session checkpoint
 
-**Updated:** 2026-11-23 (Africa/Lagos)
+**Updated:** 2026-11-24 (Africa/Lagos)
 
-## Repository and roadmap
+## Repository and verified stage
 
-- Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; start HEAD `4a6dbde` (`update the mds`). Worktree was clean at start.
-- Application code is unchanged by this session. Only progress/roadmap documentation is now modified. No commit, push, deployment, production migration, configured-schema reset, or deletion of existing data occurred.
-- Roadmap is **30/47 complete**, recalculated from the 47 task entries. INV-010 moved to COMPLETED based on its documented acceptance criterion and browser evidence below. QUALITY-002 and QUALITY-003 remain IN_PROGRESS.
+- Workspace: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; current HEAD at session start: `dfd26fe` (`update the mds`), ahead of the prior checkpoint's `4a6dbde`. Worktree was clean at start. No source code, schema or migration was changed in this session; only progress/roadmap documentation was updated. No commit, push, deployment, migration, database reset or data deletion occurred.
+- Roadmap: **30/47 completed**, recalculated from the 47 task entries. SALES-004 is now explicitly **BLOCKED** pending policy approval; it is not counted complete. PROD-002, ARCH-002, QUALITY-002 and QUALITY-003 remain IN_PROGRESS. REPORT-002 remains gated by SALES-004. QUALITY-001 remains NOT_STARTED and dependency-gated by REPORT-002.
+- Read the task ledger, acceptance criteria, dependency map, inventory semantics, decisions and current checkpoint. SALES-004 and SALES-003 dependencies are complete, but PROD-002 financial/tax approval is not. The provided SALES-004 execution brief itself says to request approval; its recommended MVP scope is not interpreted as approval.
 
-## INV-010 acceptance completed
+## SALES-004 policy proposal awaiting owner approval
 
-- Reviewed the scanner component, barcode API, new sales order handler, purchase receiving handler, and reserved sales-picking handler. The handlers use exact tenant barcode lookup; guard late results after organization/order changes; bound receiving to outstanding quantity and unit precision; bound picking to active reservations, unpicked quantity and unit precision; and do not post stock during scanning.
-- Rendered the actual `BarcodeScanner` React component on a temporary local Next page and drove it with native keyboard events in installed headless Chrome over CDP. Seven checks passed:
-  - Enter submitted exactly once.
-  - Three identical scans showed quantity 1 → 2 → 3.
-  - Rapid different codes kept submission order.
-  - An unknown code produced an accessible error without changing quantity.
-  - The scanner accepted another scan after the error.
-  - Focus returned to the input after processing.
-  - The scanner form submit event was default-prevented.
-- The temporary route and its WorkspaceShell public-route exception were removed. No app page or route was added to the product.
-- Existing API tests cover normalized exact tenant lookup, unknown/foreign barcode denial, auth and OpenAPI. The inventory PostgreSQL suite passed 13/13. Full authenticated browser journeys through the actual new-sales-order, PO-receiving and sales-picking pages were not executed; retain that broader UAT under QUALITY-001. No inventory posting claim is based on the temporary component harness.
+See `docs/progress/decisions.md` under “SALES-004 owner decision proposal”. It asks the owner to decide:
 
-## Verification results
+1. Invoice timing, sequential organization numbering, and any fiscal-year reset/prefix.
+2. One immutable invoice currency inherited from the order; currency/price basis.
+3. Tax treatment and statutory fields after Nigerian accountant/legal review, discount scope and rounding.
+4. Manual payments, supported methods, allocation, same-currency rule, overpayment and unallocated-credit scope.
+5. Issued invoice void/credit policy and payment reversal rules.
+6. Confirmation that this is an operational subledger, not a general ledger or tax-compliance certification.
 
-- `npm test`: API/shared **52 passed, 0 failed, 2 opt-in PostgreSQL suites skipped**; web **2 passed, 0 failed**.
-- `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs`: **13 passed, 0 failed, 0 skipped**.
-- `npm run typecheck`: passed.
-- `npm run lint`: passed.
-- `npm run format:check`: passed.
-- `npm run build`: passed (shared, Nest API, Next.js Webpack production build).
-- `npm run db:validate --workspace=@inventory/api`: passed in previous checkpoint.
-- Read-only `npx prisma migrate status --config prisma.config.ts`: **20 migrations found; configured development schema up to date**.
-- API readiness returned HTTP 200 and the local web login returned HTTP 200 while services were running. Services and isolated Chrome were stopped afterward.
-- For an isolated migration check, all existing migrations were applied to a new random schema; that schema contained only migration artifacts and was dropped at the end. The configured `public` schema was not modified by migrations.
-- No application test framework was added. An offline npm install attempt could not resolve cached package metadata; the actual rendered component was verified in Chrome instead.
+No financial schema, behavior, tax calculation or migration has been implemented. Await explicit approval/answers before starting SALES-004. Once approved, record decisions, then implement/test the vertical slice against task acceptance.
 
-## Remaining work and exact next steps
+## Verification in this session
 
-1. Continue QUALITY-002: rerun `npm audit --omit=dev --audit-level=high` when npm registry DNS works; inspect advisories and remediate only confirmed compatible risks. Keep the task IN_PROGRESS until the no-unresolved-high gate is evidenced or formally dispositioned.
-2. Continue QUALITY-003: obtain owner-approved RPO/RTO, retention, residency and encryption/key-management policy; configure and drill independent off-host recovery. Local test timings do not establish production recovery commitments.
-3. Keep full authenticated browser UAT for actual sales order scanning, PO receipt limits/post confirmation, sales picking reservation limits, and organization switching under QUALITY-001. Do not count the temporary component harness as full workflow UAT.
-4. QUALITY-001 is not dependency-ready until REPORT-002 is complete; REPORT-002 remains gated by SALES-004/accounting/tax decisions. Do not invent those approvals.
-5. Preserve current progress-document edits; no commits were created. No app changes remain from the temporary browser test.
+- `npm test`: passed; 52 API/shared passed, 0 failed, 2 opt-in PostgreSQL tests skipped; web 2 passed, 0 failed. The test script built shared/API packages before running tests.
+- `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs`: did not execute acceptance; failed connecting to configured PostgreSQL port 5433 with `EPERM`. No integration pass is claimed.
+- `docker compose ps`: blocked by permission denied on Docker daemon socket. No container health is claimed.
+- `npm audit --omit=dev --audit-level=high`: failed because registry lookup returned `ENOTFOUND registry.npmjs.org`; no audit result is claimed.
+- Browser inventory showed the existing in-app tab at `http://localhost:3002/verify-email?...` with “This site can't be reached”. No authenticated browser workflow could be exercised. Docker Desktop appears running in the app inventory, but the CLI cannot access its daemon socket; app-level presence is not container health.
+- `pg_isready` at default `/tmp:5432` returned no response; a local postgres process was observed listening on loopback 5432, distinct from configured integration endpoint 5433. Do not infer configured DB health from that process.
+- Prior 2026-11-23 checks are historical evidence only: isolated PostgreSQL tests, Prisma status, typecheck/lint/format, production build and Chrome scanner component acceptance are recorded in `current-state.md` and `session-log.md`. They do not resolve this session's Docker/DB/audit blockers.
 
-## Current open blockers
+## Exact next steps
 
-- npm audit registry DNS previously returned `ENOTFOUND registry.npmjs.org`; earlier install output reported three high advisories without details.
-- Production independent-account/off-site encrypted backup configuration and drill are not complete; owner approval for RPO/RTO and retention/residency/key policy is pending.
-- Authenticated full-page browser UAT is not complete, although INV-010's scanner component acceptance passed.
-- Other unresolved decisions remain in `docs/progress/decisions.md`: tax/accounting, RLS/support access, MFA enforcement and hosting/data residency.
+1. Obtain the explicit owner decisions listed in `docs/progress/decisions.md`. Until then, do not implement SALES-004 financial semantics or its migration.
+2. If policy approval arrives: update the decision log and dependent task criteria if needed; design additive tenant-composite invoice/payment schema; implement APIs, idempotent transactional manual allocations/reversals and UI; add focused unit/API/PostgreSQL tests; verify invoice/payment actions never post inventory movements; run migration only after inspecting it and confirming the configured database target.
+3. While policy is pending, continue only independent QUALITY-001 work: check whether the normal browser/local app and authenticated account are available; run actual PO receiving, transfer and sales picking workflows including warehouse-scope denial and organization switching. Record evidence precisely; do not claim full QUALITY-001 until REPORT-002 and all required workflows are ready.
+4. Retry the isolated PostgreSQL integration suites only when the configured endpoint is reachable; they create/drop random test schemas, not the configured application schema. Retry dependency audit when npm registry DNS works. Preserve prior and current failures as separate evidence.
+5. Maintain SECURITY/backup open items: QUALITY-002 dependency-advisory review; QUALITY-003 owner-approved RPO/RTO, retention/residency/key-management and production off-site recovery drill. Do not reimplement local recovery features already verified.
+6. Update `task-breakdown.md`, `master-plan.md`, `current-state.md`, `next-session.md`, `session-log.md`, and blocker/pending summaries after each meaningful milestone. Recount tasks only from individual statuses.
+
+## Current blockers
+
+- SALES-004/REPORT-002: owner approval for tax, numbering, currency, discount/rounding, payment allocation/overpayment, correction and accounting-boundary policy is pending.
+- Configured PostgreSQL integration endpoint on port 5433 rejected sandbox connection (`EPERM`); Docker daemon socket access denied.
+- npm advisory endpoint unavailable (`ENOTFOUND registry.npmjs.org`); QUALITY-002 remains open.
+- QUALITY-003 production recovery targets/configuration and QUALITY-001 authenticated full-page workflow UAT remain open.
+
+No commit or push was created.

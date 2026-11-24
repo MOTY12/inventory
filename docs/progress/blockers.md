@@ -1,6 +1,6 @@
 # Blockers and constraints
 
-**Updated 2026-11-23 (Africa/Lagos).** Historical environment blockers below are superseded by the latest evidence where noted.
+**Updated 2026-11-24 (Africa/Lagos).** Historical environment blockers below are superseded by the latest evidence where noted.
 
 ## Active verification gaps
 
@@ -12,6 +12,8 @@
 - **Dependency audit:** Current `npm audit --omit=dev --audit-level=high` could not reach `registry.npmjs.org` (`ENOTFOUND`). Earlier installation reported seven lockfile advisories (4 moderate, 3 high) without full advisory detail. No clean audit is claimed.
 - **Docker CLI:** `docker compose ps` is blocked by access to the Docker daemon socket. PostgreSQL, Redis and S3Mock endpoints were reachable and the isolated integration suites used them successfully; Docker health itself is not claimed for this session.
 - **QUALITY-003:** PostgreSQL, queue interruption/restart, pending-row dispatch, and generated-object backup/missing/restore rehearsals pass locally; measured timings are recorded in `docs/operations/backup-restore.md`. Production independent-account replication/encryption has not been configured or drilled. RPO/RTO and retention/residency/key policies require owner approval before closure.
+- **SALES-004 / REPORT-002:** SALES-004 is BLOCKED until owner approval resolves invoice timing/numbering, currency, tax, discounts/rounding, payment allocation/overpayment, correction and accounting-boundary rules. Proposal is in `docs/progress/decisions.md`; broad implementation authorization and the execution brief's recommendations do not approve these financial policies. REPORT-002 and QUALITY-001 remain downstream-gated.
+- **Current-session integration environment:** explicit PostgreSQL inventory test could not connect to configured port 5433 (`EPERM`); `docker compose ps` could not access the Docker daemon socket. A separate local postgres process listening on port 5432 does not establish the configured endpoint's health.
 
 ## Completed verification in this session
 

@@ -1,5 +1,7 @@
 # Pending work
 
+**Updated:** 2026-11-24 (Africa/Lagos).
+
 This summary is subordinate to the task ledger in `docs/implementation/task-breakdown.md`.
 
 ## Current implementation
@@ -13,6 +15,7 @@ This summary is subordinate to the task ledger in `docs/implementation/task-brea
 
 - **QUALITY-003 — IN_PROGRESS:** Dependencies FOUNDATION-002 and FOUNDATION-005 are complete. PostgreSQL restore, queue worker termination/restart, durable pending-job dispatch, private-prefix object backup, missing-object behavior and checksum-verified restore drills passed locally. Runbook includes database/queue/object recovery and incident steps. Measured timings are documented; production off-host encrypted recovery configuration has not been drilled, and owner-approved RPO/RTO/retention/residency/key policy remain open.
 - Do not start SALES-004 or REPORT-002 until invoice/tax/accounting policy is approved.
+- **SALES-004 — BLOCKED:** SALES-003 is complete, but owner approval of invoice/tax/accounting policy is outstanding. The decision proposal is in `docs/progress/decisions.md`; no invoice/payment implementation is claimed.
 
 ## Other pending work
 
@@ -24,5 +27,5 @@ This summary is subordinate to the task ledger in `docs/implementation/task-brea
 
 ## Environment evidence
 
-- Latest `npm test` passed 52 API/shared tests, 0 failed, with 2 opt-in PostgreSQL suites skipped in that invocation; web tests passed 2/2. Inventory PostgreSQL suite was explicitly run this session and passed 13/13; auth/organization integration previously passed 10/10.
-- The API contract smoke passed when local loopback permission was granted; prior `listen EPERM` was environmental. Docker daemon socket itself remains inaccessible, but the configured PostgreSQL, Redis and S3Mock endpoints were used successfully by integration tests.
+- Current-session `npm test` passed 52 API/shared and 2 web tests; two opt-in PostgreSQL suites were skipped. Explicit inventory PostgreSQL execution failed connecting to configured port 5433 with `EPERM`; Docker daemon socket access was denied. Prior successful integration results remain historical evidence in `session-log.md`.
+- Current-session `npm audit --omit=dev --audit-level=high` failed because `registry.npmjs.org` returned `ENOTFOUND`; no clean audit is claimed.

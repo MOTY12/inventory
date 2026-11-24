@@ -19,3 +19,16 @@
 
 ## Open decisions
 Remaining material decisions: initial customer segment, product name/branding, tax/invoice compliance, pricing/subscription limits, production hosting/data-residency commitments, MFA enforcement, RLS and support access. Use the defaults above only for reversible implementation; flag changes before customer commitments or changes to the security boundary.
+
+## SALES-004 owner decision proposal (2026-11-24; approval pending)
+
+The recommended MVP scope in the SALES-004 execution brief is not itself approval of financial or statutory policy. Before implementation, please approve or specify:
+
+1. **Invoice timing and numbering:** issue manually from an eligible sales order; organization-wide sequential `INV-000001` numbering, no reuse after issue; confirm any fiscal-year reset/prefix requirement.
+2. **Currency and price basis:** one immutable currency per invoice inherited from the order; confirm whether line prices are tax-exclusive and whether multi-currency payment is disallowed.
+3. **Tax, discounts and rounding:** do not assume a statutory rate. Confirm supported tax types/inclusive-vs-exclusive treatment, invoice-level/line discounts, and the required currency rounding rule after accountant/legal review.
+4. **Payments:** manual records only (no gateway), exact-decimal positive amounts, multiple partial payments, explicit invoice allocation, same-currency only, reject overpayment; confirm supported payment methods and whether unallocated customer credits are out of scope.
+5. **Issued documents and corrections:** issued invoice snapshots are immutable; cancellation uses a void/credit-note policy and never recycles a number; payment corrections use an audited reversal entry, never edit/delete. Confirm whether only unpaid invoices may be voided and what document is required after payment.
+6. **Accounting/compliance boundary:** invoice/payment records are operational subledger evidence, not a general ledger or tax-compliance certification. Confirm this MVP boundary and require Nigerian accountant/legal review of statutory invoice fields before pilot use.
+
+Until these decisions are approved, SALES-004 and dependent REPORT-002 remain blocked. No invoice/payment schema, tax calculation, numbering, or financial behavior has been implemented on the basis of this proposal.
