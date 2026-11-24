@@ -1226,6 +1226,217 @@ p {
   }
 }
 
+.report-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin: 0 0 18px;
+}
+.report-summary-card,
+.form-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+  box-shadow: var(--shadow-panel);
+  padding: 18px;
+}
+.report-summary-card > p {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.report-summary-card > strong {
+  color: var(--ink);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.report-summary-detail,
+.invoice-totals > p,
+.invoice-total-preview > p {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 10px 0 0;
+  color: var(--muted);
+}
+.report-summary-detail b,
+.invoice-totals strong,
+.invoice-total-preview strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.catalog-toolbar,
+.page-heading-actions {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.catalog-toolbar {
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.catalog-toolbar label,
+.form-card label,
+.modal-card label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+.catalog-search {
+  min-width: min(100%, 300px);
+}
+.catalog-toolbar input,
+.catalog-toolbar select,
+.form-card input,
+.form-card select,
+.form-card textarea,
+.modal-card input,
+.modal-card select,
+.modal-card textarea {
+  min-height: var(--control-height);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  padding: 9px 11px;
+  color: var(--ink);
+  font: inherit;
+}
+.form-card {
+  display: grid;
+  gap: 18px;
+}
+.form-card > label {
+  max-width: 480px;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.invoice-total-preview,
+.invoice-totals {
+  width: min(100%, 390px);
+  margin: 18px 0 0 auto;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.invoice-total-preview small {
+  display: block;
+  margin-top: 12px;
+  color: var(--muted);
+}
+.invoice-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.invoice-detail-grid .catalog-panel p {
+  margin: 8px 0;
+  color: var(--muted);
+}
+.invoice-detail-grid .catalog-panel strong {
+  color: var(--ink);
+}
+.catalog-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-top: 15px;
+  color: var(--muted);
+}
+.catalog-pagination > div {
+  display: flex;
+  gap: 8px;
+}
+.table-action {
+  border: 0;
+  background: transparent;
+  color: var(--forest);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.table-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.status-pill {
+  display: inline-flex;
+  border-radius: var(--radius-pill);
+  background: var(--mint);
+  padding: 4px 9px;
+  color: var(--forest-dark);
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.status-pill.status-warning {
+  background: var(--status-warning-bg);
+  color: var(--status-warning);
+}
+.modal-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  background: rgb(14 25 19 / 48%);
+  padding: 24px;
+}
+.modal-card {
+  width: min(100%, 520px);
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--paper);
+  box-shadow: 0 18px 60px rgb(17 35 24 / 24%);
+  padding: 24px;
+}
+.modal-card form {
+  display: grid;
+  gap: 14px;
+}
+.modal-card .form-actions {
+  display: flex;
+  flex-direction: row;
+}
+@media (max-width: 760px) {
+  .invoice-detail-grid,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .catalog-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .page-heading-actions {
+    width: 100%;
+  }
+}
+@media print {
+  .sidebar,
+  .topbar,
+  .page-heading-actions,
+  .modal-backdrop {
+    display: none !important;
+  }
+  .page-content {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  .catalog-panel {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+}
+
 @media (max-width: 620px) {
   .report-breakdowns {
     grid-template-columns: 1fr;

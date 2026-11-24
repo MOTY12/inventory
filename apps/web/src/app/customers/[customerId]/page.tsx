@@ -40,6 +40,34 @@ type AddressFields = Pick<
   | "shippingPostalCode"
   | "shippingCountryCode"
 >;
+type CustomerInvoice = {
+  id: string;
+  invoiceNumber: string | null;
+  status: string;
+  paymentStatus: string;
+  currency: string;
+  totalAmount: string;
+  amountPaid: string;
+  outstandingAmount: string;
+  isOverdue: boolean;
+};
+type CustomerFinancialSummary = {
+  currency: string;
+  invoiced: string;
+  paid: string;
+  outstanding: string;
+  overdue: string;
+}[];
+type CustomerPayment = {
+  id: string;
+  amount: string;
+  currency: string;
+  paymentMethod: string;
+  paymentDate: string;
+  paymentReference: string | null;
+  reversal: { reason: string } | null;
+  allocations: { invoice: { id: string; invoiceNumber: string | null } }[];
+};
 const addressFields: { key: keyof AddressFields; label: string }[] = [
   { key: "billingAddressLine1", label: "Billing street" },
   { key: "billingAddressLine2", label: "Billing street 2" },
@@ -92,6 +120,21 @@ export default function CustomerDetailPage() {
       actor: { email: string };
     }[]
   >([]);
+  const [financialSummary, setFinancialSummary] =
+    useState<CustomerFinancialSummary>([]);
+  const [financialInvoices, setFinancialInvoices] = useState<CustomerInvoice[]>(
+    [],
+  );
+  const [financialPayments, setFinancialPayments] = useState<CustomerPayment[]>(
+    [],
+  );
+  const canViewFinance = [
+    "OWNER",
+    "ADMIN",
+    "FINANCE",
+    "READ_ONLY",
+    "MEMBER",
+  ].includes(organization?.role ?? "");
   const canWrite = ["OWNER", "ADMIN", "MANAGER", "SALES"].includes(
     organization?.role ?? "",
   );
@@ -100,6 +143,9 @@ export default function CustomerDetailPage() {
     if (!organization) {
       setRow(null);
       setHistory([]);
+      setFinancialSummary([]);
+      setFinancialInvoices([]);
+      setFinancialPayments([]);
       setLoading(false);
       return;
     }
@@ -110,6 +156,27 @@ export default function CustomerDetailPage() {
         authenticatedRequest<typeof history>(`${api}/${customerId}/audit`),
       ]);
       if (version !== requestVersion.current) return;
+      if (canViewFinance) {
+        const [summary, invoices, payments] = await Promise.all([
+          authenticatedRequest<CustomerFinancialSummary>(
+            `${api}/${customerId}/financial-summary`,
+          ),
+          authenticatedRequest<CustomerInvoice[]>(
+            `${api}/${customerId}/invoices`,
+          ),
+          authenticatedRequest<CustomerPayment[]>(
+            `${api}/${customerId}/payments`,
+          ),
+        ]);
+        if (version !== requestVersion.current) return;
+        setFinancialSummary(summary);
+        setFinancialInvoices(invoices);
+        setFinancialPayments(payments);
+      } else {
+        setFinancialSummary([]);
+        setFinancialInvoices([]);
+        setFinancialPayments([]);
+      }
       setRow(customer);
       setName(customer.name);
       setType(customer.type);
@@ -140,7 +207,7 @@ export default function CustomerDetailPage() {
     } finally {
       if (version === requestVersion.current) setLoading(false);
     }
-  }, [authenticatedRequest, customerId, organization]);
+  }, [authenticatedRequest, canViewFinance, customerId, organization]);
   useEffect(() => {
     void Promise.resolve().then(load);
   }, [load]);
@@ -372,6 +439,75 @@ export default function CustomerDetailPage() {
                 <p>{row.notes || "No notes"}</p>
               </div>
             </div>
+          </section>
+          <section className="panel">
+            <h2>Financial history</h2>
+            {!canViewFinance ? (
+              <p>
+                Financial history is available to finance-authorized members.
+              </p>
+            ) : (
+              <>
+                {financialSummary.length === 0 ? (
+                  <p>No invoice activity recorded.</p>
+                ) : (
+                  <div className="form-grid">
+                    {financialSummary.map((amounts) => (
+                      <div key={amounts.currency}>
+                        <h3>{amounts.currency}</h3>
+                        <p>Invoiced: {amounts.invoiced}</p>
+                        <p>Collected: {amounts.paid}</p>
+                        <p>Outstanding: {amounts.outstanding}</p>
+                        <p>Overdue: {amounts.overdue}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {financialInvoices.length > 0 && (
+                  <ul>
+                    {financialInvoices.map((invoice) => (
+                      <li key={invoice.id}>
+                        <Link href={`/invoices/${invoice.id}`}>
+                          {invoice.invoiceNumber ?? "Draft invoice"}
+                        </Link>{" "}
+                        · {invoice.paymentStatus} · {invoice.totalAmount}{" "}
+                        {invoice.currency}
+                        {invoice.isOverdue ? " · OVERDUE" : ""}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <h3>Payments</h3>
+                {financialPayments.length === 0 ? (
+                  <p>No payments recorded.</p>
+                ) : (
+                  <ul>
+                    {financialPayments.map((payment) => (
+                      <li key={payment.id}>
+                        {new Date(payment.paymentDate).toLocaleDateString()} ·{" "}
+                        {payment.paymentMethod.replaceAll("_", " ")} ·{" "}
+                        {payment.currency} {payment.amount}
+                        {payment.paymentReference
+                          ? ` · ${payment.paymentReference}`
+                          : ""}
+                        {payment.reversal
+                          ? ` · REVERSED: ${payment.reversal.reason}`
+                          : ""}
+                        {payment.allocations.map(({ invoice }) => (
+                          <span key={invoice.id}>
+                            {" "}
+                            ·{" "}
+                            <Link href={`/invoices/${invoice.id}`}>
+                              {invoice.invoiceNumber ?? "Invoice"}
+                            </Link>
+                          </span>
+                        ))}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
           </section>
           <section className="panel">
             <h2>Activity</h2>

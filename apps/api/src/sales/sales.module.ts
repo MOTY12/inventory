@@ -7,13 +7,28 @@ import { CustomersController } from "./customers.controller";
 import { CustomersService } from "./customers.service";
 import { SalesOrdersController } from "./sales-orders.controller";
 import { SalesOrdersService } from "./sales-orders.service";
+import {
+  CustomerFinancialController,
+  CustomerPaymentsController,
+  InvoicesController,
+  TaxRatesController,
+} from "./invoices.controller";
+import { InvoicesService } from "./invoices.service";
 
 @Module({
   imports: [AuthModule, InventoryModule],
-  controllers: [CustomersController, SalesOrdersController],
+  controllers: [
+    CustomersController,
+    SalesOrdersController,
+    InvoicesController,
+    CustomerPaymentsController,
+    TaxRatesController,
+    CustomerFinancialController,
+  ],
   providers: [
     CustomersService,
     SalesOrdersService,
+    InvoicesService,
     OrganizationContextGuard,
     RoleCapabilityGuard,
   ],

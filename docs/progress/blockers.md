@@ -5,21 +5,20 @@
 ## Active verification gaps
 
 - **QUALITY-002 dependency audit:** `npm audit --omit=dev --audit-level=high` failed because `registry.npmjs.org` resolved as `ENOTFOUND`. Earlier installation output recorded seven lockfile advisories including three high, without details. QUALITY-002 remains IN_PROGRESS until current advisory state is known and dispositioned. Evidence is in `docs/security/tenant-isolation-review.md`.
-- **Prisma migration status:** Resolved for this checkpoint. Read-only `npx prisma migrate status --config prisma.config.ts` passed: 20 migrations found; schema up to date. No migration was applied.
+- **Prisma migration status:** Resolved. The additive SALES-004 migration was applied to local `inventory_dev`; `npx prisma migrate status --config prisma.config.ts` reports 21 migrations and database schema up to date. No reset or deletion occurred.
 
 - **QUALITY-001 authenticated workflow UAT:** INV-010's scanner component acceptance passed in headless Chrome: native Enter once, repeated quantity increment, rapid order, unknown-code feedback/no quantity change, recovery, focus, and no parent submit. The authenticated new-sales-order, PO-receiving, and sales-picking pages were not exercised end-to-end; track that broader manual/browser workflow evidence under QUALITY-001. INV-010's documented acceptance is complete.
+- **SALES-004 acceptance:** Explicit owner approval DEC-010 removes the financial-policy blocker. Backend and frontend workflows plus isolated PostgreSQL coverage are implemented, but authenticated browser/controller UAT, concurrent independent invoice numbering, void/tax-update edge cases and some database trigger cases remain. SALES-004 is IN_PROGRESS; REPORT-002 remains downstream until it is complete.
 - **Report performance:** All export types, queue/storage, private service download, retries and expiry passed isolated integration, but a representative large-tenant performance benchmark was not run.
 - **Dependency audit:** Current `npm audit --omit=dev --audit-level=high` could not reach `registry.npmjs.org` (`ENOTFOUND`). Earlier installation reported seven lockfile advisories (4 moderate, 3 high) without full advisory detail. No clean audit is claimed.
 - **Docker CLI:** `docker compose ps` is blocked by access to the Docker daemon socket. PostgreSQL, Redis and S3Mock endpoints were reachable and the isolated integration suites used them successfully; Docker health itself is not claimed for this session.
 - **QUALITY-003:** PostgreSQL, queue interruption/restart, pending-row dispatch, and generated-object backup/missing/restore rehearsals pass locally; measured timings are recorded in `docs/operations/backup-restore.md`. Production independent-account replication/encryption has not been configured or drilled. RPO/RTO and retention/residency/key policies require owner approval before closure.
-- **SALES-004 / REPORT-002:** SALES-004 is BLOCKED until owner approval resolves invoice timing/numbering, currency, tax, discounts/rounding, payment allocation/overpayment, correction and accounting-boundary rules. Proposal is in `docs/progress/decisions.md`; broad implementation authorization and the execution brief's recommendations do not approve these financial policies. REPORT-002 and QUALITY-001 remain downstream-gated.
-- **Current-session integration environment:** explicit PostgreSQL inventory test could not connect to configured port 5433 (`EPERM`); `docker compose ps` could not access the Docker daemon socket. A separate local postgres process listening on port 5432 does not establish the configured endpoint's health.
+- **SALES-004 verification:** Browser/control and live authenticated controller acceptance remain unavailable/unrun. PostgreSQL itself is reachable when granted local access; isolated SALES-004 integration passed.
 
 ## Completed verification in this session
 
-- Full `npm test` passed: 52 passed, 0 failed, 2 opt-in PostgreSQL suites skipped in that invocation; web tests passed 2/2. Local loopback permission allowed the API contract smoke, so the previously reported `listen EPERM` is no longer an active test blocker under that permission.
-- Opt-in PostgreSQL inventory/report tests passed 13/13, including recovery drill timings (worker restart 3,253 ms, pending dispatcher 105 ms, object backup/missing/restore 84 ms); auth/organization tests passed 10/10. Prisma status is 20/20. API `/api/v1/health/ready` returned status `ok` in prior verified session.
-- No application data was reset or deleted. Tests created and dropped only their isolated random schemas and removed the temporary export objects.
+- Full `npm test`: 57 passed, 0 failed, 3 opt-in PostgreSQL suites skipped; web tests 2/2. SALES-004 isolated PostgreSQL suite: 2 passed, 0 failed, 0 skipped. Typecheck, lint, format, Prisma validation, migration status (21/21), production build and diff check passed.
+- Migration deploy succeeded after an initial sandbox schema-engine failure. No application data was reset or deleted. The passing integration test created and dropped its own uniquely named temporary schema.
 
 ## Production hardening and policy gates
 

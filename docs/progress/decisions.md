@@ -18,17 +18,18 @@
 - Configurable deployment region; no production data-residency claim.
 
 ## Open decisions
-Remaining material decisions: initial customer segment, product name/branding, tax/invoice compliance, pricing/subscription limits, production hosting/data-residency commitments, MFA enforcement, RLS and support access. Use the defaults above only for reversible implementation; flag changes before customer commitments or changes to the security boundary.
+Remaining material decisions: initial customer segment, product name/branding, pricing/subscription limits, production hosting/data-residency commitments, MFA enforcement, RLS and support access. Statutory invoice fields/rates and production use remain subject to accountant/legal review; no compliance claim is made. Use the defaults above only for reversible implementation; flag changes before customer commitments or changes to the security boundary.
 
-## SALES-004 owner decision proposal (2026-11-24; approval pending)
+## SALES-004 owner approval (2026-11-24; DEC-010)
 
-The recommended MVP scope in the SALES-004 execution brief is not itself approval of financial or statutory policy. Before implementation, please approve or specify:
+The owner explicitly approved the following provisional MVP policies in the SALES-004 execution brief. They authorize implementation; they are not validated statutory/customer requirements:
 
-1. **Invoice timing and numbering:** issue manually from an eligible sales order; organization-wide sequential `INV-000001` numbering, no reuse after issue; confirm any fiscal-year reset/prefix requirement.
-2. **Currency and price basis:** one immutable currency per invoice inherited from the order; confirm whether line prices are tax-exclusive and whether multi-currency payment is disallowed.
-3. **Tax, discounts and rounding:** do not assume a statutory rate. Confirm supported tax types/inclusive-vs-exclusive treatment, invoice-level/line discounts, and the required currency rounding rule after accountant/legal review.
-4. **Payments:** manual records only (no gateway), exact-decimal positive amounts, multiple partial payments, explicit invoice allocation, same-currency only, reject overpayment; confirm supported payment methods and whether unallocated customer credits are out of scope.
-5. **Issued documents and corrections:** issued invoice snapshots are immutable; cancellation uses a void/credit-note policy and never recycles a number; payment corrections use an audited reversal entry, never edit/delete. Confirm whether only unpaid invoices may be voided and what document is required after payment.
-6. **Accounting/compliance boundary:** invoice/payment records are operational subledger evidence, not a general ledger or tax-compliance certification. Confirm this MVP boundary and require Nigerian accountant/legal review of statutory invoice fields before pilot use.
+1. Generate invoices manually from confirmed sales orders; organization-specific sequential `INV-000001` numbering; no automatic annual reset.
+2. One currency per invoice, inherited from its sales order.
+3. Configurable organization tax rates; tax-exclusive pricing; no hardcoded statutory rate.
+4. Line-level discounts using exact decimal calculations.
+5. Manual payment methods: cash, bank transfer, POS, card, cheque, and other; allow multiple partial payments and reject overpayment.
+6. Only unpaid issued invoices may be voided; paid corrections require the future credit workflow. Payment corrections use audited reversal entries rather than editing/deleting.
+7. Operational financial records only, not a general accounting system. Accountant/legal review is required before statutory production use.
 
-Until these decisions are approved, SALES-004 and dependent REPORT-002 remain blocked. No invoice/payment schema, tax calculation, numbering, or financial behavior has been implemented on the basis of this proposal.
+Reversible implementation defaults from the same approved brief: one active invoice per sales order; draft invoice amounts derive from ordered quantities and snapshotted order-line prices; tax rates are exact decimal percentages and tax is rounded half-up per line to the currency minor unit, falling back to two decimal places where no currency precision metadata exists; payment requests explicitly allocate the full payment to one invoice; only full payment reversals are supported; no unallocated customer-credit balance, gateway, currency conversion, or annual sequence reset. These details are engineering assumptions rather than owner-validated business/accounting requirements. Statutory fields, rates, rounding suitability and production compliance remain release-review items.
