@@ -16,6 +16,12 @@
 - **QUALITY-003:** PostgreSQL, queue interruption/restart, pending-row dispatch, and generated-object backup/missing/restore rehearsals pass locally; measured timings are recorded in `docs/operations/backup-restore.md`. Production independent-account replication/encryption has not been configured or drilled. RPO/RTO and retention/residency/key policies require owner approval before closure.
 - **SALES-004 verification:** Browser/control and live authenticated controller acceptance remain unavailable/unrun. PostgreSQL itself is reachable when granted local access; isolated SALES-004 integration passed.
 
+## 2026-11-24 REPORT-002 checkpoint correction
+
+- Four report detail APIs, UI sections/dashboard metrics, and four export types are implemented; additive migration `20261124150000_business_performance_exports` is applied, and local migration status is 22/22. Explicit isolated PostgreSQL/API suite passed 3/3. This supersedes earlier statements that no REPORT-002 rankings/export support or migration existed.
+- Remaining evidence gaps: new purchase analytics on non-empty PO/receipt fixtures; customer effective collections and reversal reconciliation; boundary/filter/security matrix; worker CSV value and revoked-finance download tests; EXPLAIN ANALYZE; authenticated browser acceptance.
+- Browser remains a real blocker for SALES-004 and REPORT-002 UAT: no local application/session was available in the current browser. Do not claim the workflow verified.
+
 ## Completed verification in this session
 
 - Current explicit SALES-004 plus REPORT-002 PostgreSQL suite: 3 passed, 0 failed, 0 skipped; it uses a uniquely named temporary schema. Workspace checks passed: `npm test` 59 API/shared pass, 0 fail, 3 opt-in suites skipped, web 2/2; typecheck, lint, format, production build, Prisma validation and diff check passed. Read-only migration status is 21/21. Migration deploy succeeded in prior work; no application data was reset or deleted.

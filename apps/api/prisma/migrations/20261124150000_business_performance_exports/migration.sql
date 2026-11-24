@@ -1,0 +1,5 @@
+-- Add report export types without rewriting existing export records.
+ALTER TYPE "ReportExportType" ADD VALUE IF NOT EXISTS 'SALES_PRODUCTS';
+ALTER TYPE "ReportExportType" ADD VALUE IF NOT EXISTS 'SALES_CUSTOMERS';
+ALTER TYPE "ReportExportType" ADD VALUE IF NOT EXISTS 'PURCHASE_PRODUCTS';
+ALTER TYPE "ReportExportType" ADD VALUE IF NOT EXISTS 'PURCHASE_SUPPLIERS';

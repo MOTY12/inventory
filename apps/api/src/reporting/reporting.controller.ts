@@ -150,6 +150,57 @@ export class ReportingController {
     return this.reports.purchasingOverview(request.organization!, query);
   }
 
+  @Get("sales/products")
+  @RequireCapabilities("reports:read", "finance:read")
+  @ApiOperation({
+    summary: "Unit- and currency-separated product sales performance",
+  })
+  salesProducts(
+    @Query() query: ReportFilterDto,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.reports.salesProductPerformance(request.organization!, query);
+  }
+
+  @Get("sales/customers")
+  @RequireCapabilities("reports:read", "finance:read")
+  @ApiOperation({
+    summary: "Customer sales and current receivables performance",
+  })
+  salesCustomers(
+    @Query() query: ReportFilterDto,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.reports.customerPerformance(request.organization!, query);
+  }
+
+  @Get("purchases/suppliers")
+  @RequireCapabilities("reports:read", "finance:read")
+  @ApiOperation({
+    summary: "Supplier purchase order and received value performance",
+  })
+  purchaseSuppliers(
+    @Query() query: ReportFilterDto,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.reports.supplierPerformance(request.organization!, query);
+  }
+
+  @Get("purchases/products")
+  @RequireCapabilities("reports:read", "finance:read")
+  @ApiOperation({
+    summary: "Unit- and currency-separated product purchasing performance",
+  })
+  purchaseProducts(
+    @Query() query: ReportFilterDto,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.reports.purchaseProductPerformance(
+      request.organization!,
+      query,
+    );
+  }
+
   @Get("sales/trends")
   @RequireCapabilities("reports:read", "finance:read")
   @ApiOperation({

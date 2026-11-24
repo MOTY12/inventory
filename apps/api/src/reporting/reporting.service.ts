@@ -1,13 +1,15 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
 import { Prisma } from "../generated/prisma/client";
-import { MembershipRole } from "../generated/prisma/enums";
+import { MembershipRole, ReportExportType } from "../generated/prisma/enums";
 import { PrismaService } from "../database/prisma.service";
 import type { OrganizationContext } from "../organizations/organization-context.guard";
 import type { LowStockListQueryDto } from "../inventory/reordering/reordering.dto";
+import { roleHasCapability } from "../organizations/access-policy";
 import { ReorderingService } from "../inventory/reordering/reordering.service";
 import type { ReportFilterDto } from "./reporting.dto";
 
@@ -39,13 +41,18 @@ export class ReportingService {
 
   async inventorySummary(context: OrganizationContext, query: ReportFilterDto) {
     this.validateDateRange(query);
+    await this.validateReportResources(context, query);
     const warehouses = await this.authorizedWarehouses(
       context,
       query.warehouse_id,
     );
     const cutoff = query.as_of ? this.asOfCutoff(query.as_of) : null;
     const pageWhere = this.productFilters(query);
-    const warehouseWhere = this.warehouseFilter(warehouses, "b.warehouse_id");
+    const warehouseWhere = this.warehouseFilter(
+      warehouses,
+      "b.warehouse_id",
+      query.branch_id,
+    );
 
     if (cutoff) {
       const cte = this.historicalSnapshotCte(
@@ -356,6 +363,7 @@ export class ReportingService {
     exportWarehouseScope?: string[],
   ) {
     this.validateDateRange(query);
+    await this.validateReportResources(context, query);
     const authorized = await this.authorizedWarehouses(
       context,
       query.warehouse_id,
@@ -456,9 +464,18 @@ export class ReportingService {
   async authorizeExport(
     context: OrganizationContext,
     query: ReportFilterDto,
-    reportType: "INVENTORY_SUMMARY" | "MOVEMENTS" | "VALUATION" | "LOW_STOCK",
+    reportType: ReportExportType,
   ) {
     this.validateDateRange(query);
+    await this.validateReportResources(context, query);
+    const financeExport =
+      reportType === ReportExportType.SALES_PRODUCTS ||
+      reportType === ReportExportType.SALES_CUSTOMERS ||
+      reportType === ReportExportType.PURCHASE_PRODUCTS ||
+      reportType === ReportExportType.PURCHASE_SUPPLIERS;
+    if (financeExport && !roleHasCapability(context.role, "finance:read")) {
+      throw new ForbiddenException("Financial export requires finance:read");
+    }
     if (reportType === "LOW_STOCK" && (query.as_of || query.from || query.to)) {
       throw new BadRequestException(
         "Low-stock alerts are current snapshots and do not support date cutoffs",
@@ -494,6 +511,7 @@ export class ReportingService {
 
   async salesOverview(context: OrganizationContext, query: ReportFilterDto) {
     this.validateDateRange(query);
+    await this.validateReportResources(context, query);
     if (
       query.status &&
       ![
@@ -521,7 +539,11 @@ export class ReportingService {
         as_of: new Date().toISOString(),
         balance_basis: "current_state",
       };
-    const warehouseFilter = this.warehouseFilter(warehouses, "so.warehouse_id");
+    const warehouseFilter = this.warehouseFilter(
+      warehouses,
+      "so.warehouse_id",
+      query.branch_id,
+    );
     const customerFilter = query.customer_id
       ? Prisma.sql`AND so.customer_id=${query.customer_id}::uuid`
       : Prisma.empty;
@@ -630,11 +652,374 @@ export class ReportingService {
     };
   }
 
+  async salesProductPerformance(
+    context: OrganizationContext,
+    query: ReportFilterDto,
+  ) {
+    this.validateDateRange(query);
+    await this.validateReportResources(context, query);
+    const warehouses = await this.authorizedWarehouses(
+      context,
+      query.warehouse_id,
+    );
+    if (warehouses?.length === 0) return this.emptyPage(query);
+    const warehouseFilter = this.warehouseFilter(
+      warehouses,
+      "so.warehouse_id",
+      query.branch_id,
+    );
+    const branchFilter = query.branch_id
+      ? Prisma.sql`AND w.branch_id=${query.branch_id}::uuid`
+      : Prisma.empty;
+    const categoryFilter = query.category_id
+      ? Prisma.sql`AND p.category_id=${query.category_id}::uuid`
+      : Prisma.empty;
+    const productFilter = query.product_id
+      ? Prisma.sql`AND p.id=${query.product_id}::uuid`
+      : Prisma.empty;
+    const customerFilter = query.customer_id
+      ? Prisma.sql`AND so.customer_id=${query.customer_id}::uuid`
+      : Prisma.empty;
+    const currencyFilter = query.currency
+      ? Prisma.sql`AND so.currency=${query.currency}`
+      : Prisma.empty;
+    const searchFilter = query.q
+      ? Prisma.sql`AND (p.name ILIKE ${`%${query.q}%`} OR p.sku ILIKE ${`%${query.q}%`})`
+      : Prisma.empty;
+    const from = query.from ? new Date(query.from) : null;
+    const to = query.to ? this.endOfUtcDay(query.to) : null;
+    const statusFilter = query.status
+      ? Prisma.sql`AND so.status=${query.status}::"SalesOrderStatus"`
+      : Prisma.empty;
+    const data = await this.prisma.$queryRaw<
+      Record<string, unknown>[]
+    >(Prisma.sql`
+      WITH orders AS (
+        SELECT so.organization_id,so.currency,sol.product_id,sol.unit_code,
+          COUNT(DISTINCT so.id)::bigint AS order_count,
+          SUM(sol.ordered_quantity) AS ordered_quantity,
+          SUM(sol.fulfilled_quantity) AS fulfilled_quantity,
+          SUM(sol.line_total) FILTER (WHERE so.status<>'CANCELLED') AS order_value
+        FROM sales_orders so JOIN sales_order_lines sol ON sol.organization_id=so.organization_id AND sol.sales_order_id=so.id
+        JOIN warehouses w ON w.organization_id=so.organization_id AND w.id=so.warehouse_id
+        JOIN products p ON p.organization_id=sol.organization_id AND p.id=sol.product_id
+        WHERE so.organization_id=${context.organizationId}::uuid ${warehouseFilter} ${branchFilter}
+          ${categoryFilter} ${productFilter} ${customerFilter} ${currencyFilter} ${searchFilter}
+          ${from ? Prisma.sql`AND so.order_date>=${from}::date` : Prisma.empty}
+          ${to ? Prisma.sql`AND so.order_date<=${to}::date` : Prisma.empty} ${statusFilter}
+        GROUP BY so.organization_id,so.currency,sol.product_id,sol.unit_code
+      ), invoices AS (
+        SELECT i.organization_id,i.currency,il.product_id,il.unit_snapshot AS unit_code,
+          SUM(il.quantity) AS invoiced_quantity,SUM(il.line_total) AS invoice_value,
+          SUM(il.discount_amount) AS discount_amount,SUM(il.tax_amount) AS tax_amount
+        FROM invoices i JOIN invoice_lines il ON il.organization_id=i.organization_id AND il.invoice_id=i.id
+        JOIN sales_orders so ON so.organization_id=i.organization_id AND so.id=i.sales_order_id
+        JOIN warehouses w ON w.organization_id=so.organization_id AND w.id=so.warehouse_id
+        JOIN products p ON p.organization_id=il.organization_id AND p.id=il.product_id
+        WHERE i.organization_id=${context.organizationId}::uuid AND i.status='ISSUED' ${warehouseFilter} ${branchFilter}
+          ${categoryFilter} ${productFilter} ${customerFilter} ${currencyFilter} ${searchFilter}
+          ${from ? Prisma.sql`AND i.issue_date>=${from}::date` : Prisma.empty}
+          ${to ? Prisma.sql`AND i.issue_date<=${to}::date` : Prisma.empty}
+        GROUP BY i.organization_id,i.currency,il.product_id,il.unit_snapshot
+      ), combined AS (
+        SELECT COALESCE(o.product_id,iv.product_id) AS product_id,
+          COALESCE(o.currency,iv.currency) AS currency,COALESCE(o.unit_code,iv.unit_code) AS unit_code,
+          COALESCE(o.order_count,0)::bigint AS order_count,COALESCE(o.ordered_quantity,0::numeric) AS ordered_quantity,
+          COALESCE(o.fulfilled_quantity,0::numeric) AS fulfilled_quantity,COALESCE(o.order_value,0::numeric) AS order_value,
+          COALESCE(iv.invoiced_quantity,0::numeric) AS invoiced_quantity,COALESCE(iv.invoice_value,0::numeric) AS invoice_value,
+          COALESCE(iv.discount_amount,0::numeric) AS discount_amount,COALESCE(iv.tax_amount,0::numeric) AS tax_amount
+        FROM orders o FULL OUTER JOIN invoices iv ON iv.organization_id=o.organization_id AND iv.product_id=o.product_id AND iv.currency=o.currency AND iv.unit_code=o.unit_code
+      )
+      SELECT x.*,p.name AS product_name,p.sku,c.id AS category_id,c.name AS category_name,
+        COUNT(*) OVER()::bigint AS total
+      FROM combined x JOIN products p ON p.organization_id=${context.organizationId}::uuid AND p.id=x.product_id
+      LEFT JOIN categories c ON c.organization_id=p.organization_id AND c.id=p.category_id
+      ORDER BY ${this.salesProductSort(query.sort_by)}
+      LIMIT ${query.page_size} OFFSET ${(query.page - 1) * query.page_size}
+    `);
+    const total = Number(data[0]?.total ?? 0);
+    return {
+      data: data.map((row) => this.jsonSafeRow(row)),
+      total,
+      page: query.page,
+      page_size: query.page_size,
+    };
+  }
+
+  async customerPerformance(
+    context: OrganizationContext,
+    query: ReportFilterDto,
+  ) {
+    this.validateDateRange(query);
+    await this.validateReportResources(context, query);
+    const warehouses = await this.authorizedWarehouses(
+      context,
+      query.warehouse_id,
+    );
+    if (warehouses?.length === 0) return this.emptyPage(query);
+    const warehouseFilter = this.warehouseFilter(
+      warehouses,
+      "so.warehouse_id",
+      query.branch_id,
+    );
+    const branchFilter = query.branch_id
+      ? Prisma.sql`AND w.branch_id=${query.branch_id}::uuid`
+      : Prisma.empty;
+    const customerFilter = query.customer_id
+      ? Prisma.sql`AND cu.id=${query.customer_id}::uuid`
+      : Prisma.empty;
+    const currencyFilter = query.currency
+      ? Prisma.sql`AND so.currency=${query.currency}`
+      : Prisma.empty;
+    const searchFilter = query.q
+      ? Prisma.sql`AND cu.name ILIKE ${`%${query.q}%`}`
+      : Prisma.empty;
+    const from = query.from ? new Date(query.from) : null;
+    const to = query.to ? this.endOfUtcDay(query.to) : null;
+    const statusFilter = query.status
+      ? Prisma.sql`AND so.status=${query.status}::"SalesOrderStatus"`
+      : Prisma.empty;
+    const data = await this.prisma.$queryRaw<
+      Record<string, unknown>[]
+    >(Prisma.sql`
+      WITH order_metrics AS (
+        SELECT so.customer_id,so.currency,COUNT(*)::bigint AS sales_order_count,
+          COUNT(*) FILTER (WHERE so.status IN ('CONFIRMED','PARTIALLY_FULFILLED','FULFILLED'))::bigint AS confirmed_order_count,
+          COUNT(*) FILTER (WHERE so.status='FULFILLED')::bigint AS fulfilled_order_count,
+          SUM(so.total) FILTER (WHERE so.status<>'CANCELLED') AS order_value,MAX(so.order_date) AS last_order_date
+        FROM sales_orders so JOIN warehouses w ON w.organization_id=so.organization_id AND w.id=so.warehouse_id
+        JOIN customers cu ON cu.organization_id=so.organization_id AND cu.id=so.customer_id
+        WHERE so.organization_id=${context.organizationId}::uuid ${warehouseFilter} ${branchFilter} ${customerFilter} ${currencyFilter} ${searchFilter}
+          ${from ? Prisma.sql`AND so.order_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND so.order_date<=${to}::date` : Prisma.empty} ${statusFilter}
+        GROUP BY so.customer_id,so.currency
+      ), invoice_metrics AS (
+        SELECT i.customer_id,i.currency,SUM(i.total_amount) AS invoiced_value
+        FROM invoices i JOIN sales_orders so ON so.organization_id=i.organization_id AND so.id=i.sales_order_id
+        JOIN warehouses w ON w.organization_id=so.organization_id AND w.id=so.warehouse_id
+        JOIN customers cu ON cu.organization_id=i.organization_id AND cu.id=i.customer_id
+        WHERE i.organization_id=${context.organizationId}::uuid AND i.status='ISSUED' ${warehouseFilter} ${branchFilter} ${customerFilter} ${currencyFilter} ${searchFilter}
+          ${from ? Prisma.sql`AND i.issue_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND i.issue_date<=${to}::date` : Prisma.empty}
+        GROUP BY i.customer_id,i.currency
+      ), invoice_balances AS (
+        SELECT i.id,i.customer_id,i.currency,i.due_date,i.total_amount-COALESCE(a.paid,0::numeric) AS outstanding
+        FROM invoices i JOIN sales_orders so ON so.organization_id=i.organization_id AND so.id=i.sales_order_id
+        JOIN warehouses w ON w.organization_id=so.organization_id AND w.id=so.warehouse_id
+        JOIN customers cu ON cu.organization_id=i.organization_id AND cu.id=i.customer_id
+        LEFT JOIN LATERAL (
+          SELECT SUM(pa.amount-CASE WHEN pr.id IS NULL THEN 0::numeric ELSE pr.amount END) AS paid
+          FROM payment_allocations pa JOIN customer_payments cp ON cp.organization_id=pa.organization_id AND cp.id=pa.payment_id
+          LEFT JOIN payment_reversals pr ON pr.organization_id=cp.organization_id AND pr.payment_id=cp.id
+          WHERE pa.organization_id=i.organization_id AND pa.invoice_id=i.id
+        ) a ON TRUE
+        WHERE i.organization_id=${context.organizationId}::uuid AND i.status='ISSUED' ${warehouseFilter} ${branchFilter} ${customerFilter} ${currencyFilter} ${searchFilter}
+      ), receivable_metrics AS (
+        SELECT customer_id,currency,SUM(outstanding) FILTER (WHERE outstanding>0) AS outstanding,
+          SUM(outstanding) FILTER (WHERE outstanding>0 AND due_date<CURRENT_DATE) AS overdue
+        FROM invoice_balances GROUP BY customer_id,currency
+      ), payment_metrics AS (
+        SELECT i.customer_id,p.currency,SUM(p.amount) FILTER (WHERE pr.id IS NULL) AS effective_payments
+        FROM customer_payments p JOIN payment_allocations pa ON pa.organization_id=p.organization_id AND pa.payment_id=p.id
+        JOIN invoices i ON i.organization_id=pa.organization_id AND i.id=pa.invoice_id
+        JOIN sales_orders so ON so.organization_id=i.organization_id AND so.id=i.sales_order_id
+        JOIN warehouses w ON w.organization_id=so.organization_id AND w.id=so.warehouse_id
+        JOIN customers cu ON cu.organization_id=i.organization_id AND cu.id=i.customer_id
+        LEFT JOIN payment_reversals pr ON pr.organization_id=p.organization_id AND pr.payment_id=p.id
+        WHERE p.organization_id=${context.organizationId}::uuid AND i.status='ISSUED' ${warehouseFilter} ${branchFilter} ${customerFilter} ${currencyFilter} ${searchFilter}
+          ${from ? Prisma.sql`AND p.payment_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND p.payment_date<=${to}::date` : Prisma.empty}
+        GROUP BY i.customer_id,p.currency
+      ), combined AS (
+        SELECT COALESCE(o.customer_id,i.customer_id,r.customer_id,pm.customer_id) AS customer_id,
+          COALESCE(o.currency,i.currency,r.currency,pm.currency) AS currency,o.sales_order_count,o.confirmed_order_count,o.fulfilled_order_count,o.order_value,o.last_order_date,
+          i.invoiced_value,pm.effective_payments,r.outstanding,r.overdue
+        FROM order_metrics o FULL OUTER JOIN invoice_metrics i ON i.customer_id=o.customer_id AND i.currency=o.currency
+        FULL OUTER JOIN receivable_metrics r ON r.customer_id=COALESCE(o.customer_id,i.customer_id) AND r.currency=COALESCE(o.currency,i.currency)
+        FULL OUTER JOIN payment_metrics pm ON pm.customer_id=COALESCE(o.customer_id,i.customer_id,r.customer_id) AND pm.currency=COALESCE(o.currency,i.currency,r.currency)
+      )
+      SELECT c.*,cu.name AS customer_name,COUNT(*) OVER()::bigint AS total
+      FROM combined c JOIN customers cu ON cu.organization_id=${context.organizationId}::uuid AND cu.id=c.customer_id
+      ORDER BY ${this.customerSort(query.sort_by)} LIMIT ${query.page_size} OFFSET ${(query.page - 1) * query.page_size}
+    `);
+    const total = Number(data[0]?.total ?? 0);
+    return {
+      data: data.map((row) => this.jsonSafeRow(row)),
+      total,
+      page: query.page,
+      page_size: query.page_size,
+      balance_basis: "current_state",
+    };
+  }
+
+  async supplierPerformance(
+    context: OrganizationContext,
+    query: ReportFilterDto,
+  ) {
+    this.validateDateRange(query);
+    await this.validateReportResources(context, query);
+    const warehouses = await this.authorizedWarehouses(
+      context,
+      query.warehouse_id,
+    );
+    if (warehouses?.length === 0) return this.emptyPage(query);
+    const warehouseFilter = this.warehouseFilter(
+      warehouses,
+      "po.warehouse_id",
+      query.branch_id,
+    );
+    const branchFilter = query.branch_id
+      ? Prisma.sql`AND w.branch_id=${query.branch_id}::uuid`
+      : Prisma.empty;
+    const supplierFilter = query.supplier_id
+      ? Prisma.sql`AND s.id=${query.supplier_id}::uuid`
+      : Prisma.empty;
+    const currencyFilter = query.currency
+      ? Prisma.sql`AND po.currency=${query.currency}`
+      : Prisma.empty;
+    const searchFilter = query.q
+      ? Prisma.sql`AND s.name ILIKE ${`%${query.q}%`}`
+      : Prisma.empty;
+    const from = query.from ? new Date(query.from) : null;
+    const to = query.to ? this.endOfUtcDay(query.to) : null;
+    const statusFilter = query.status
+      ? Prisma.sql`AND po.status=${query.status}::"PurchaseOrderStatus"`
+      : Prisma.empty;
+    const data = await this.prisma.$queryRaw<
+      Record<string, unknown>[]
+    >(Prisma.sql`
+      WITH orders AS (
+        SELECT po.supplier_id,po.currency,COUNT(*)::bigint AS purchase_order_count,
+          COUNT(*) FILTER (WHERE po.status IN ('SUBMITTED'))::bigint AS open_purchase_orders,
+          COUNT(*) FILTER (WHERE po.status='PARTIALLY_RECEIVED')::bigint AS partially_received_purchase_orders,
+          COUNT(*) FILTER (WHERE po.status='RECEIVED')::bigint AS fully_received_purchase_orders,
+          COUNT(*) FILTER (WHERE po.status='CANCELLED')::bigint AS cancelled_purchase_orders,
+          SUM(po.subtotal) FILTER (WHERE po.status<>'CANCELLED') AS ordered_value,MAX(po.order_date) AS last_purchase_order_date
+        FROM purchase_orders po JOIN warehouses w ON w.organization_id=po.organization_id AND w.id=po.warehouse_id
+        JOIN suppliers s ON s.organization_id=po.organization_id AND s.id=po.supplier_id
+        WHERE po.organization_id=${context.organizationId}::uuid ${warehouseFilter} ${branchFilter} ${supplierFilter} ${currencyFilter} ${searchFilter}
+          ${from ? Prisma.sql`AND po.order_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND po.order_date<=${to}::date` : Prisma.empty} ${statusFilter}
+        GROUP BY po.supplier_id,po.currency
+      ), received AS (
+        SELECT po.supplier_id,po.currency,SUM(grl.quantity*pol.unit_cost) AS received_value
+        FROM goods_receipts gr JOIN goods_receipt_lines grl ON grl.organization_id=gr.organization_id AND grl.receipt_id=gr.id
+        JOIN purchase_orders po ON po.organization_id=gr.organization_id AND po.id=gr.purchase_order_id
+        JOIN purchase_order_lines pol ON pol.organization_id=grl.organization_id AND pol.id=grl.purchase_order_line_id
+        JOIN warehouses w ON w.organization_id=po.organization_id AND w.id=po.warehouse_id
+        JOIN suppliers s ON s.organization_id=po.organization_id AND s.id=po.supplier_id
+        WHERE po.organization_id=${context.organizationId}::uuid ${warehouseFilter} ${branchFilter} ${supplierFilter} ${currencyFilter} ${searchFilter}
+          ${from ? Prisma.sql`AND po.order_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND po.order_date<=${to}::date` : Prisma.empty} ${statusFilter}
+          ${from ? Prisma.sql`AND gr.received_at>=${from}` : Prisma.empty} ${to ? Prisma.sql`AND gr.received_at<=${to}` : Prisma.empty}
+        GROUP BY po.supplier_id,po.currency
+      )
+      SELECT o.*,s.name AS supplier_name,COALESCE(r.received_value,0::numeric) AS received_value,
+        GREATEST(o.ordered_value-COALESCE(r.received_value,0::numeric),0::numeric) AS outstanding_order_value,
+        COUNT(*) OVER()::bigint AS total
+      FROM orders o JOIN suppliers s ON s.organization_id=${context.organizationId}::uuid AND s.id=o.supplier_id
+      LEFT JOIN received r ON r.supplier_id=o.supplier_id AND r.currency=o.currency
+      ORDER BY ${this.supplierSort(query.purchasing_sort_by)} LIMIT ${query.page_size} OFFSET ${(query.page - 1) * query.page_size}
+    `);
+    const total = Number(data[0]?.total ?? 0);
+    return {
+      data: data.map((row) => this.jsonSafeRow(row)),
+      total,
+      page: query.page,
+      page_size: query.page_size,
+      outstanding_value_is_payable: false,
+    };
+  }
+
+  async purchaseProductPerformance(
+    context: OrganizationContext,
+    query: ReportFilterDto,
+  ) {
+    this.validateDateRange(query);
+    await this.validateReportResources(context, query);
+    const warehouses = await this.authorizedWarehouses(
+      context,
+      query.warehouse_id,
+    );
+    if (warehouses?.length === 0) return this.emptyPage(query);
+    const warehouseFilter = this.warehouseFilter(
+      warehouses,
+      "po.warehouse_id",
+      query.branch_id,
+    );
+    const branchFilter = query.branch_id
+      ? Prisma.sql`AND w.branch_id=${query.branch_id}::uuid`
+      : Prisma.empty;
+    const supplierFilter = query.supplier_id
+      ? Prisma.sql`AND po.supplier_id=${query.supplier_id}::uuid`
+      : Prisma.empty;
+    const productFilter = query.product_id
+      ? Prisma.sql`AND p.id=${query.product_id}::uuid`
+      : Prisma.empty;
+    const categoryFilter = query.category_id
+      ? Prisma.sql`AND p.category_id=${query.category_id}::uuid`
+      : Prisma.empty;
+    const currencyFilter = query.currency
+      ? Prisma.sql`AND po.currency=${query.currency}`
+      : Prisma.empty;
+    const searchFilter = query.q
+      ? Prisma.sql`AND (p.name ILIKE ${`%${query.q}%`} OR p.sku ILIKE ${`%${query.q}%`})`
+      : Prisma.empty;
+    const from = query.from ? new Date(query.from) : null;
+    const to = query.to ? this.endOfUtcDay(query.to) : null;
+    const statusFilter = query.status
+      ? Prisma.sql`AND po.status=${query.status}::"PurchaseOrderStatus"`
+      : Prisma.empty;
+    const data = await this.prisma.$queryRaw<
+      Record<string, unknown>[]
+    >(Prisma.sql`
+      WITH ordered AS (
+        SELECT pol.product_id,u.code AS unit_code,po.currency,COUNT(DISTINCT po.id)::bigint AS purchase_order_count,
+          SUM(pol.ordered_quantity) AS ordered_quantity,
+          SUM(pol.ordered_quantity*pol.unit_cost) FILTER (WHERE po.status<>'CANCELLED') AS order_value,
+          SUM(GREATEST(pol.ordered_quantity-pol.received_quantity,0::numeric)) FILTER (WHERE po.status NOT IN ('CANCELLED','RECEIVED')) AS outstanding_quantity,
+          SUM(GREATEST(pol.ordered_quantity-pol.received_quantity,0::numeric)*pol.unit_cost) FILTER (WHERE po.status NOT IN ('CANCELLED','RECEIVED')) AS outstanding_value
+        FROM purchase_orders po JOIN purchase_order_lines pol ON pol.organization_id=po.organization_id AND pol.purchase_order_id=po.id
+        JOIN units u ON u.organization_id=pol.organization_id AND u.id=pol.unit_id
+        JOIN products p ON p.organization_id=pol.organization_id AND p.id=pol.product_id
+        JOIN warehouses w ON w.organization_id=po.organization_id AND w.id=po.warehouse_id
+        WHERE po.organization_id=${context.organizationId}::uuid ${warehouseFilter} ${branchFilter} ${supplierFilter} ${productFilter} ${categoryFilter} ${currencyFilter} ${searchFilter}
+          ${from ? Prisma.sql`AND po.order_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND po.order_date<=${to}::date` : Prisma.empty} ${statusFilter}
+        GROUP BY pol.product_id,u.code,po.currency
+      ), received AS (
+        SELECT pol.product_id,u.code AS unit_code,po.currency,SUM(grl.quantity) AS received_quantity,SUM(grl.quantity*pol.unit_cost) AS received_value
+        FROM goods_receipts gr JOIN goods_receipt_lines grl ON grl.organization_id=gr.organization_id AND grl.receipt_id=gr.id
+        JOIN purchase_orders po ON po.organization_id=gr.organization_id AND po.id=gr.purchase_order_id
+        JOIN purchase_order_lines pol ON pol.organization_id=grl.organization_id AND pol.id=grl.purchase_order_line_id
+        JOIN units u ON u.organization_id=pol.organization_id AND u.id=pol.unit_id
+        JOIN products p ON p.organization_id=pol.organization_id AND p.id=pol.product_id
+        JOIN warehouses w ON w.organization_id=po.organization_id AND w.id=po.warehouse_id
+        WHERE po.organization_id=${context.organizationId}::uuid ${warehouseFilter} ${branchFilter} ${supplierFilter} ${productFilter} ${categoryFilter} ${currencyFilter} ${searchFilter}
+          ${from ? Prisma.sql`AND po.order_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND po.order_date<=${to}::date` : Prisma.empty} ${statusFilter}
+          ${from ? Prisma.sql`AND gr.received_at>=${from}` : Prisma.empty} ${to ? Prisma.sql`AND gr.received_at<=${to}` : Prisma.empty}
+        GROUP BY pol.product_id,u.code,po.currency
+      ), combined AS (
+        SELECT COALESCE(o.product_id,r.product_id) AS product_id,COALESCE(o.unit_code,r.unit_code) AS unit_code,COALESCE(o.currency,r.currency) AS currency,
+          COALESCE(o.purchase_order_count,0)::bigint AS purchase_order_count,COALESCE(o.ordered_quantity,0::numeric) AS ordered_quantity,
+          COALESCE(r.received_quantity,0::numeric) AS received_quantity,COALESCE(o.outstanding_quantity,0::numeric) AS outstanding_quantity,
+          COALESCE(o.order_value,0::numeric) AS order_value,COALESCE(r.received_value,0::numeric) AS received_value,COALESCE(o.outstanding_value,0::numeric) AS outstanding_value
+        FROM ordered o FULL OUTER JOIN received r ON r.product_id=o.product_id AND r.unit_code=o.unit_code AND r.currency=o.currency
+      )
+      SELECT x.*,p.name AS product_name,p.sku,c.id AS category_id,c.name AS category_name,COUNT(*) OVER()::bigint AS total
+      FROM combined x JOIN products p ON p.organization_id=${context.organizationId}::uuid AND p.id=x.product_id
+      LEFT JOIN categories c ON c.organization_id=p.organization_id AND c.id=p.category_id
+      ORDER BY ${this.purchaseProductSort(query.purchasing_sort_by)} LIMIT ${query.page_size} OFFSET ${(query.page - 1) * query.page_size}
+    `);
+    const total = Number(data[0]?.total ?? 0);
+    return {
+      data: data.map((row) => this.jsonSafeRow(row)),
+      total,
+      page: query.page,
+      page_size: query.page_size,
+    };
+  }
+
   async purchasingOverview(
     context: OrganizationContext,
     query: ReportFilterDto,
   ) {
     this.validateDateRange(query);
+    await this.validateReportResources(context, query);
     if (
       query.status &&
       ![
@@ -660,7 +1045,11 @@ export class ReportingService {
         outstanding: [],
         as_of: new Date().toISOString(),
       };
-    const warehouseFilter = this.warehouseFilter(warehouses, "po.warehouse_id");
+    const warehouseFilter = this.warehouseFilter(
+      warehouses,
+      "po.warehouse_id",
+      query.branch_id,
+    );
     const supplierFilter = query.supplier_id
       ? Prisma.sql`AND po.supplier_id=${query.supplier_id}::uuid`
       : Prisma.empty;
@@ -733,6 +1122,7 @@ export class ReportingService {
 
   async salesTrends(context: OrganizationContext, query: ReportFilterDto) {
     this.validateDateRange(query);
+    await this.validateReportResources(context, query);
     const warehouses = await this.authorizedWarehouses(
       context,
       query.warehouse_id,
@@ -746,7 +1136,11 @@ export class ReportingService {
         collections: [],
       };
     const bucket = query.period ?? "day";
-    const warehouseFilter = this.warehouseFilter(warehouses, "so.warehouse_id");
+    const warehouseFilter = this.warehouseFilter(
+      warehouses,
+      "so.warehouse_id",
+      query.branch_id,
+    );
     const customerFilter = query.customer_id
       ? Prisma.sql`AND so.customer_id=${query.customer_id}::uuid`
       : Prisma.empty;
@@ -831,6 +1225,7 @@ export class ReportingService {
 
   async purchasingTrends(context: OrganizationContext, query: ReportFilterDto) {
     this.validateDateRange(query);
+    await this.validateReportResources(context, query);
     const warehouses = await this.authorizedWarehouses(
       context,
       query.warehouse_id,
@@ -838,7 +1233,11 @@ export class ReportingService {
     if (warehouses?.length === 0)
       return { period: query.period ?? "day", orders: [], received: [] };
     const bucket = query.period ?? "day";
-    const warehouseFilter = this.warehouseFilter(warehouses, "po.warehouse_id");
+    const warehouseFilter = this.warehouseFilter(
+      warehouses,
+      "po.warehouse_id",
+      query.branch_id,
+    );
     const supplierFilter = query.supplier_id
       ? Prisma.sql`AND po.supplier_id=${query.supplier_id}::uuid`
       : Prisma.empty;
@@ -885,6 +1284,7 @@ export class ReportingService {
 
   async receivablesAging(context: OrganizationContext, query: ReportFilterDto) {
     this.validateDateRange(query);
+    await this.validateReportResources(context, query);
     const warehouses = await this.authorizedWarehouses(
       context,
       query.warehouse_id,
@@ -895,7 +1295,11 @@ export class ReportingService {
         basis: "current_state",
         data: [],
       };
-    const warehouseFilter = this.warehouseFilter(warehouses, "so.warehouse_id");
+    const warehouseFilter = this.warehouseFilter(
+      warehouses,
+      "so.warehouse_id",
+      query.branch_id,
+    );
     const customerFilter = query.customer_id
       ? Prisma.sql`AND i.customer_id=${query.customer_id}::uuid`
       : Prisma.empty;
@@ -938,6 +1342,113 @@ export class ReportingService {
         no_due_date: Number(row.no_due_date),
       })),
     };
+  }
+
+  private salesProductSort(sort?: ReportFilterDto["sort_by"]): Prisma.Sql {
+    switch (sort) {
+      case "ordered_quantity":
+        return Prisma.sql`x.ordered_quantity DESC,p.name ASC,p.id ASC,x.currency ASC,x.unit_code ASC`;
+      case "fulfilled_quantity":
+        return Prisma.sql`x.fulfilled_quantity DESC,p.name ASC,p.id ASC,x.currency ASC,x.unit_code ASC`;
+      case "order_count":
+        return Prisma.sql`x.order_count DESC,p.name ASC,p.id ASC,x.currency ASC,x.unit_code ASC`;
+      case "name":
+        return Prisma.sql`p.name ASC,p.id ASC,x.currency ASC,x.unit_code ASC`;
+      default:
+        return Prisma.sql`x.invoice_value DESC,p.name ASC,p.id ASC,x.currency ASC,x.unit_code ASC`;
+    }
+  }
+
+  private jsonSafeRow(row: Record<string, unknown>) {
+    return Object.fromEntries(
+      Object.entries(row)
+        .filter(([key]) => key !== "total")
+        .map(([key, value]) => [
+          key,
+          typeof value === "bigint" ? Number(value) : value,
+        ]),
+    );
+  }
+
+  private customerSort(sort?: ReportFilterDto["sort_by"]): Prisma.Sql {
+    if (sort === "name")
+      return Prisma.sql`cu.name ASC,cu.id ASC,c.currency ASC`;
+    if (sort === "order_count")
+      return Prisma.sql`COALESCE(c.sales_order_count,0) DESC,cu.name ASC,cu.id ASC,c.currency ASC`;
+    return Prisma.sql`COALESCE(c.invoiced_value,0::numeric) DESC,cu.name ASC,cu.id ASC,c.currency ASC`;
+  }
+
+  private supplierSort(
+    sort?: ReportFilterDto["purchasing_sort_by"],
+  ): Prisma.Sql {
+    if (sort === "name") return Prisma.sql`s.name ASC,s.id ASC,o.currency ASC`;
+    if (sort === "received_value")
+      return Prisma.sql`COALESCE(r.received_value,0::numeric) DESC,s.name ASC,s.id ASC,o.currency ASC`;
+    if (sort === "order_count")
+      return Prisma.sql`o.purchase_order_count DESC,s.name ASC,s.id ASC,o.currency ASC`;
+    return Prisma.sql`o.ordered_value DESC NULLS LAST,s.name ASC,s.id ASC,o.currency ASC`;
+  }
+
+  private purchaseProductSort(
+    sort?: ReportFilterDto["purchasing_sort_by"],
+  ): Prisma.Sql {
+    if (sort === "received_value")
+      return Prisma.sql`x.received_value DESC,p.name ASC,p.id ASC,x.currency ASC,x.unit_code ASC`;
+    if (sort === "order_count")
+      return Prisma.sql`x.purchase_order_count DESC,p.name ASC,p.id ASC,x.currency ASC,x.unit_code ASC`;
+    if (sort === "name")
+      return Prisma.sql`p.name ASC,p.id ASC,x.currency ASC,x.unit_code ASC`;
+    return Prisma.sql`x.order_value DESC NULLS LAST,p.name ASC,p.id ASC,x.currency ASC,x.unit_code ASC`;
+  }
+
+  private async validateReportResources(
+    context: OrganizationContext,
+    query: ReportFilterDto,
+  ) {
+    const checks: Array<
+      [string | undefined, (id: string) => Promise<boolean>]
+    > = [
+      [
+        query.branch_id,
+        (id) =>
+          this.prisma.branch
+            .count({ where: { id, organizationId: context.organizationId } })
+            .then((count) => count > 0),
+      ],
+      [
+        query.product_id,
+        (id) =>
+          this.prisma.product
+            .count({ where: { id, organizationId: context.organizationId } })
+            .then((count) => count > 0),
+      ],
+      [
+        query.category_id,
+        (id) =>
+          this.prisma.category
+            .count({ where: { id, organizationId: context.organizationId } })
+            .then((count) => count > 0),
+      ],
+      [
+        query.customer_id,
+        (id) =>
+          this.prisma.customer
+            .count({ where: { id, organizationId: context.organizationId } })
+            .then((count) => count > 0),
+      ],
+      [
+        query.supplier_id,
+        (id) =>
+          this.prisma.supplier
+            .count({ where: { id, organizationId: context.organizationId } })
+            .then((count) => count > 0),
+      ],
+    ];
+    for (const [id, exists] of checks)
+      if (id && !(await exists(id)))
+        throw new NotFoundException(
+          "Report filter resource was not found in this organization",
+        );
   }
 
   private async authorizedWarehouses(
@@ -1005,10 +1516,21 @@ export class ReportingService {
     };
   }
 
-  private warehouseFilter(warehouses: WarehouseScope, column: string) {
-    if (warehouses === null) return Prisma.empty;
-    if (!warehouses.length) return Prisma.sql`AND false`;
-    return Prisma.sql`AND ${Prisma.raw(column)} IN (${Prisma.join(warehouses)})`;
+  private warehouseFilter(
+    warehouses: WarehouseScope,
+    column: string,
+    branchId?: string,
+  ) {
+    const scope =
+      warehouses === null
+        ? Prisma.empty
+        : warehouses.length
+          ? Prisma.sql`AND ${Prisma.raw(column)} IN (${Prisma.join(warehouses)})`
+          : Prisma.sql`AND false`;
+    const branch = branchId
+      ? Prisma.sql`AND EXISTS (SELECT 1 FROM warehouses branch_scope WHERE branch_scope.id=${Prisma.raw(column)} AND branch_scope.branch_id=${branchId}::uuid)`
+      : Prisma.empty;
+    return Prisma.sql`${scope} ${branch}`;
   }
 
   private historicalSnapshotCte(
@@ -1017,7 +1539,11 @@ export class ReportingService {
     warehouses: WarehouseScope,
     cutoff: Date,
   ) {
-    const warehouseFilter = this.warehouseFilter(warehouses, "m.warehouse_id");
+    const warehouseFilter = this.warehouseFilter(
+      warehouses,
+      "m.warehouse_id",
+      query.branch_id,
+    );
     const productFilter = this.productFilters(query);
     return Prisma.sql`
       WITH RECURSIVE ordered_movements AS (

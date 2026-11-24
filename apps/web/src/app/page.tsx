@@ -47,6 +47,17 @@ type InventorySummary = {
   };
 };
 type CountPage = { total: number };
+type BusinessSummary = {
+  sales: {
+    invoice_value: { currency: string; invoice_value: string }[];
+    collections: { currency: string; collected: string; reversed: string }[];
+    receivables: { currency: string; outstanding: string; overdue: string }[];
+  };
+  purchasing: {
+    order_value: { currency: string; order_value: string }[];
+    order_status: { status: string; count: number }[];
+  };
+};
 
 function Dashboard() {
   const { organization, user, authenticatedRequest } = useSession();
@@ -61,8 +72,17 @@ function Dashboard() {
     useState<InventorySummary | null>(null);
   const [pendingPurchaseOrders, setPendingPurchaseOrders] = useState(0);
   const [pendingSalesOrders, setPendingSalesOrders] = useState(0);
+  const [businessSummary, setBusinessSummary] =
+    useState<BusinessSummary | null>(null);
   const canViewPurchasing = organization?.role !== "SALES";
   const canViewSales = organization?.role !== "BUYER";
+  const canViewFinance = [
+    "OWNER",
+    "ADMIN",
+    "FINANCE",
+    "READ_ONLY",
+    "MEMBER",
+  ].includes(organization?.role ?? "");
   const [lowStock, setLowStock] = useState<LowStockResult>({
     data: [],
     total: 0,
@@ -80,6 +100,7 @@ function Dashboard() {
       setInventorySummary(null);
       setPendingPurchaseOrders(0);
       setPendingSalesOrders(0);
+      setBusinessSummary(null);
       setBalances([]);
       setBalanceCount(0);
       setMovements([]);
@@ -93,6 +114,7 @@ function Dashboard() {
     setInventorySummary(null);
     setPendingPurchaseOrders(0);
     setPendingSalesOrders(0);
+    setBusinessSummary(null);
     setBalances([]);
     setBalanceCount(0);
     setMovements([]);
@@ -107,6 +129,7 @@ function Dashboard() {
         summaryResult,
         purchaseCounts,
         salesCounts,
+        businessReports,
       ] = await Promise.all([
         authenticatedRequest<Page<Product>>(
           "/organizations/current/catalog/products?page=1&page_size=1&status=ACTIVE",
@@ -143,6 +166,16 @@ function Dashboard() {
               ),
             )
           : Promise.resolve([]),
+        canViewFinance
+          ? Promise.all([
+              authenticatedRequest<
+                BusinessSummary["sales"] & Record<string, unknown>
+              >("/organizations/current/reports/sales/summary"),
+              authenticatedRequest<
+                BusinessSummary["purchasing"] & Record<string, unknown>
+              >("/organizations/current/reports/purchases/summary"),
+            ])
+          : Promise.resolve(null),
       ]);
       setProducts(productResult);
       setWarehouses(warehouseResult.data);
@@ -156,6 +189,12 @@ function Dashboard() {
       setPendingSalesOrders(
         salesCounts.reduce((sum, result) => sum + result.total, 0),
       );
+      if (businessReports) {
+        setBusinessSummary({
+          sales: businessReports[0] as BusinessSummary["sales"],
+          purchasing: businessReports[1] as BusinessSummary["purchasing"],
+        });
+      }
       const stock = await Promise.all(
         warehouseResult.data.map(async (warehouse) => {
           const [balanceResult, movementResult] = await Promise.all([
@@ -192,7 +231,13 @@ function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [authenticatedRequest, canViewPurchasing, canViewSales, organization]);
+  }, [
+    authenticatedRequest,
+    canViewFinance,
+    canViewPurchasing,
+    canViewSales,
+    organization,
+  ]);
 
   useEffect(() => {
     void Promise.resolve().then(load);
@@ -347,6 +392,86 @@ function Dashboard() {
                 </small>
               </article>
             </section>
+            {canViewFinance && businessSummary && (
+              <section aria-label="Financial overview" className="metric-grid">
+                <article className="metric-card">
+                  <span>Issued invoices</span>
+                  {businessSummary.sales.invoice_value.length ? (
+                    <div className="metric-values">
+                      {businessSummary.sales.invoice_value.map((item) => (
+                        <strong key={item.currency}>
+                          {item.currency} {item.invoice_value}
+                        </strong>
+                      ))}
+                    </div>
+                  ) : (
+                    <strong>—</strong>
+                  )}
+                  <small>
+                    <Link href="/reports/business">Issued invoice totals</Link>
+                  </small>
+                </article>
+                <article className="metric-card">
+                  <span>Effective collections</span>
+                  {businessSummary.sales.collections.length ? (
+                    <div className="metric-values">
+                      {businessSummary.sales.collections.map((item) => (
+                        <strong key={item.currency}>
+                          {item.currency} {item.collected}
+                        </strong>
+                      ))}
+                    </div>
+                  ) : (
+                    <strong>—</strong>
+                  )}
+                  <small>Recorded payments after reversals</small>
+                </article>
+                <article className="metric-card">
+                  <span>Outstanding receivables</span>
+                  {businessSummary.sales.receivables.length ? (
+                    <div className="metric-values">
+                      {businessSummary.sales.receivables.map((item) => (
+                        <strong key={item.currency}>
+                          {item.currency} {item.outstanding}
+                        </strong>
+                      ))}
+                    </div>
+                  ) : (
+                    <strong>—</strong>
+                  )}
+                  <small>
+                    Overdue:{" "}
+                    {businessSummary.sales.receivables
+                      .map((item) => `${item.currency} ${item.overdue}`)
+                      .join(" · ") || "—"}
+                  </small>
+                </article>
+                <article className="metric-card">
+                  <span>Purchase order value</span>
+                  {businessSummary.purchasing.order_value.length ? (
+                    <div className="metric-values">
+                      {businessSummary.purchasing.order_value.map((item) => (
+                        <strong key={item.currency}>
+                          {item.currency} {item.order_value}
+                        </strong>
+                      ))}
+                    </div>
+                  ) : (
+                    <strong>—</strong>
+                  )}
+                  <small>
+                    Open orders:{" "}
+                    {businessSummary.purchasing.order_status
+                      .filter((item) =>
+                        ["SUBMITTED", "PARTIALLY_RECEIVED"].includes(
+                          item.status,
+                        ),
+                      )
+                      .reduce((sum, item) => sum + item.count, 0)}
+                  </small>
+                </article>
+              </section>
+            )}
             {!loading && balanceCount > 0 && (
               <p className="dashboard-stock-context">
                 Stock is tracked across {balanceCount} product and warehouse

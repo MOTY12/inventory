@@ -4,37 +4,35 @@
 
 ## Repository and roadmap
 
-- Repository: `/Users/newuser/Documents/GitHub/inventory`, branch `develop`, base HEAD at session start `8f07388` (`payment integration implemented`). Existing SALES-004 changes were present and preserved. This session has uncommitted SALES-004 tests/hardening and REPORT-002 code/docs; no commit, push or deployment was made.
-- Roadmap count: **30/47 complete**, recalculated from task entries. SALES-004 and REPORT-002 remain IN_PROGRESS and are not counted complete. SALES-004 acceptance implementation/database/API checks now pass, but the attached brief's interactive browser workflow was not run because the available Chrome/IAB tabs did not have the local inventory app running. REPORT-002 is a partial implementation slice.
-- SALES-004 migration `20261124120000_sales_invoices_payments` was applied in the existing local DB by the preceding session, additively; no reset/deletion. Latest documented migration count is 21/21. REPORT-002 required no schema migration.
+- Repository: `/Users/newuser/Documents/GitHub/inventory`, branch `develop`; session-start HEAD `f68d85b` (`Update the report`). No commit, push or deployment was made this session. Changes listed in `next-session.md` remain uncommitted.
+- Completed task count remains **30/47**. `SALES-004` and `REPORT-002` are IN_PROGRESS and are not counted complete. The count is from individual task entries.
+- Local database: `inventory_dev` on localhost:5433. Additive migration `20261124150000_business_performance_exports` was applied using `npm run db:migrate:deploy --workspace=@inventory/api`; it only adds four enum values. Prisma reports **22 migrations found, schema up to date**. No reset or business-record deletion occurred.
 
-## SALES-004 acceptance completed in this session
+## Work this session
 
-- Strengthened void and payment reversal reason checks to reject whitespace-only values at DTO and service boundaries.
-- Expanded isolated PostgreSQL acceptance to cover sequential numbering under concurrent issuance across orders, organization-local sequences and no reuse; unpaid versus paid/partial void rules, required reason and idempotent void; tax snapshot preservation after rate edit/deactivation and rejection of inactive/cross-tenant rates; reversal replay/conflict/duplicate prevention; direct DB invoice/line/payment immutability, cross-tenant FK and allocation-overpayment trigger; authenticated live HTTP routes, DTO validation, OpenAPI, role/warehouse/tenant denial, PDF, customer summary and no inventory mutation.
-- `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/sales-invoices.postgres.integration.test.mjs`: **3 passed, 0 failed, 0 skipped** against a unique temporary schema; cleanup is performed by the test. This run also exercised REPORT-002 sales/purchase/aging API queries and finance-role denial.
-- Browser workflow remains unverified. Available browser state showed unrelated tabs and an inventory verify-email URL that could not be reached; no local UI session was opened. No browser acceptance is claimed.
+- Added paginated business analytics endpoints:
+  - `GET /api/v1/organizations/current/reports/sales/products`
+  - `GET /api/v1/organizations/current/reports/sales/customers`
+  - `GET /api/v1/organizations/current/reports/purchases/products`
+  - `GET /api/v1/organizations/current/reports/purchases/suppliers`
+- Aggregations separate order lines, issued invoice lines, payments and receipt lines before joining, keep monetary rows separated by currency and quantity rows separated by unit code, and use deterministic sort tie-breakers with bounded pagination. Resource filters are organization-validated; warehouse grants and branch scope constrain report queries. Customer outstanding/overdue values are explicitly current-state. Supplier outstanding order value is not payable.
+- Product sales report exposes order/fulfilled/invoiced quantities, order counts/values, issued invoice value, discounts and tax. Customer report exposes order-state counts, order/invoice value, effective payments after reversal, current outstanding/overdue and last order date. Product purchasing exposes ordered/received/outstanding quantities and values. Supplier report exposes PO state counts and ordered/received/outstanding values.
+- Extended the Business Reports UI with detail views, currency/search filters and paging controls; dashboard requests finance summaries only for roles with `finance:read` and shows currency-separated invoice, collection, receivable, overdue and PO indicators. Chrome opened the authenticated app on port 3002 and rendered Sales & Purchasing, product sales, product purchasing and supplier analytics with live rows. This verifies the report page data rendering, not filter permutations, export downloads or SALES-004 workflow actions.
+- Added four detailed CSV types to the existing export worker: `SALES_PRODUCTS`, `SALES_CUSTOMERS`, `PURCHASE_PRODUCTS`, `PURCHASE_SUPPLIERS`. They use existing bounded service paging, CSV sanitation, private storage and export lifecycle. Financial export queue/process/download authorization now also checks `finance:read`. Detailed worker value reconciliation and revocation integration for these new types remains pending.
+- The explicit PG test revealed SQL aggregate counts serialize as `bigint`; converted report row bigints to JSON numbers while keeping exact decimal fields intact. Added a safe server-side error log for unexpected exceptions without exposing internals in the HTTP error envelope.
+- SALES-004 whitespace-only void/reversal reason checks and existing isolated DB/API acceptance work remain in place; browser acceptance is still unverified.
 
-## REPORT-002 implementation slice
+## Verification evidence
 
-- Added organization- and warehouse-scoped APIs for sales summary (order status/value, issued invoices, effective/reversed payments and current receivables), purchasing summary (PO status/value, received value and outstanding quantity/value), receivable aging by currency, and daily/weekly/monthly sales and purchase trends.
-- Monetary totals remain grouped by currency and use PostgreSQL `numeric`; current receivable values are labeled current-state. Draft/void invoices are excluded, reversed payments do not count as collections, no-due-date invoices are identified separately, and outstanding PO amount is explicitly not supplier payable.
-- Financial report endpoints require `reports:read` and `finance:read`; links are hidden for roles without finance access. Added validated date/currency/status filters, endpoint OpenAPI/auth contract checks, a live-data responsive report page, and metric definitions in `docs/architecture/purchase-sales-reporting.md`.
-- A serialization defect from SQL `bigint` counts was found by the integration test and fixed by mapping count fields to JSON numbers. The final 3/3 isolated suite passed after the fix.
-- REPORT-002 is not complete: product/customer/supplier performance reports, aging boundary fixtures, full filter matrix, CSV export integration, deterministic purchase/report fixtures, performance query evidence, and browser UAT remain.
+- `npm test`: **59 API/shared passed, 0 failed, 3 opt-in PostgreSQL suites skipped**; web **2 passed, 0 failed**.
+- `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs apps/api/test/postgres.integration.test.mjs apps/api/test/sales-invoices.postgres.integration.test.mjs`: final explicit run **26 passed, 0 failed, 0 skipped** against disposable schemas. Includes SALES-004 DB/API cases, exact sales product quantity/tax, summary/trends/aging, all detail report routes, finance-role denials and new export enqueue permission checks. Purchase analytics routes have empty purchase fixtures; exact populated purchase/receipt reconciliation remains unverified.
+- Passed: `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run db:validate --workspace=@inventory/api`, API build, root `npm run build` (Next Webpack production build, 29 routes), and final `git diff --check`.
+- Local API readiness returned HTTP 200. Stockroom web returned HTTP 200 on port 3002 and was inspected in Chrome. Port 3000 was occupied by a separate “Hello World!” app and was not touched.
+- Migration status after applying the additive migration: **22/22 up to date**. Migration applied locally without reset/deletion.
+- Browser report-page rendering was observed, but authenticated SALES-004 invoice/payment/PDF/customer-history workflow, detailed filter behavior and export downloads were not exercised. Export worker/storage reconciliation for the new financial types, report-specific non-empty purchasing fixtures, aging-boundary fixture run or EXPLAIN ANALYZE evidence remain open. `npm audit` remains blocked by registry DNS (`ENOTFOUND`).
 
-## Verification status
+## Remaining task status
 
-- `npm test`: **59 API/shared passed, 0 failed, 3 opt-in PostgreSQL suites skipped**, plus **2 web tests passed**. The SALES-004/REPORT-002 opt-in suite was run explicitly: **3 passed, 0 failed, 0 skipped** against an isolated schema; authenticated summary, trends, aging and purchase endpoints passed, as did restricted-role denial.
-- `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build`, `npm run db:validate --workspace=@inventory/api`, and `git diff --check` passed after final edits. Generated Next artifacts were restored to their original HEAD content.
-- Read-only migration status: **21 migrations found; database schema up to date** at `inventory_dev` on `localhost:5433`. No migration was added or applied this session.
-- Do not infer full task acceptance from these checks: browser flow and remaining REPORT-002 breadth are outstanding. npm audit remains blocked by prior registry DNS (`ENOTFOUND`).
-
-## Exact next work
-
-1. Start the local application and execute the authenticated browser invoice/payment/PDF/history workflow plus new report UI acceptance; the available browser had no live local Stockroom instance.
-2. Add paginated product/customer/supplier performance APIs with per-currency totals and unit-aware quantity grouping.
-3. Add receivable aging boundary and resource/status/filter/security integration fixtures; add export types using REPORT-003 authorization and bounded paging.
-4. Inspect representative query plans and test multi-currency, canceled/partial/full order and receipt fixtures.
-5. Re-run the quality and isolated integration checks after code changes.
-6. Update task statuses and checkpoint. Keep SALES-004 IN_PROGRESS until browser acceptance is completed; keep REPORT-002 IN_PROGRESS until its full acceptance and dependencies are verified. Do not increase 30/47 without that evidence.
+- **SALES-004 — IN_PROGRESS:** database and authenticated HTTP acceptance passed; authenticated interactive invoice/payment/PDF/customer-history/tax/organization-switch browser workflow remains open. No completion claim.
+- **REPORT-002 — IN_PROGRESS:** summary/trend/aging and four paginated detail APIs plus first UI/dashboard/export support are implemented. Full purchase receipt/supplier and payment/reversal fixtures, full filter/security matrix, export worker reconciliation, performance query plans, and authenticated browser acceptance remain. No completion claim.
+- Completed task count remains **30/47**; no task was newly completed.

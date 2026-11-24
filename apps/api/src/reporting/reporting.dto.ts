@@ -20,6 +20,10 @@ export class ReportFilterDto extends PaginationQueryDto {
 
   @IsOptional()
   @IsUUID()
+  branch_id?: string;
+
+  @IsOptional()
+  @IsUUID()
   category_id?: string;
 
   @IsOptional()
@@ -82,4 +86,24 @@ export class ReportFilterDto extends PaginationQueryDto {
   @IsOptional()
   @IsIn(["day", "week", "month"])
   period?: "day" | "week" | "month";
+
+  @IsOptional()
+  @IsIn([
+    "invoiced_value",
+    "ordered_quantity",
+    "fulfilled_quantity",
+    "order_count",
+    "name",
+  ])
+  sort_by?:
+    | "invoiced_value"
+    | "ordered_quantity"
+    | "fulfilled_quantity"
+    | "order_count"
+    | "name";
+
+  @IsOptional()
+  @IsIn(["ordered_value", "received_value", "order_count", "name"])
+  purchasing_sort_by?:
+    "ordered_value" | "received_value" | "order_count" | "name";
 }

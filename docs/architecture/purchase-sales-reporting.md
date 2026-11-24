@@ -1,6 +1,6 @@
 # Purchase, sales and receivables reporting semantics
 
-Status: implemented initial REPORT-002 summaries, daily/weekly/monthly trends and receivables aging; product-performance tables, export types and historical receivable snapshots remain pending.
+Status: implemented summaries, daily/weekly/monthly trends, current receivables aging, paginated performance APIs and initial detail-report export types. REPORT-002 remains IN_PROGRESS pending broader data-fixture, browser and performance acceptance.
 
 ## Scope and data source
 
@@ -27,6 +27,10 @@ For date filters, `from` is inclusive at UTC start of day and `to` is inclusive 
 - **Received purchase value**: goods receipt quantity multiplied by the corresponding PO line unit cost, grouped by PO currency. This is received operational cost, not an accounts-payable balance.
 - **Outstanding receiving**: ordered quantity less received quantity, grouped by PO line unit code; value is the same remainder multiplied by PO line unit cost. Cancelled and fully received orders are excluded.
 - **Receivables aging**: current outstanding invoice balance bucketed by due date as not yet due, 1–30, 31–60, 61–90, and over 90 days overdue. Missing due dates have a separate count.
+- **Product sales performance**: aggregates sales order lines by product, sales-line unit code and currency. Ordered/fulfilled quantities and order values come from order lines; invoiced quantity, discount, tax and issued value come from issued invoice lines, pre-aggregated separately to avoid join multiplication.
+- **Customer performance**: reports order-state counts and order value by order date, issued invoice value by issue date, payment collections by payment date, and current outstanding/overdue balances. Reversed payments are excluded from effective collections and current balances. Current balances are not historical snapshots.
+- **Product purchasing performance**: groups PO line quantities by PO unit and currency; receipts are aggregated separately by product/unit/currency. Received value uses receipt quantity times recorded PO unit cost. Outstanding receiving is a PO-line quantity/value projection, not payable.
+- **Supplier performance**: supplier PO counts/status counts, order value, received value and outstanding order value. The outstanding value is operational receiving exposure, not accounts payable. No lead-time score is produced because workflow timestamps have not been validated for that use.
 
 ## Filters and authorization
 
@@ -34,4 +38,8 @@ The reporting controller derives organization scope from authenticated membershi
 
 ## Known limitations
 
-The first implementation exposes overview, daily/weekly/monthly trend, and aging APIs plus a live UI. It does not yet provide product/customer/supplier performance rankings, a historical receivables cutoff, a full customer outstanding invoice table, configurable sorting/pagination on those rankings, or financial CSV export integration. Those remain acceptance work for REPORT-002. No general ledger semantics are inferred.
+The implemented detail APIs are `/reports/sales/products`, `/reports/sales/customers`, `/reports/purchases/products`, and `/reports/purchases/suppliers`; they use stable tie-breakers, bounded pagination and currency/unit-separated rows. Product/customer/supplier filters are organization validated. Branch scope is applied through associated warehouse rows; warehouse grants remain an intersected scope. The business report page now includes live detail sections, currency/search filters and pagination; the dashboard requests finance KPIs only for roles with finance read access.
+
+The export worker now recognizes `SALES_PRODUCTS`, `SALES_CUSTOMERS`, `PURCHASE_PRODUCTS`, and `PURCHASE_SUPPLIERS`. These types reuse REPORT-003 jobs, bounded API paging, private storage, CSV escaping and current authorization checks. Their report-specific worker output/revocation paths still require dedicated isolated integration coverage. Sales/Purchase Summary and Receivables Aging export types are not yet implemented. No general ledger semantics are inferred.
+
+Known acceptance gaps: no report-specific PostgreSQL fixtures yet cover purchase receipt aggregation, multi-currency pagination, customer reversal balances or aging bucket boundaries; browser UAT and EXPLAIN ANALYZE evidence remain outstanding. Historical receivables are not reconstructed and a full customer invoice table is not part of these ranked APIs.

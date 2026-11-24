@@ -18,6 +18,7 @@ import { InvoicesService } from "../dist/sales/invoices.service.js";
 import { AccessTokenService } from "../dist/identity/access-token.service.js";
 import { ReportingService } from "../dist/reporting/reporting.service.js";
 import { ReorderingService } from "../dist/inventory/reordering/reordering.service.js";
+import { ReportFilterDto } from "../dist/reporting/reporting.dto.js";
 
 const enabled = process.env.RUN_POSTGRES_INTEGRATION === "1";
 
@@ -61,6 +62,10 @@ test(
       const customers = new CustomersService(prisma);
       const salesOrders = new SalesOrdersService(prisma, posting);
       const invoices = new InvoicesService(prisma);
+      const reportQueries = new ReportingService(
+        prisma,
+        new ReorderingService(prisma),
+      );
       const branch = await locations.createBranch(owner.context, owner.userId, {
         name: "Invoice branch",
       });
@@ -161,6 +166,15 @@ test(
         (await invoices.issue(owner.context, owner.userId, draft.id, issueKey))
           .invoiceNumber,
         issued.invoiceNumber,
+      );
+      await reportQueries.salesProductPerformance(
+        owner.context,
+        Object.assign(new ReportFilterDto(), {
+          currency: "NGN",
+          product_id: product.id,
+          page: 1,
+          page_size: 25,
+        }),
       );
 
       async function makeDraft(context, actor, customerName) {
@@ -661,6 +675,125 @@ test(
             assert.ok(Array.isArray(salesReportBody.order_value));
             assert.ok(Array.isArray(salesReportBody.receivables));
             assert.equal(salesReportBody.balance_basis, "current_state");
+            const productPerformance = await fetch(
+              `${api.url}/api/v1/organizations/current/reports/sales/products?currency=NGN&product_id=${product.id}`,
+              { headers: auth(ownerToken) },
+            );
+            assert.equal(
+              productPerformance.status,
+              200,
+              `${await productPerformance.clone().text()}\n${api.output()}`,
+            );
+            const productPerformanceBody = await productPerformance.json();
+            assert.equal(productPerformanceBody.total, 1);
+            assert.equal(productPerformanceBody.data[0].product_id, product.id);
+            assert.equal(productPerformanceBody.data[0].unit_code, "EA");
+            assert.equal(
+              String(productPerformanceBody.data[0].ordered_quantity),
+              "13",
+            );
+            assert.equal(
+              String(productPerformanceBody.data[0].invoiced_quantity),
+              "12",
+            );
+            assert.equal(
+              String(productPerformanceBody.data[0].tax_amount),
+              "2250",
+            );
+            const customerPerformance = await fetch(
+              `${api.url}/api/v1/organizations/current/reports/sales/customers?currency=NGN&customer_id=${customer.id}`,
+              { headers: auth(ownerToken) },
+            );
+            assert.equal(
+              customerPerformance.status,
+              200,
+              await customerPerformance.clone().text(),
+            );
+            const customerPerformanceBody = await customerPerformance.json();
+            assert.ok(
+              customerPerformanceBody.data.some(
+                (row) => row.customer_id === customer.id,
+              ),
+            );
+            assert.equal(
+              customerPerformanceBody.balance_basis,
+              "current_state",
+            );
+            const purchaseProductPerformance = await fetch(
+              `${api.url}/api/v1/organizations/current/reports/purchases/products`,
+              { headers: auth(ownerToken) },
+            );
+            assert.equal(
+              purchaseProductPerformance.status,
+              200,
+              await purchaseProductPerformance.clone().text(),
+            );
+            assert.deepEqual(
+              (await purchaseProductPerformance.json()).data,
+              [],
+            );
+            const supplierPerformance = await fetch(
+              `${api.url}/api/v1/organizations/current/reports/purchases/suppliers`,
+              { headers: auth(ownerToken) },
+            );
+            assert.equal(
+              supplierPerformance.status,
+              200,
+              await supplierPerformance.clone().text(),
+            );
+            assert.deepEqual((await supplierPerformance.json()).data, []);
+            const restrictedProductReport = await fetch(
+              `${api.url}/api/v1/organizations/current/reports/sales/products`,
+              { headers: auth(salesToken) },
+            );
+            assert.equal(restrictedProductReport.status, 403);
+            for (const reportType of [
+              "SALES_PRODUCTS",
+              "SALES_CUSTOMERS",
+              "PURCHASE_PRODUCTS",
+              "PURCHASE_SUPPLIERS",
+            ]) {
+              const exportResponse = await fetch(
+                `${api.url}/api/v1/organizations/current/reports/exports`,
+                {
+                  method: "POST",
+                  headers: {
+                    ...auth(ownerToken),
+                    "Content-Type": "application/json",
+                    "Idempotency-Key": `report-${reportType}-${randomUUID()}`,
+                  },
+                  body: JSON.stringify({
+                    report_type: reportType,
+                    filters: {},
+                  }),
+                },
+              );
+              assert.equal(
+                exportResponse.status,
+                201,
+                await exportResponse.clone().text(),
+              );
+              assert.equal(
+                (await exportResponse.json()).report_type,
+                reportType,
+              );
+            }
+            const forbiddenFinancialExport = await fetch(
+              `${api.url}/api/v1/organizations/current/reports/exports`,
+              {
+                method: "POST",
+                headers: {
+                  ...auth(salesToken),
+                  "Content-Type": "application/json",
+                  "Idempotency-Key": `report-denied-${randomUUID()}`,
+                },
+                body: JSON.stringify({
+                  report_type: "SALES_PRODUCTS",
+                  filters: {},
+                }),
+              },
+            );
+            assert.equal(forbiddenFinancialExport.status, 403);
             const salesTrends = await fetch(
               `${api.url}/api/v1/organizations/current/reports/sales/trends?period=month`,
               { headers: auth(ownerToken) },

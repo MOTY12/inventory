@@ -15,7 +15,7 @@ This summary is subordinate to the task ledger in `docs/implementation/task-brea
 
 - **QUALITY-003 — IN_PROGRESS:** Dependencies FOUNDATION-002 and FOUNDATION-005 are complete. PostgreSQL restore, queue worker termination/restart, durable pending-job dispatch, private-prefix object backup, missing-object behavior and checksum-verified restore drills passed locally. Runbook includes database/queue/object recovery and incident steps. Measured timings are documented; production off-host encrypted recovery configuration has not been drilled, and owner-approved RPO/RTO/retention/residency/key policy remain open.
 - **SALES-004 — IN_PROGRESS:** DEC-010 policies are owner-approved. Isolated PostgreSQL acceptance now passes 3/3, covering concurrent numbering, void/tax snapshots, reversal replay/conflict, database triggers, authenticated HTTP/controller roles/tenant/warehouse scope, PDF, DTO/OpenAPI and inventory non-mutation. Interactive authenticated browser flow remains unverified; see next-session checkpoint.
-- **REPORT-002 — IN_PROGRESS:** Live-data APIs/UI for sales, purchasing, current receivables, aging, and daily/weekly/monthly trends are implemented. Metric semantics are documented. Remaining: product/customer/supplier performance, complete filter/security fixtures, export integration, performance evidence and browser acceptance. Completed count remains 30/47.
+- **REPORT-002 — IN_PROGRESS:** Live summary/trend/aging and paginated product-sales, customer, product-purchasing, and supplier APIs/UI/dashboard are implemented. Four detailed report export types reuse REPORT-003. Migration `20261124150000_business_performance_exports` was applied additively (22/22). Remaining: populated purchasing/receipt and customer payment/reversal fixtures, aging boundaries, full filter/security matrix, new export worker content/download/revocation verification, query-plan evidence and browser acceptance. Completed count remains 30/47.
 
 ## Other pending work
 
@@ -24,6 +24,8 @@ This summary is subordinate to the task ledger in `docs/implementation/task-brea
 - Production email delivery, distributed rate limiting and comprehensive browser E2E remain hardening work.
 - Registry-backed dependency audit remains unknown; prior audit could not reach npm registry and install output reported seven advisories (4 moderate, 3 high).
 - Large-export performance benchmark and authenticated browser Reports UAT remain broader hardening/UAT gaps.
+
+Checkpoint 2026-11-24: SALES-004/REPORT-002 isolated DB/API suite most recently passed 3/3; default tests passed 59 API/shared and 2 web with 3 opt-in PG suites skipped. See `current-state.md` and `next-session.md` for exact evidence and remaining steps. Migration status is now 22/22, superseding earlier 21/21 entries above.
 
 ## Environment evidence
 

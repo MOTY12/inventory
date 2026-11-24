@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "../auth/session-provider";
 
-type ReportView = "sales" | "purchases" | "receivables";
+type ReportView =
+  | "sales"
+  | "sales-products"
+  | "sales-customers"
+  | "purchases"
+  | "purchase-products"
+  | "suppliers"
+  | "receivables";
 type Summary = Record<string, unknown>;
 
 function rows(value: unknown): Record<string, unknown>[] {
@@ -29,6 +36,9 @@ function BusinessReportsContent() {
   const [to, setTo] = useState("");
   const [period, setPeriod] = useState<"day" | "week" | "month">("month");
   const [warehouse, setWarehouse] = useState("");
+  const [currency, setCurrency] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [warehouses, setWarehouses] = useState<
     { id: string; name: string; code: string }[]
   >([]);
@@ -73,18 +83,36 @@ function BusinessReportsContent() {
     if (from) params.set("from", from);
     if (to) params.set("to", to);
     if (warehouse) params.set("warehouse_id", warehouse);
+    if (currency) params.set("currency", currency);
+    if (search) params.set("q", search);
+    params.set("page", String(page));
+    params.set("page_size", "25");
     const path =
-      view === "sales"
+      view === "sales" ||
+      view === "sales-products" ||
+      view === "sales-customers"
         ? "sales/summary"
-        : view === "purchases"
+        : view === "purchases" ||
+            view === "purchase-products" ||
+            view === "suppliers"
           ? "purchases/summary"
           : "receivables/aging";
+    const detailPath: Partial<Record<ReportView, string>> = {
+      "sales-products": "sales/products",
+      "sales-customers": "sales/customers",
+      "purchase-products": "purchases/products",
+      suppliers: "purchases/suppliers",
+    };
     try {
-      const response = await authenticatedRequest<Summary>(
-        `/organizations/current/reports/${path}?${params}`,
-      );
+      const response = detailPath[view]
+        ? await authenticatedRequest<Summary>(
+            `/organizations/current/reports/${detailPath[view]}?${params}`,
+          )
+        : await authenticatedRequest<Summary>(
+            `/organizations/current/reports/${path}?${params}`,
+          );
       let trendResponse: Summary | null = null;
-      if (view !== "receivables") {
+      if (view === "sales" || view === "purchases") {
         const trendParams = new URLSearchParams(params);
         trendParams.set("period", period);
         const trendPath =
@@ -107,7 +135,18 @@ function BusinessReportsContent() {
     } finally {
       if (version === requestVersion.current) setLoading(false);
     }
-  }, [authenticatedRequest, from, organization, period, to, view, warehouse]);
+  }, [
+    authenticatedRequest,
+    currency,
+    from,
+    organization,
+    page,
+    period,
+    search,
+    to,
+    view,
+    warehouse,
+  ]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
@@ -115,28 +154,44 @@ function BusinessReportsContent() {
   }, [load]);
 
   const sections: [string, unknown][] =
-    view === "sales"
+    view === "sales-products" ||
+    view === "sales-customers" ||
+    view === "purchase-products" ||
+    view === "suppliers"
       ? [
-          ["Order value by currency", result?.order_value],
-          ["Issued invoice value", result?.invoice_value],
-          ["Effective collections and reversals", result?.collections],
-          ["Current receivables", result?.receivables],
-          ["Sales order statuses", result?.order_status],
-          ["Sales order trend", trend?.orders],
-          ["Fulfilled quantities by line unit", trend?.fulfilled],
-          ["Issued invoice trend", trend?.invoices],
-          ["Collections trend", trend?.collections],
+          [
+            view === "sales-products"
+              ? "Product sales performance by unit and currency"
+              : view === "sales-customers"
+                ? "Customer performance · current balances"
+                : view === "purchase-products"
+                  ? "Product purchasing performance by unit and currency"
+                  : "Supplier purchasing performance · not accounts payable",
+            result?.data,
+          ],
         ]
-      : view === "purchases"
+      : view === "sales"
         ? [
-            ["Purchase order value", result?.order_value],
-            ["Received purchase value", result?.received_value],
-            ["Outstanding receiving", result?.outstanding],
-            ["Purchase order statuses", result?.order_status],
-            ["Purchase order trend", trend?.orders],
-            ["Goods received trend", trend?.received],
+            ["Order value by currency", result?.order_value],
+            ["Issued invoice value", result?.invoice_value],
+            ["Effective collections and reversals", result?.collections],
+            ["Current receivables", result?.receivables],
+            ["Sales order statuses", result?.order_status],
+            ["Sales order trend", trend?.orders],
+            ["Fulfilled quantities by line unit", trend?.fulfilled],
+            ["Issued invoice trend", trend?.invoices],
+            ["Collections trend", trend?.collections],
           ]
-        : [["Receivables aging by currency", result?.data]];
+        : view === "purchases"
+          ? [
+              ["Purchase order value", result?.order_value],
+              ["Received purchase value", result?.received_value],
+              ["Outstanding receiving", result?.outstanding],
+              ["Purchase order statuses", result?.order_status],
+              ["Purchase order trend", trend?.orders],
+              ["Goods received trend", trend?.received],
+            ]
+          : [["Receivables aging by currency", result?.data]];
 
   return (
     <main className="page-content reports-page">
@@ -172,22 +227,36 @@ function BusinessReportsContent() {
       ) : (
         <>
           <nav className="report-tabs" aria-label="Business reports">
-            {(["sales", "purchases", "receivables"] as ReportView[]).map(
-              (item) => (
-                <button
-                  className={view === item ? "report-tab active" : "report-tab"}
-                  aria-pressed={view === item}
-                  key={item}
-                  onClick={() => setView(item)}
-                >
-                  {item === "sales"
-                    ? "Sales"
-                    : item === "purchases"
-                      ? "Purchasing"
-                      : "Receivables aging"}
-                </button>
-              ),
-            )}
+            {(
+              [
+                "sales",
+                "sales-products",
+                "sales-customers",
+                "purchases",
+                "purchase-products",
+                "suppliers",
+                "receivables",
+              ] as ReportView[]
+            ).map((item) => (
+              <button
+                className={view === item ? "report-tab active" : "report-tab"}
+                aria-pressed={view === item}
+                key={item}
+                onClick={() => setView(item)}
+              >
+                {
+                  {
+                    sales: "Sales overview",
+                    "sales-products": "Product sales",
+                    "sales-customers": "Customers",
+                    purchases: "Purchasing overview",
+                    "purchase-products": "Product purchasing",
+                    suppliers: "Suppliers",
+                    receivables: "Receivables aging",
+                  }[item]
+                }
+              </button>
+            ))}
           </nav>
           <section
             className="report-filters"
@@ -223,7 +292,38 @@ function BusinessReportsContent() {
                 ))}
               </select>
             </label>
-            {view !== "receivables" && (
+            <label>
+              Currency
+              <input
+                maxLength={3}
+                placeholder="All currencies"
+                value={currency}
+                onChange={(event) => {
+                  setCurrency(event.target.value.toUpperCase());
+                  setPage(1);
+                }}
+              />
+            </label>
+            {(
+              [
+                "sales-products",
+                "sales-customers",
+                "purchase-products",
+                "suppliers",
+              ] as ReportView[]
+            ).includes(view) && (
+              <label>
+                Search
+                <input
+                  value={search}
+                  onChange={(event) => {
+                    setSearch(event.target.value);
+                    setPage(1);
+                  }}
+                />
+              </label>
+            )}
+            {(view === "sales" || view === "purchases") && (
               <label>
                 Trend interval
                 <select
@@ -246,6 +346,32 @@ function BusinessReportsContent() {
             >
               Refresh
             </button>
+            {(
+              [
+                "sales-products",
+                "sales-customers",
+                "purchase-products",
+                "suppliers",
+              ] as ReportView[]
+            ).includes(view) && (
+              <div className="report-pagination" aria-label="Report pages">
+                <button
+                  className="catalog-secondary-link"
+                  disabled={page <= 1 || loading}
+                  onClick={() => setPage((value) => Math.max(1, value - 1))}
+                >
+                  Previous
+                </button>
+                <span>Page {page}</span>
+                <button
+                  className="catalog-secondary-link"
+                  disabled={rows(result?.data).length < 25 || loading}
+                  onClick={() => setPage((value) => value + 1)}
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </section>
           {loading ? (
             <section className="catalog-empty" aria-live="polite">

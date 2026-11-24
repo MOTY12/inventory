@@ -5,6 +5,7 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
+  Logger,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 
@@ -93,6 +94,8 @@ export function toApiError(
 
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(ApiExceptionFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const http = host.switchToHttp();
     const request = http.getRequest<RequestWithId>();
@@ -101,6 +104,17 @@ export class ApiExceptionFilter implements ExceptionFilter {
       exception instanceof HttpException
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      this.logger.error(
+        JSON.stringify({
+          message: "Unhandled API exception",
+          requestId: request.requestId ?? "unknown",
+          errorName: exception instanceof Error ? exception.name : "unknown",
+          errorMessage:
+            exception instanceof Error ? exception.message : "unknown",
+        }),
+      );
+    }
     response
       .status(status)
       .json(toApiError(exception, request.requestId ?? "unknown"));

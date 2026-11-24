@@ -92,6 +92,65 @@ const exportHeaders: Record<ReportExportType, string[]> = {
     "Suggested quantity",
     "Last evaluated at",
   ],
+  [ReportExportType.SALES_PRODUCTS]: [
+    "Product ID",
+    "Product",
+    "SKU",
+    "Category",
+    "Currency",
+    "Unit",
+    "Orders",
+    "Ordered quantity",
+    "Fulfilled quantity",
+    "Invoiced quantity",
+    "Order value",
+    "Invoice value",
+    "Discounts",
+    "Tax",
+  ],
+  [ReportExportType.SALES_CUSTOMERS]: [
+    "Customer ID",
+    "Customer",
+    "Currency",
+    "Sales orders",
+    "Confirmed orders",
+    "Fulfilled orders",
+    "Order value",
+    "Issued invoice value",
+    "Effective payments",
+    "Current outstanding",
+    "Current overdue",
+    "Last order date",
+  ],
+  [ReportExportType.PURCHASE_PRODUCTS]: [
+    "Product ID",
+    "Product",
+    "SKU",
+    "Category",
+    "Currency",
+    "Unit",
+    "Purchase orders",
+    "Ordered quantity",
+    "Received quantity",
+    "Outstanding receiving quantity",
+    "Order value",
+    "Received value",
+    "Outstanding order value",
+  ],
+  [ReportExportType.PURCHASE_SUPPLIERS]: [
+    "Supplier ID",
+    "Supplier",
+    "Currency",
+    "Purchase orders",
+    "Open orders",
+    "Partially received orders",
+    "Fully received orders",
+    "Cancelled orders",
+    "Ordered value",
+    "Received value",
+    "Outstanding order value (not payable)",
+    "Most recent order date",
+  ],
 };
 
 @Injectable()
@@ -378,6 +437,14 @@ export class ReportExportProcessor {
           data: Record<string, unknown>[];
           total: number;
         }>;
+      case ReportExportType.SALES_PRODUCTS:
+        return this.reports.salesProductPerformance(context, query);
+      case ReportExportType.SALES_CUSTOMERS:
+        return this.reports.customerPerformance(context, query);
+      case ReportExportType.PURCHASE_PRODUCTS:
+        return this.reports.purchaseProductPerformance(context, query);
+      case ReportExportType.PURCHASE_SUPPLIERS:
+        return this.reports.supplierPerformance(context, query);
     }
   }
 
@@ -390,6 +457,73 @@ export class ReportExportProcessor {
       csvText(value == null ? "" : String(value));
     const number = (value: unknown) =>
       csvNumber(value == null ? "" : String(value));
+    if (type === ReportExportType.SALES_PRODUCTS) {
+      return [
+        text(row.product_id),
+        text(row.product_name),
+        text(row.sku),
+        text(row.category_name),
+        text(row.currency),
+        text(row.unit_code),
+        number(row.order_count),
+        number(row.ordered_quantity),
+        number(row.fulfilled_quantity),
+        number(row.invoiced_quantity),
+        number(row.order_value),
+        number(row.invoice_value),
+        number(row.discount_amount),
+        number(row.tax_amount),
+      ];
+    }
+    if (type === ReportExportType.SALES_CUSTOMERS) {
+      return [
+        text(row.customer_id),
+        text(row.customer_name),
+        text(row.currency),
+        number(row.sales_order_count),
+        number(row.confirmed_order_count),
+        number(row.fulfilled_order_count),
+        number(row.order_value),
+        number(row.invoiced_value),
+        number(row.effective_payments),
+        number(row.outstanding),
+        number(row.overdue),
+        text(row.last_order_date),
+      ];
+    }
+    if (type === ReportExportType.PURCHASE_PRODUCTS) {
+      return [
+        text(row.product_id),
+        text(row.product_name),
+        text(row.sku),
+        text(row.category_name),
+        text(row.currency),
+        text(row.unit_code),
+        number(row.purchase_order_count),
+        number(row.ordered_quantity),
+        number(row.received_quantity),
+        number(row.outstanding_quantity),
+        number(row.order_value),
+        number(row.received_value),
+        number(row.outstanding_value),
+      ];
+    }
+    if (type === ReportExportType.PURCHASE_SUPPLIERS) {
+      return [
+        text(row.supplier_id),
+        text(row.supplier_name),
+        text(row.currency),
+        number(row.purchase_order_count),
+        number(row.open_purchase_orders),
+        number(row.partially_received_purchase_orders),
+        number(row.fully_received_purchase_orders),
+        number(row.cancelled_purchase_orders),
+        number(row.ordered_value),
+        number(row.received_value),
+        number(row.outstanding_order_value),
+        text(row.last_purchase_order_date),
+      ];
+    }
     if (type === ReportExportType.INVENTORY_SUMMARY) {
       return [
         text(row.product_id),
