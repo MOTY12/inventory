@@ -644,6 +644,10 @@ test(
         owner.context,
         Object.assign(new ReportFilterDto(), {
           customer_id: agingCustomer.id,
+          branch_id: branch.id,
+          warehouse_id: warehouse.id,
+          from: new Date().toISOString().slice(0, 10),
+          to: new Date().toISOString().slice(0, 10),
           currency: "NGN",
         }),
       );

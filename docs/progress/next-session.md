@@ -4,37 +4,41 @@
 
 ## Resume facts
 
-- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD `cf45670` (`the reporting updated`). Preserve this session's uncommitted changes. No commit, push, deployment or reset.
-- Count remains **30/47**. SALES-004 and REPORT-002 are IN_PROGRESS; QUALITY-001 is NOT_STARTED until REPORT-002 passes its dependencies/acceptance.
-- Local database `inventory_dev` on `localhost:5433`: read-only Prisma status says 22 migrations found and schema up to date.
+- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD `c961de7` (`updatae reporting`). Four application/test files and the progress/roadmap documentation edits plus `docs/operations/quality-001-acceptance.md` remain uncommitted. Preserve these and inspect the diff before edits. No commit, push, deploy, migration application or DB reset occurred.
+- Roadmap count remains **30/47**. SALES-004 and REPORT-002 are IN_PROGRESS; QUALITY-001 is NOT_STARTED until REPORT-002 acceptance passes.
+- PostgreSQL `inventory_dev` at `localhost:5433` is reachable; read-only migration status confirms 22/22 current. The interrupted full-suite attempt does not replace completed test results.
+- The QA Chrome session is signed in on the test workspace `Quality 001 QA Workspace` at `http://localhost:3002`. Do not record or change account credentials. It has no sales/invoice/payment report data. A product was created during UI exploration and a related stock-count document remains DRAFT/unposted; no movement was posted.
 
-## Changes this session
+## Changes in the previous session
 
-- `apps/api/src/reporting/reporting.service.ts`: aging includes `no_due_date_outstanding`; customer report financial aggregates coalesce to numeric zero.
-- `apps/api/test/inventory.postgres.integration.test.mjs`: populated supplier/PO partial+full receipt fixture; exact purchase performance assertions; all four detail export types processed/downloaded through the real worker and S3Mock; deterministic worker crash-recovery startup handshake.
-- `apps/api/test/sales-invoices.postgres.integration.test.mjs`: exact customer invoice/payment/reversal reconciliation and aging boundary fixture for today, 1, 30, 31, 60, 61, 90, 91 days, and missing due date.
-- No Prisma schema or migration change was made in this session.
-- `docs/architecture/purchase-sales-reporting.md`, `docs/implementation/task-breakdown.md`, `docs/implementation/master-plan.md`, and progress files updated with current evidence and outstanding gaps.
+- Expanded business report API contract filter validation and isolated DB acceptance for combined filters, stable pagination, currency splits, tenant foreign-resource denial and ungranted warehouse denial. Added aging branch/warehouse/date filters.
+- Extended reports UI with branch/status/sort filters and detailed export queue/history/download controls.
+- Chrome exercised all seven report views plus branch, warehouse, date, currency, search, status and sort; confirmed normal empty states. Filtered CSV job completed with zero rows. Download endpoint returned HTTP 200, but the browser file event/path was not confirmed.
+- No Prisma schema or migration change.
 
-## Latest checks
+## Verified commands and outcomes
 
-- `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs apps/api/test/postgres.integration.test.mjs apps/api/test/sales-invoices.postgres.integration.test.mjs`: **26 pass, 0 fail, 0 skipped**. Disposable isolated schemas; existing DB was not reset.
-- `npm test`: API/shared **59 pass, 0 fail, 3 opt-in PG skipped**; web **2 pass, 0 fail**.
-- Passed: `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run db:validate --workspace=@inventory/api`, `npm run build` (Next Webpack build, 29 routes).
-- `npx prisma migrate status --config prisma.config.ts`: 22 migrations found, schema up to date.
-- Run final `git diff --check` and review `git status --short` after any edits.
+- `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs apps/api/test/sales-invoices.postgres.integration.test.mjs`: **16 passed, 0 failed, 0 skipped** after the filter matrix changes.
+- Earlier complete opt-in three-suite run: **26 passed, 0 failed, 0 skipped**. A later complete-suite rerun stalled with no output and was interrupted; it is not a pass.
+- `npm test`: API/shared **59 passed, 0 failed, 3 opt-in suites skipped**; web **2 passed, 0 failed**.
+- Passed: `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build` (Next Webpack build, 29 routes), `npm run db:validate --workspace=@inventory/api`.
+- Read-only `npx prisma migrate status --config prisma.config.ts`: 22 migrations found; database schema up to date.
+- Rerun `git diff --check` after documentation edits. No verification result may be inferred from the interrupted rerun.
 
-## Exact next steps
+## Exact next implementation/acceptance steps
 
-1. Inspect the final worktree/diff and confirm only intended files are modified.
-2. Obtain or use an authenticated browser session for the local Stockroom app without changing/resetting account credentials. Exercise invoice creation, issuance, payment/reversal, PDF/customer history, report filters and export download. If no session is available, record the concrete access blocker and do not claim browser acceptance.
-3. Complete the REPORT-002 filter/security matrix: date, branch, warehouse grant, status, customer/supplier, currency, search, stable sorting/pagination, cross-tenant denial and finance capability/revocation behavior.
-4. Add/verify multi-currency pagination and run safe `EXPLAIN ANALYZE` on populated disposable fixtures; record query, row counts and timings.
-5. Run the affected checks again; update the task ledger only if all acceptance criteria are evidenced. Keep SALES-004 and REPORT-002 IN_PROGRESS while browser/filter/performance gaps remain. QUALITY-001 remains not started until REPORT-002 is eligible.
+1. Resume with REPORT-002 acceptance. Inspect current diffs and test the completed filter/security matrix via opt-in PostgreSQL; split suites if the combined runner stalls, and report an interrupted test accurately.
+2. Add focused disposable-DB coverage for purchasing multi-currency pagination and export filter/result consistency. Verify cross-tenant resource denial, ungranted warehouse denial, finance role/capability denial, revoked requester behavior and stable sort ties for each report/export surface.
+3. Run a safe representative `EXPLAIN ANALYZE` using a sufficiently populated disposable fixture; record query, fixture row counts and actual timings. Do not run on customer production data.
+4. In authenticated Chrome, seed/use an authorized disposable QA scenario only through existing supported UI/API workflows. Verify report filters produce rows and download an actual CSV file. Then test SALES-004 invoice issue, partial/multiple payment, reversal, PDF and customer history using a valid sales order; do not alter/reset credentials.
+5. Complete SALES-004 and REPORT-002 only when documented acceptance evidence is complete. Until then keep task statuses and count at 30/47.
+6. Only after REPORT-002 is satisfied, execute QUALITY-001's receive → stock → transfer → sale → fulfill/payment → report end-to-end reconciliation, including ledger/reservation/balance equality and retry idempotency. `docs/operations/quality-001-acceptance.md` is a preparation-only scenario; all actual results there must remain “Not run” until executed.
+7. Run required checks and refresh `current-state.md`, `session-log.md`, `pending-tasks.md`, `blockers.md`, task ledger and this checkpoint. Do not commit/push unless separately directed.
 
-## Blockers and open work
+## Remaining gaps
 
-- Chrome was logged out at `localhost:3002`, so SALES-004 interactive actions and authenticated report filters/exports were not exercised.
-- Full report filter/security coverage, multi-currency paging and query-plan/performance evidence remain.
-- `npm audit` remains blocked by package registry DNS (`ENOTFOUND`) per prior evidence.
-- No statutory/accounting compliance claim; accountant/legal review remains a production gate. No new security, hosting or accounting policy decisions were introduced.
+- Report filter/security matrix still needs full acceptance evidence across roles, tenant and warehouse access.
+- Multi-currency pagination and exports, query plan/performance, and browser download file capture remain unverified.
+- SALES-004 interactive invoice/payment UI remains unverified due absent sales/invoice data in the current QA workspace.
+- QUALITY-001 remains NOT_STARTED and must not be represented as an executed test.
+- Dependency audit is still blocked by npm registry DNS (`ENOTFOUND`); prior install output reported advisories. No clean audit is claimed.

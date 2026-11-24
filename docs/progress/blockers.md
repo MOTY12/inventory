@@ -8,8 +8,8 @@
 - **Prisma migration status:** Resolved. The additive SALES-004 migration was applied to local `inventory_dev`; `npx prisma migrate status --config prisma.config.ts` reports 21 migrations and database schema up to date. No reset or deletion occurred.
 
 - **QUALITY-001 authenticated workflow UAT:** INV-010's scanner component acceptance passed in headless Chrome: native Enter once, repeated quantity increment, rapid order, unknown-code feedback/no quantity change, recovery, focus, and no parent submit. The authenticated new-sales-order, PO-receiving, and sales-picking pages were not exercised end-to-end; track that broader manual/browser workflow evidence under QUALITY-001. INV-010's documented acceptance is complete.
-- **SALES-004 acceptance:** DEC-010 is approved; isolated PostgreSQL and authenticated HTTP/controller coverage passes, including numbering, void/tax/reversal, immutability, auth/tenant/warehouse scope, non-mutation and customer metrics after payment reversal. Interactive authenticated browser UAT is unverified because Chrome is logged out. SALES-004 remains IN_PROGRESS and is not counted complete.
-- **REPORT-002 acceptance:** Sales/purchase/receivables summaries, trends, paginated performance APIs, live UI and four detail export types are implemented. Isolated PostgreSQL acceptance now verifies populated purchase receipts, four CSV worker outputs via S3Mock, customer reversal balances, and all documented aging boundaries including no-due-date reconciliation. Remaining: full filter/security matrix, multi-currency pagination, query plan/performance evidence, and authenticated browser UAT. REPORT-002 remains IN_PROGRESS; completed count remains 30/47.
+- **SALES-004 acceptance:** DEC-010 is approved; isolated PostgreSQL and authenticated HTTP/controller coverage passes, including numbering, void/tax/reversal, immutability, auth/tenant/warehouse scope, non-mutation and customer metrics after payment reversal. Interactive invoice/payment browser UAT is unverified because the QA workspace has no eligible sales/invoice/payment data. SALES-004 remains IN_PROGRESS and is not counted complete.
+- **REPORT-002 acceptance:** Sales/purchase/receivables summaries, trends, paginated performance APIs, live UI and four detail export types are implemented. Isolated PostgreSQL acceptance verifies populated purchase receipts, four CSV worker outputs via S3Mock, customer reversal balances, aging boundaries including no-due-date reconciliation, and updated resource-filter tenant/warehouse denials. Authenticated Chrome exercised views and filters on an empty QA dataset, and export job completion plus HTTP 200 download route; file capture was not confirmed. Remaining: full role/security matrix, multi-currency pagination/exports, query plan/performance evidence, confirmed download and populated browser evidence. REPORT-002 remains IN_PROGRESS; completed count remains 30/47.
 - **QUALITY-001 dependency:** NOT_STARTED until REPORT-002 acceptance is complete.
 - **Report performance:** All export types, queue/storage, private service download, retries and expiry passed isolated integration, but a representative large-tenant performance benchmark was not run.
 - **Dependency audit:** Current `npm audit --omit=dev --audit-level=high` could not reach `registry.npmjs.org` (`ENOTFOUND`). Earlier installation reported seven lockfile advisories (4 moderate, 3 high) without full advisory detail. No clean audit is claimed.
@@ -20,12 +20,17 @@
 ## 2026-11-24 REPORT-002 checkpoint correction
 
 - Four report detail APIs, UI sections/dashboard metrics, and four export types are implemented; additive migration `20261124150000_business_performance_exports` is applied, and local migration status is 22/22. Explicit isolated PostgreSQL/API suite passed 3/3. This supersedes earlier statements that no REPORT-002 rankings/export support or migration existed.
-- Remaining evidence gaps: complete filter/security matrix, multi-currency pagination, EXPLAIN ANALYZE, and authenticated browser acceptance.
-- Latest browser session reached the local Stockroom login page but was logged out; no credentials were changed. Do not claim authenticated workflow verification.
+- Remaining evidence gaps: complete filter/security matrix, multi-currency pagination, EXPLAIN ANALYZE, and confirmed browser download from a populated report.
+- Latest browser session authenticated to the local Stockroom app and exercised report views/filters with an empty dataset. The download endpoint returned HTTP 200, but browser download file capture was not confirmed. SALES-004 invoice/payment UI was not exercised; no credentials were changed.
 
-## Completed verification in this session
+## Completed verification in previous session
 
 - All three opt-in PostgreSQL suites together: 26 passed, 0 failed, 0 skipped using disposable schemas. Workspace checks passed: `npm test` 59 API/shared pass, 0 fail, 3 opt-in suites skipped, web 2/2; typecheck, lint, format, production build, Prisma validation. Read-only migration status: 22 migrations found, schema up to date. No application data was reset or deleted.
+
+## Current session verification
+
+- Changed inventory and sales-invoice PostgreSQL suites passed 16/16 with no skips after filter additions. A later rerun of all three suites stalled and was interrupted; it is not a passing result.
+- Default suite, typecheck, lint, format, build, Prisma validation, and read-only migration status results are recorded in `current-state.md`. Current-schema status remains 22 migrations, up to date.
 
 ## Production hardening and policy gates
 

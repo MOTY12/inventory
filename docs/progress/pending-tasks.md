@@ -6,7 +6,7 @@ This summary is subordinate to the task ledger in `docs/implementation/task-brea
 
 ## Current implementation
 
-- **QUALITY-001 browser UAT gap:** INV-010 is complete after real Enter/scan component acceptance in Chrome and existing API/DB checks. Still schedule authenticated browser UAT on the actual new sales order, PO receiving, and sales picking pages, including warehouse permissions and no-post-until-confirm behavior.
+- **QUALITY-001 — NOT_STARTED:** INV-010 scanner component acceptance passed separately. This session prepared `docs/operations/quality-001-acceptance.md` only; the operational receive→stock→transfer→sale→fulfill/payment→report scenario has not been run and is gated on REPORT-002 completion.
 - **REPORT-003 — COMPLETED:** All four CSV exports, queue/storage integration, service-authenticated downloads, multi-warehouse movement ordering, historical/current WAC, NGN/USD separation, low-stock values, transient retry, expiry object deletion and expired-download denial passed isolated tests. See task ledger and next-session checkpoint.
 
 ## Current next-stage work
@@ -15,7 +15,7 @@ This summary is subordinate to the task ledger in `docs/implementation/task-brea
 
 - **QUALITY-003 — IN_PROGRESS:** Dependencies FOUNDATION-002 and FOUNDATION-005 are complete. PostgreSQL restore, queue worker termination/restart, durable pending-job dispatch, private-prefix object backup, missing-object behavior and checksum-verified restore drills passed locally. Runbook includes database/queue/object recovery and incident steps. Measured timings are documented; production off-host encrypted recovery configuration has not been drilled, and owner-approved RPO/RTO/retention/residency/key policy remain open.
 - **SALES-004 — IN_PROGRESS:** DEC-010 policies are owner-approved. Isolated PostgreSQL acceptance now passes 3/3, covering concurrent numbering, void/tax snapshots, reversal replay/conflict, database triggers, authenticated HTTP/controller roles/tenant/warehouse scope, PDF, DTO/OpenAPI and inventory non-mutation. Interactive authenticated browser flow remains unverified; see next-session checkpoint.
-- **REPORT-002 — IN_PROGRESS:** Live summary/trend/aging and paginated product-sales, customer, product-purchasing, and supplier APIs/UI/dashboard are implemented. Four detailed report export types reuse REPORT-003. Migration `20261124150000_business_performance_exports` is applied (22 migrations, schema up to date). Disposable PostgreSQL acceptance now covers purchase partial/full receipt totals, four detailed CSV worker outputs via S3Mock, customer payment reversal totals, and aging boundaries including missing due-date amount reconciliation. Remaining: full filter/security matrix, multi-currency pagination, EXPLAIN ANALYZE/performance evidence, and authenticated browser acceptance. Completed count remains 30/47.
+- **REPORT-002 — IN_PROGRESS:** Live summary/trend/aging and paginated product-sales, customer, product-purchasing, and supplier APIs/UI/dashboard are implemented. Four detailed report export types reuse REPORT-003. Migration `20261124150000_business_performance_exports` is applied (22 migrations, schema up to date). Disposable PostgreSQL acceptance covers purchase partial/full receipt totals, four detailed CSV worker outputs via S3Mock, customer payment reversal totals, aging boundaries including missing due-date reconciliation, and updated filter/tenant/warehouse-denial cases. Authenticated Chrome exercised filters and export completion against an empty QA dataset; the route returned HTTP 200 but browser file capture is unconfirmed. Remaining: comprehensive role/security matrix, multi-currency pagination/exports, EXPLAIN ANALYZE/performance, confirmed browser download, and populated report UI evidence. Completed count remains 30/47.
 - **QUALITY-001 — NOT_STARTED:** Depends on REPORT-002; do not start until reporting acceptance dependencies are satisfied.
 
 ## Other pending work
@@ -26,7 +26,7 @@ This summary is subordinate to the task ledger in `docs/implementation/task-brea
 - Registry-backed dependency audit remains unknown; prior audit could not reach npm registry and install output reported seven advisories (4 moderate, 3 high).
 - Large-export performance benchmark and authenticated browser Reports UAT remain broader hardening/UAT gaps.
 
-Checkpoint 2026-11-24: SALES-004/REPORT-002 isolated DB/API suite most recently passed 3/3; default tests passed 59 API/shared and 2 web with 3 opt-in PG suites skipped. See `current-state.md` and `next-session.md` for exact evidence and remaining steps. Migration status is now 22/22, superseding earlier 21/21 entries above.
+Checkpoint 2026-11-24: previous complete three-suite opt-in run passed 26/26; the changed inventory/sales-invoice suites passed 16/16 after filter updates. A subsequent three-suite rerun stalled and was interrupted, not counted as passing. Default tests passed 59 API/shared and 2 web with 3 opt-in PG suites skipped. See `current-state.md` and `next-session.md` for current evidence and exact next steps. Migration status is 22/22.
 
 ## Environment evidence
 

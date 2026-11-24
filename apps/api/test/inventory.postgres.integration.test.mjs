@@ -1073,6 +1073,323 @@ test(
               warehouseId: warehouse.id,
             },
           });
+
+          const matrixCategory = await catalog.createCategory(
+            contextA,
+            ownerA.userId,
+            { name: `Report matrix ${randomUUID()}` },
+          );
+          const matrixUsdProduct = await catalog.createProduct(
+            contextA,
+            ownerA.userId,
+            {
+              name: "Report USD matrix pump",
+              sku: `REPORT-USD-MATRIX-${randomUUID()}`,
+              baseUnitId: unit.id,
+              categoryId: matrixCategory.id,
+            },
+          );
+          await catalog.updateProduct(
+            contextA,
+            ownerA.userId,
+            reportProduct.id,
+            {
+              categoryId: matrixCategory.id,
+            },
+          );
+          await inventory.postWarehouseMovement(
+            contextA,
+            ownerA.userId,
+            `report-matrix-opening-${randomUUID()}`,
+            {
+              warehouseId: warehouse.id,
+              productId: matrixUsdProduct.id,
+              documentType: "OPENING_BALANCE",
+              documentId: randomUUID(),
+              movementType: "OPENING_BALANCE",
+              quantityDelta: "3",
+              costPerBaseUnit: "2.0000",
+              costCurrency: "USD",
+            },
+          );
+          const matrixCustomer = await customers.create(
+            contextA,
+            ownerA.userId,
+            { name: "Report matrix USD customer" },
+          );
+          const matrixSalesOrder = await salesOrders.create(
+            contextA,
+            ownerA.userId,
+            {
+              customerId: matrixCustomer.id,
+              warehouseId: warehouse.id,
+              currency: "USD",
+              lines: [
+                {
+                  productId: matrixUsdProduct.id,
+                  quantity: "2",
+                  unitPrice: "10.0000",
+                },
+              ],
+            },
+            `report-matrix-sale-${randomUUID()}`,
+          );
+          await salesOrders.confirm(
+            contextA,
+            ownerA.userId,
+            matrixSalesOrder.id,
+            `report-matrix-confirm-${randomUUID()}`,
+          );
+          const matrixSupplier = await suppliers.create(
+            contextA,
+            ownerA.userId,
+            { name: "Report matrix USD supplier" },
+          );
+          const matrixPurchaseOrder = await purchaseOrders.create(
+            contextA,
+            ownerA.userId,
+            {
+              supplierId: matrixSupplier.id,
+              warehouseId: warehouse.id,
+              currency: "USD",
+              lines: [
+                {
+                  productId: matrixUsdProduct.id,
+                  unitId: unit.id,
+                  quantity: "4",
+                  unitCost: "3.0000",
+                },
+              ],
+            },
+          );
+          await purchaseOrders.submit(
+            contextA,
+            ownerA.userId,
+            matrixPurchaseOrder.id,
+          );
+          await purchaseOrders.receive(
+            contextA,
+            ownerA.userId,
+            matrixPurchaseOrder.id,
+            `report-matrix-receipt-${randomUUID()}`,
+            {
+              lines: [
+                {
+                  purchaseOrderLineId: matrixPurchaseOrder.lines[0].id,
+                  quantity: "1",
+                },
+              ],
+            },
+          );
+
+          const today = new Date().toISOString().slice(0, 10);
+          const salesMatrixFilters = {
+            from: today,
+            to: today,
+            branch_id: branch.id,
+            warehouse_id: warehouse.id,
+            category_id: matrixCategory.id,
+            product_id: matrixUsdProduct.id,
+            customer_id: matrixCustomer.id,
+            currency: "USD",
+            status: "CONFIRMED",
+            q: matrixUsdProduct.name,
+          };
+          const filteredSales = await reports.salesProductPerformance(
+            contextA,
+            salesMatrixFilters,
+          );
+          assert.equal(filteredSales.total, 1);
+          assert.equal(filteredSales.data[0].product_id, matrixUsdProduct.id);
+          assert.equal(String(filteredSales.data[0].order_value), "20");
+          const filteredSalesOverview = await reports.salesOverview(contextA, {
+            ...salesMatrixFilters,
+          });
+          assert.deepEqual(
+            filteredSalesOverview.order_value.map((row) => [
+              row.currency,
+              String(row.order_value),
+            ]),
+            [["USD", "20"]],
+          );
+          const filteredSalesTrend = await reports.salesTrends(contextA, {
+            ...salesMatrixFilters,
+            period: "day",
+          });
+          assert.deepEqual(
+            filteredSalesTrend.orders.map((row) => [
+              row.currency,
+              String(row.order_value),
+            ]),
+            [["USD", "20"]],
+          );
+          const pageOne = await reports.salesProductPerformance(contextA, {
+            from: today,
+            to: today,
+            branch_id: branch.id,
+            warehouse_id: warehouse.id,
+            page: 1,
+            page_size: 1,
+            sort_by: "name",
+          });
+          const pageTwo = await reports.salesProductPerformance(contextA, {
+            from: today,
+            to: today,
+            branch_id: branch.id,
+            warehouse_id: warehouse.id,
+            page: 2,
+            page_size: 1,
+            sort_by: "name",
+          });
+          assert.equal(pageOne.total, 2);
+          assert.equal(pageTwo.total, 2);
+          assert.notEqual(
+            pageOne.data[0].product_id,
+            pageTwo.data[0].product_id,
+          );
+          assert.deepEqual(
+            new Set([pageOne.data[0].product_id, pageTwo.data[0].product_id]),
+            new Set([reportProduct.id, matrixUsdProduct.id]),
+          );
+          const usdOnlyPage = await reports.salesProductPerformance(contextA, {
+            from: today,
+            to: today,
+            branch_id: branch.id,
+            warehouse_id: warehouse.id,
+            currency: "USD",
+            page: 1,
+            page_size: 1,
+            sort_by: "name",
+          });
+          assert.equal(usdOnlyPage.total, 1);
+          assert.equal(usdOnlyPage.data[0].currency, "USD");
+
+          const customerPages = await Promise.all([
+            reports.customerPerformance(contextA, {
+              from: today,
+              to: today,
+              branch_id: branch.id,
+              warehouse_id: warehouse.id,
+              page: 1,
+              page_size: 1,
+              sort_by: "name",
+            }),
+            reports.customerPerformance(contextA, {
+              from: today,
+              to: today,
+              branch_id: branch.id,
+              warehouse_id: warehouse.id,
+              page: 2,
+              page_size: 1,
+              sort_by: "name",
+            }),
+          ]);
+          assert.equal(customerPages[0].total, 2);
+          assert.equal(customerPages[1].total, 2);
+          assert.notEqual(
+            customerPages[0].data[0].customer_id,
+            customerPages[1].data[0].customer_id,
+          );
+          const filteredCustomers = await reports.customerPerformance(
+            contextA,
+            {
+              ...salesMatrixFilters,
+              q: "Report matrix USD customer",
+              sort_by: "name",
+            },
+          );
+          assert.equal(filteredCustomers.total, 1);
+          assert.equal(filteredCustomers.data[0].currency, "USD");
+
+          const purchaseFilters = {
+            from: today,
+            to: today,
+            branch_id: branch.id,
+            warehouse_id: warehouse.id,
+            category_id: matrixCategory.id,
+            product_id: matrixUsdProduct.id,
+            supplier_id: matrixSupplier.id,
+            currency: "USD",
+            status: "PARTIALLY_RECEIVED",
+            q: matrixUsdProduct.name,
+          };
+          const filteredPurchase = await reports.purchaseProductPerformance(
+            contextA,
+            purchaseFilters,
+          );
+          assert.equal(filteredPurchase.total, 1);
+          assert.equal(filteredPurchase.data[0].currency, "USD");
+          assert.equal(String(filteredPurchase.data[0].received_quantity), "1");
+          assert.equal(
+            String(filteredPurchase.data[0].outstanding_quantity),
+            "3",
+          );
+          const filteredSupplier = await reports.supplierPerformance(contextA, {
+            from: today,
+            to: today,
+            branch_id: branch.id,
+            warehouse_id: warehouse.id,
+            supplier_id: matrixSupplier.id,
+            currency: "USD",
+            status: "PARTIALLY_RECEIVED",
+            q: "Report matrix USD supplier",
+            purchasing_sort_by: "name",
+          });
+          assert.equal(filteredSupplier.total, 1);
+          assert.equal(String(filteredSupplier.data[0].ordered_value), "12");
+          assert.equal(String(filteredSupplier.data[0].received_value), "3");
+          const purchaseOverview = await reports.purchasingOverview(contextA, {
+            from: today,
+            to: today,
+            branch_id: branch.id,
+            warehouse_id: warehouse.id,
+            supplier_id: matrixSupplier.id,
+            currency: "USD",
+            status: "PARTIALLY_RECEIVED",
+          });
+          assert.deepEqual(
+            purchaseOverview.order_value.map((row) => [
+              row.currency,
+              String(row.order_value),
+            ]),
+            [["USD", "12"]],
+          );
+          const purchaseTrend = await reports.purchasingTrends(contextA, {
+            from: today,
+            to: today,
+            branch_id: branch.id,
+            warehouse_id: warehouse.id,
+            supplier_id: matrixSupplier.id,
+            currency: "USD",
+            period: "day",
+          });
+          assert.deepEqual(
+            purchaseTrend.orders.map((row) => [
+              row.currency,
+              String(row.order_value),
+            ]),
+            [["USD", "12"]],
+          );
+
+          await assert.rejects(
+            reports.salesProductPerformance(contextA, {
+              from: "2026-11-25",
+              to: "2026-11-24",
+            }),
+            (error) => error.getStatus() === 400,
+          );
+          await assert.rejects(
+            reports.salesProductPerformance(contextA, {
+              product_id: foreignProduct.id,
+            }),
+            (error) => error.getStatus() === 404,
+          );
+          await assert.rejects(
+            reports.salesProductPerformance(limitedContext, {
+              warehouse_id: secondWarehouse.id,
+            }),
+            (error) => error.getStatus() === 404,
+          );
         },
       );
 

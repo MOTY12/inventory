@@ -190,8 +190,43 @@ test("business report filters accept ISO currencies and reject malformed values"
     metadata,
   );
   assert.equal(valid.currency, "NGN");
+  const combined = await pipe.transform(
+    {
+      from: "2026-01-01",
+      to: "2026-01-31",
+      branch_id: "1a6375c2-9535-4386-92c4-11d50a772af0",
+      warehouse_id: "c6df050e-eab8-495c-9522-1f7ee0848755",
+      customer_id: "62c01f14-5821-4268-a816-048391b9b677",
+      supplier_id: "80bb5c17-2664-42d6-b1a8-32ef55001894",
+      product_id: "5c1c0aaf-f3af-4588-8b96-dd62d28c6d93",
+      category_id: "aa672f0b-5912-4f78-b353-e0d6766a3e96",
+      currency: "USD",
+      status: "CONFIRMED",
+      q: "pump",
+      sort_by: "name",
+      purchasing_sort_by: "received_value",
+      page: "2",
+      page_size: "10",
+    },
+    metadata,
+  );
+  assert.equal(combined.page, 2);
+  assert.equal(combined.page_size, 10);
+  assert.equal(combined.sort_by, "name");
+  assert.equal(combined.purchasing_sort_by, "received_value");
   await assert.rejects(pipe.transform({ currency: "ngn" }, metadata));
   await assert.rejects(pipe.transform({ currency: "NGNN" }, metadata));
+  await assert.rejects(pipe.transform({ sort_by: "total_value" }, metadata));
+  await assert.rejects(
+    pipe.transform({ purchasing_sort_by: "margin" }, metadata),
+  );
+  await assert.rejects(pipe.transform({ status: "PAID" }, metadata));
+  await assert.rejects(
+    pipe.transform({ page_size: "101" }, metadata),
+    (error) =>
+      toApiError(error, "report-page-size").error.code === "VALIDATION_FAILED",
+  );
+  await assert.rejects(pipe.transform({ from: "not-a-date" }, metadata));
 });
 
 test("unknown routes use a consistent not found envelope", () => {

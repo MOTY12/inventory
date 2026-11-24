@@ -12,6 +12,29 @@ type ReportView =
   | "suppliers"
   | "receivables";
 type Summary = Record<string, unknown>;
+type ExportJob = {
+  id: string;
+  report_type: string;
+  status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "EXPIRED";
+  row_count: number | null;
+  last_error: string | null;
+  download_url: string | null;
+};
+
+function detailExportType(view: ReportView) {
+  switch (view) {
+    case "sales-products":
+      return "SALES_PRODUCTS";
+    case "sales-customers":
+      return "SALES_CUSTOMERS";
+    case "purchase-products":
+      return "PURCHASE_PRODUCTS";
+    case "suppliers":
+      return "PURCHASE_SUPPLIERS";
+    default:
+      return null;
+  }
+}
 
 function rows(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value) ? (value as Record<string, unknown>[]) : [];
@@ -30,18 +53,27 @@ export function BusinessReportsPage() {
 }
 
 function BusinessReportsContent() {
-  const { organization, authenticatedRequest } = useSession();
+  const { organization, authenticatedRequest, authenticatedDownload } =
+    useSession();
   const [view, setView] = useState<ReportView>("sales");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [period, setPeriod] = useState<"day" | "week" | "month">("month");
   const [warehouse, setWarehouse] = useState("");
+  const [branch, setBranch] = useState("");
   const [currency, setCurrency] = useState("");
   const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [sort, setSort] = useState("");
   const [page, setPage] = useState(1);
   const [warehouses, setWarehouses] = useState<
     { id: string; name: string; code: string }[]
   >([]);
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [exports, setExports] = useState<ExportJob[]>([]);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportMessage, setExportMessage] = useState("");
+  const [exportError, setExportError] = useState("");
   const [result, setResult] = useState<Summary | null>(null);
   const [trend, setTrend] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,14 +86,27 @@ function BusinessReportsContent() {
       return () => {
         active = false;
       };
-    void authenticatedRequest<{
-      data: { id: string; name: string; code: string }[];
-    }>("/organizations/current/warehouses?page=1&page_size=100&status=ACTIVE")
-      .then((response) => {
-        if (active) setWarehouses(response.data);
+    void Promise.all([
+      authenticatedRequest<{
+        data: { id: string; name: string; code: string }[];
+      }>(
+        "/organizations/current/warehouses?page=1&page_size=100&status=ACTIVE",
+      ),
+      authenticatedRequest<{ data: { id: string; name: string }[] }>(
+        "/organizations/current/branches?page=1&page_size=100&status=ACTIVE",
+      ),
+    ])
+      .then(([warehouseResponse, branchResponse]) => {
+        if (active) {
+          setWarehouses(warehouseResponse.data);
+          setBranches(branchResponse.data);
+        }
       })
       .catch(() => {
-        if (active) setWarehouses([]);
+        if (active) {
+          setWarehouses([]);
+          setBranches([]);
+        }
       });
     return () => {
       active = false;
@@ -83,8 +128,14 @@ function BusinessReportsContent() {
     if (from) params.set("from", from);
     if (to) params.set("to", to);
     if (warehouse) params.set("warehouse_id", warehouse);
+    if (branch) params.set("branch_id", branch);
     if (currency) params.set("currency", currency);
     if (search) params.set("q", search);
+    if (status) params.set("status", status);
+    if ((view === "sales-products" || view === "sales-customers") && sort)
+      params.set("sort_by", sort);
+    if ((view === "purchase-products" || view === "suppliers") && sort)
+      params.set("purchasing_sort_by", sort);
     params.set("page", String(page));
     params.set("page_size", "25");
     const path =
@@ -137,12 +188,15 @@ function BusinessReportsContent() {
     }
   }, [
     authenticatedRequest,
+    branch,
     currency,
     from,
     organization,
     page,
     period,
     search,
+    sort,
+    status,
     to,
     view,
     warehouse,
@@ -152,6 +206,102 @@ function BusinessReportsContent() {
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  const loadExports = useCallback(async () => {
+    if (!organization) {
+      setExports([]);
+      return;
+    }
+    try {
+      const response = await authenticatedRequest<{ data: ExportJob[] }>(
+        "/organizations/current/reports/exports?page=1&page_size=25",
+      );
+      setExports(response.data);
+    } catch {
+      setExports([]);
+    }
+  }, [authenticatedRequest, organization]);
+
+  useEffect(() => {
+    const initial = window.setTimeout(() => void loadExports(), 0);
+    const timer = window.setInterval(() => void loadExports(), 3000);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(timer);
+    };
+  }, [loadExports]);
+
+  const exportCurrentReport = useCallback(async () => {
+    const reportType = detailExportType(view);
+    if (!reportType || !organization) return;
+    setExportBusy(true);
+    setExportError("");
+    setExportMessage("");
+    const filters: Record<string, string> = {};
+    if (from) filters.from = from;
+    if (to) filters.to = to;
+    if (warehouse) filters.warehouse_id = warehouse;
+    if (branch) filters.branch_id = branch;
+    if (currency) filters.currency = currency;
+    if (search.trim()) filters.q = search.trim();
+    if (status) filters.status = status;
+    if (sort && (view === "sales-products" || view === "sales-customers"))
+      filters.sort_by = sort;
+    if (sort && (view === "purchase-products" || view === "suppliers"))
+      filters.purchasing_sort_by = sort;
+    try {
+      await authenticatedRequest(
+        "/organizations/current/reports/exports",
+        { report_type: reportType, filters },
+        "POST",
+        { "Idempotency-Key": crypto.randomUUID() },
+      );
+      setExportMessage("CSV export queued. Status updates appear below.");
+      await loadExports();
+    } catch (cause) {
+      setExportError(
+        cause instanceof Error ? cause.message : "Could not queue this export.",
+      );
+    } finally {
+      setExportBusy(false);
+    }
+  }, [
+    authenticatedRequest,
+    branch,
+    currency,
+    from,
+    loadExports,
+    organization,
+    search,
+    sort,
+    status,
+    to,
+    view,
+    warehouse,
+  ]);
+
+  const downloadExport = useCallback(
+    async (job: ExportJob) => {
+      if (!job.download_url) return;
+      setExportError("");
+      try {
+        const blob = await authenticatedDownload(job.download_url);
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `${job.report_type.toLowerCase()}-${job.id}.csv`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+      } catch (cause) {
+        setExportError(
+          cause instanceof Error
+            ? cause.message
+            : "Could not download this export.",
+        );
+      }
+    },
+    [authenticatedDownload],
+  );
 
   const sections: [string, unknown][] =
     view === "sales-products" ||
@@ -242,7 +392,12 @@ function BusinessReportsContent() {
                 className={view === item ? "report-tab active" : "report-tab"}
                 aria-pressed={view === item}
                 key={item}
-                onClick={() => setView(item)}
+                onClick={() => {
+                  setView(item);
+                  setPage(1);
+                  setStatus("");
+                  setSort("");
+                }}
               >
                 {
                   {
@@ -293,6 +448,23 @@ function BusinessReportsContent() {
               </select>
             </label>
             <label>
+              Branch
+              <select
+                value={branch}
+                onChange={(event) => {
+                  setBranch(event.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">All accessible branches</option>
+                {branches.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
               Currency
               <input
                 maxLength={3}
@@ -323,6 +495,100 @@ function BusinessReportsContent() {
                 />
               </label>
             )}
+            {view === "sales" ||
+            view === "sales-products" ||
+            view === "sales-customers" ? (
+              <label>
+                Order status
+                <select
+                  value={status}
+                  onChange={(event) => {
+                    setStatus(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="">All statuses</option>
+                  {[
+                    "DRAFT",
+                    "CONFIRMED",
+                    "PARTIALLY_FULFILLED",
+                    "FULFILLED",
+                    "CANCELLED",
+                  ].map((item) => (
+                    <option key={item} value={item}>
+                      {item.replaceAll("_", " ")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {view === "purchases" ||
+            view === "purchase-products" ||
+            view === "suppliers" ? (
+              <label>
+                Purchase status
+                <select
+                  value={status}
+                  onChange={(event) => {
+                    setStatus(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <option value="">All statuses</option>
+                  {[
+                    "DRAFT",
+                    "SUBMITTED",
+                    "PARTIALLY_RECEIVED",
+                    "RECEIVED",
+                    "CANCELLED",
+                  ].map((item) => (
+                    <option key={item} value={item}>
+                      {item.replaceAll("_", " ")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {view === "sales-products" ||
+            view === "sales-customers" ||
+            view === "purchase-products" ||
+            view === "suppliers" ? (
+              <label>
+                Sort by
+                <select
+                  value={sort}
+                  onChange={(event) => {
+                    setSort(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  {view === "sales-products" ? (
+                    <>
+                      <option value="">Invoiced value</option>
+                      <option value="ordered_quantity">Ordered quantity</option>
+                      <option value="fulfilled_quantity">
+                        Fulfilled quantity
+                      </option>
+                      <option value="order_count">Order count</option>
+                      <option value="name">Name</option>
+                    </>
+                  ) : view === "sales-customers" ? (
+                    <>
+                      <option value="">Invoiced value</option>
+                      <option value="order_count">Order count</option>
+                      <option value="name">Name</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="">Ordered value</option>
+                      <option value="received_value">Received value</option>
+                      <option value="order_count">Order count</option>
+                      <option value="name">Name</option>
+                    </>
+                  )}
+                </select>
+              </label>
+            ) : null}
             {(view === "sales" || view === "purchases") && (
               <label>
                 Trend interval
@@ -425,6 +691,64 @@ function BusinessReportsContent() {
               ))}
             </section>
           )}
+          {detailExportType(view) ? (
+            <section
+              className="report-export-panel"
+              aria-label="Business report export"
+            >
+              <div>
+                <h2>Export current report</h2>
+                <p>
+                  Creates a private CSV with all rows matching the current
+                  filters.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="button-primary"
+                disabled={exportBusy || loading || Boolean(error)}
+                onClick={() => void exportCurrentReport()}
+              >
+                {exportBusy ? "Queueing…" : "Export CSV"}
+              </button>
+            </section>
+          ) : null}
+          {exportMessage ? <p role="status">{exportMessage}</p> : null}
+          {exportError ? <p role="alert">{exportError}</p> : null}
+          {detailExportType(view) ? (
+            <section
+              className="report-export-history"
+              aria-label="Business export history"
+            >
+              <h2>Export history</h2>
+              {exports.length ? (
+                <ul>
+                  {exports.map((job) => (
+                    <li key={job.id}>
+                      <strong>{job.report_type.replaceAll("_", " ")}</strong>{" "}
+                      <span role="status">{job.status.toLowerCase()}</span>
+                      {job.row_count !== null ? (
+                        <span> · {job.row_count} rows</span>
+                      ) : null}
+                      {job.last_error && job.status === "FAILED" ? (
+                        <span> · {job.last_error}</span>
+                      ) : null}
+                      {job.status === "COMPLETED" && job.download_url ? (
+                        <button
+                          type="button"
+                          onClick={() => void downloadExport(job)}
+                        >
+                          Download CSV
+                        </button>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>No exports have been requested in this workspace.</p>
+              )}
+            </section>
+          ) : null}
           {view === "purchases" && (
             <p className="page-description">
               Outstanding order value represents goods not yet received; it is
