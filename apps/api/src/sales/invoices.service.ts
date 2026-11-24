@@ -473,6 +473,8 @@ export class InvoicesService {
     reason: string,
     key: string,
   ) {
+    if (!reason?.trim())
+      throw new BadRequestException("A void reason is required");
     const payloadHash = hash({ command: "invoice.void", id, reason });
     try {
       const row = await this.prisma.$transaction(async (tx) => {
@@ -707,6 +709,8 @@ export class InvoicesService {
     reason: string,
     key: string,
   ) {
+    if (!reason?.trim())
+      throw new BadRequestException("A reversal reason is required");
     const payloadHash = hash({ command: "payment.reverse", id, reason });
     try {
       return await this.prisma.$transaction(async (tx) => {

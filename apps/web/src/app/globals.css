@@ -1975,6 +1975,39 @@ select {
   border-bottom: 1px solid var(--line);
   margin-bottom: 18px;
 }
+.report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 430px), 1fr));
+  gap: 14px;
+}
+.report-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+}
+.report-card h2 {
+  margin: 0 0 14px;
+  font-size: 15px;
+}
+.report-card table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.report-card th,
+.report-card td {
+  padding: 9px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+.report-card th {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: capitalize;
+}
 .report-tab {
   flex: 0 0 auto;
   border: 0;

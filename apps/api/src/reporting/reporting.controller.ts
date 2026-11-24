@@ -127,4 +127,60 @@ export class ReportingController {
   ) {
     return this.reports.lowStock(request.organization!, query);
   }
+
+  @Get("sales/summary")
+  @RequireCapabilities("reports:read", "finance:read")
+  @ApiOperation({
+    summary: "Sales order, issued invoice, collections and receivables summary",
+  })
+  salesSummary(
+    @Query() query: ReportFilterDto,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.reports.salesOverview(request.organization!, query);
+  }
+
+  @Get("purchases/summary")
+  @RequireCapabilities("reports:read", "finance:read")
+  @ApiOperation({ summary: "Purchase order and goods received summary" })
+  purchasesSummary(
+    @Query() query: ReportFilterDto,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.reports.purchasingOverview(request.organization!, query);
+  }
+
+  @Get("sales/trends")
+  @RequireCapabilities("reports:read", "finance:read")
+  @ApiOperation({
+    summary: "Daily, weekly or monthly sales and collection trends",
+  })
+  salesTrends(
+    @Query() query: ReportFilterDto,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.reports.salesTrends(request.organization!, query);
+  }
+
+  @Get("purchases/trends")
+  @RequireCapabilities("reports:read", "finance:read")
+  @ApiOperation({
+    summary: "Daily, weekly or monthly purchasing and receipt trends",
+  })
+  purchasesTrends(
+    @Query() query: ReportFilterDto,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.reports.purchasingTrends(request.organization!, query);
+  }
+
+  @Get("receivables/aging")
+  @RequireCapabilities("reports:read", "finance:read")
+  @ApiOperation({ summary: "Current-state receivables aging by currency" })
+  receivablesAging(
+    @Query() query: ReportFilterDto,
+    @Req() request: OrganizationRequest,
+  ) {
+    return this.reports.receivablesAging(request.organization!, query);
+  }
 }

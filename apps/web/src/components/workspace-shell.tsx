@@ -55,7 +55,14 @@ const groups = [
   },
   {
     label: "REPORTS",
-    links: [{ href: "/reports", label: "Inventory reports", icon: "reports" }],
+    links: [
+      { href: "/reports", label: "Inventory reports", icon: "reports" },
+      {
+        href: "/reports/business",
+        label: "Sales & purchasing",
+        icon: "reports",
+      },
+    ],
   },
   {
     label: "ADMINISTRATION",
@@ -185,41 +192,48 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
     .map((group) => ({
       ...group,
       links: group.links.filter((item) =>
-        item.href === "/organizations"
-          ? ["OWNER", "ADMIN", "MANAGER"].includes(role)
-          : ["/invoices", "/payments", "/tax-rates"].includes(item.href)
-            ? ["OWNER", "ADMIN", "FINANCE"].includes(role)
-            : item.href === "/customers"
-              ? role !== "BUYER"
-              : item.href === "/sales-orders"
+        item.href === "/reports/business"
+          ? ["OWNER", "ADMIN", "FINANCE", "READ_ONLY", "MEMBER"].includes(role)
+          : item.href === "/organizations"
+            ? ["OWNER", "ADMIN", "MANAGER"].includes(role)
+            : ["/invoices", "/payments", "/tax-rates"].includes(item.href)
+              ? ["OWNER", "ADMIN", "FINANCE"].includes(role)
+              : item.href === "/customers"
                 ? role !== "BUYER"
-                : item.href === "/purchase-orders" || item.href === "/suppliers"
-                  ? ["OWNER", "ADMIN", "MANAGER", "BUYER", "FINANCE"].includes(
-                      role,
-                    )
-                  : item.href === "/locations"
+                : item.href === "/sales-orders"
+                  ? role !== "BUYER"
+                  : item.href === "/purchase-orders" ||
+                      item.href === "/suppliers"
                     ? [
                         "OWNER",
                         "ADMIN",
                         "MANAGER",
                         "BUYER",
-                        "WAREHOUSE_CLERK",
-                        "READ_ONLY",
-                        "MEMBER",
-                        "SALES",
                         "FINANCE",
                       ].includes(role)
-                    : [
-                        "OWNER",
-                        "ADMIN",
-                        "MANAGER",
-                        "BUYER",
-                        "WAREHOUSE_CLERK",
-                        "READ_ONLY",
-                        "MEMBER",
-                        "SALES",
-                        "FINANCE",
-                      ].includes(role),
+                    : item.href === "/locations"
+                      ? [
+                          "OWNER",
+                          "ADMIN",
+                          "MANAGER",
+                          "BUYER",
+                          "WAREHOUSE_CLERK",
+                          "READ_ONLY",
+                          "MEMBER",
+                          "SALES",
+                          "FINANCE",
+                        ].includes(role)
+                      : [
+                          "OWNER",
+                          "ADMIN",
+                          "MANAGER",
+                          "BUYER",
+                          "WAREHOUSE_CLERK",
+                          "READ_ONLY",
+                          "MEMBER",
+                          "SALES",
+                          "FINANCE",
+                        ].includes(role),
       ),
     }))
     .filter((group) => group.links.length > 0);

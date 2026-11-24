@@ -492,6 +492,454 @@ export class ReportingService {
     } as LowStockListQueryDto);
   }
 
+  async salesOverview(context: OrganizationContext, query: ReportFilterDto) {
+    this.validateDateRange(query);
+    if (
+      query.status &&
+      ![
+        "DRAFT",
+        "CONFIRMED",
+        "PARTIALLY_FULFILLED",
+        "FULFILLED",
+        "CANCELLED",
+      ].includes(query.status)
+    )
+      throw new BadRequestException(
+        "The status filter is not valid for sales reports",
+      );
+    const warehouses = await this.authorizedWarehouses(
+      context,
+      query.warehouse_id,
+    );
+    if (warehouses?.length === 0)
+      return {
+        order_status: [],
+        order_value: [],
+        invoice_value: [],
+        collections: [],
+        receivables: [],
+        as_of: new Date().toISOString(),
+        balance_basis: "current_state",
+      };
+    const warehouseFilter = this.warehouseFilter(warehouses, "so.warehouse_id");
+    const customerFilter = query.customer_id
+      ? Prisma.sql`AND so.customer_id=${query.customer_id}::uuid`
+      : Prisma.empty;
+    const currencyFilter = query.currency
+      ? Prisma.sql`AND so.currency=${query.currency}`
+      : Prisma.empty;
+    const from = query.from ? new Date(query.from) : null;
+    const to = query.to ? this.endOfUtcDay(query.to) : null;
+    const statusFilter = query.status
+      ? Prisma.sql`AND so.status=${query.status}::"SalesOrderStatus"`
+      : Prisma.empty;
+    const [orderStatus, orderValue, invoiceValue, collections, receivables] =
+      await Promise.all([
+        this.prisma.$queryRaw<{ status: string; count: bigint }[]>(Prisma.sql`
+        SELECT so.status::text AS status, COUNT(*) AS count FROM sales_orders so
+        WHERE so.organization_id=${context.organizationId}::uuid ${warehouseFilter} ${customerFilter} ${currencyFilter}
+          ${from ? Prisma.sql`AND so.order_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND so.order_date<=${to}::date` : Prisma.empty} ${statusFilter}
+        GROUP BY so.status ORDER BY so.status::text`),
+        this.prisma.$queryRaw<
+          {
+            currency: string;
+            order_count: bigint;
+            order_value: Prisma.Decimal;
+          }[]
+        >(Prisma.sql`
+        SELECT so.currency, COUNT(*) AS order_count, COALESCE(SUM(so.total),0::numeric) AS order_value
+        FROM sales_orders so WHERE so.organization_id=${context.organizationId}::uuid AND so.status<>'CANCELLED'
+          ${warehouseFilter} ${customerFilter} ${currencyFilter}
+          ${from ? Prisma.sql`AND so.order_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND so.order_date<=${to}::date` : Prisma.empty} ${statusFilter}
+        GROUP BY so.currency ORDER BY so.currency`),
+        this.prisma.$queryRaw<
+          {
+            currency: string;
+            invoice_count: bigint;
+            invoice_value: Prisma.Decimal;
+          }[]
+        >(Prisma.sql`
+        SELECT i.currency, COUNT(*) AS invoice_count, COALESCE(SUM(i.total_amount),0::numeric) AS invoice_value
+        FROM invoices i JOIN sales_orders so ON so.organization_id=i.organization_id AND so.id=i.sales_order_id
+        WHERE i.organization_id=${context.organizationId}::uuid AND i.status='ISSUED'
+          ${warehouseFilter} ${customerFilter} ${currencyFilter}
+          ${from ? Prisma.sql`AND i.issue_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND i.issue_date<=${to}::date` : Prisma.empty}
+        GROUP BY i.currency ORDER BY i.currency`),
+        this.prisma.$queryRaw<
+          {
+            currency: string;
+            collected: Prisma.Decimal;
+            reversed: Prisma.Decimal;
+          }[]
+        >(Prisma.sql`
+        SELECT p.currency, COALESCE(SUM(CASE WHEN r.id IS NULL THEN p.amount ELSE 0::numeric END),0::numeric) AS collected,
+          COALESCE(SUM(CASE WHEN r.id IS NOT NULL THEN r.amount ELSE 0::numeric END),0::numeric) AS reversed
+        FROM customer_payments p JOIN payment_allocations a ON a.organization_id=p.organization_id AND a.payment_id=p.id
+        JOIN invoices i ON i.organization_id=a.organization_id AND i.id=a.invoice_id
+        JOIN sales_orders so ON so.organization_id=i.organization_id AND so.id=i.sales_order_id
+        LEFT JOIN payment_reversals r ON r.organization_id=p.organization_id AND r.payment_id=p.id
+        WHERE p.organization_id=${context.organizationId}::uuid AND i.status='ISSUED'
+          ${warehouseFilter} ${customerFilter} ${currencyFilter}
+          ${from ? Prisma.sql`AND p.payment_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND p.payment_date<=${to}::date` : Prisma.empty}
+        GROUP BY p.currency ORDER BY p.currency`),
+        this.prisma.$queryRaw<
+          {
+            currency: string;
+            outstanding: Prisma.Decimal;
+            overdue: Prisma.Decimal;
+            invoice_count: bigint;
+            without_due_date: bigint;
+          }[]
+        >(Prisma.sql`
+        WITH effective AS (SELECT a.organization_id,a.invoice_id,SUM(CASE WHEN r.id IS NULL THEN a.amount ELSE 0::numeric END) AS paid
+          FROM payment_allocations a JOIN customer_payments p ON p.organization_id=a.organization_id AND p.id=a.payment_id
+          LEFT JOIN payment_reversals r ON r.organization_id=p.organization_id AND r.payment_id=p.id
+          GROUP BY a.organization_id,a.invoice_id)
+        SELECT i.currency, COALESCE(SUM(i.total_amount-COALESCE(e.paid,0::numeric)),0::numeric) AS outstanding,
+          COALESCE(SUM(CASE WHEN i.due_date<CURRENT_DATE THEN i.total_amount-COALESCE(e.paid,0::numeric) ELSE 0::numeric END),0::numeric) AS overdue,
+          COUNT(*) FILTER (WHERE i.total_amount>COALESCE(e.paid,0::numeric)) AS invoice_count,
+          COUNT(*) FILTER (WHERE i.due_date IS NULL AND i.total_amount>COALESCE(e.paid,0::numeric)) AS without_due_date
+        FROM invoices i JOIN sales_orders so ON so.organization_id=i.organization_id AND so.id=i.sales_order_id
+        LEFT JOIN effective e ON e.organization_id=i.organization_id AND e.invoice_id=i.id
+        WHERE i.organization_id=${context.organizationId}::uuid AND i.status='ISSUED'
+          ${warehouseFilter} ${customerFilter} ${currencyFilter}
+          ${from ? Prisma.sql`AND i.issue_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND i.issue_date<=${to}::date` : Prisma.empty}
+        GROUP BY i.currency ORDER BY i.currency`),
+      ]);
+    return {
+      order_status: orderStatus.map((row) => ({
+        status: row.status,
+        count: Number(row.count),
+      })),
+      order_value: orderValue.map((row) => ({
+        ...row,
+        order_count: Number(row.order_count),
+      })),
+      invoice_value: invoiceValue.map((row) => ({
+        ...row,
+        invoice_count: Number(row.invoice_count),
+      })),
+      collections,
+      receivables: receivables.map((row) => ({
+        ...row,
+        invoice_count: Number(row.invoice_count),
+        without_due_date: Number(row.without_due_date),
+      })),
+      as_of: new Date().toISOString(),
+      balance_basis: "current_state",
+    };
+  }
+
+  async purchasingOverview(
+    context: OrganizationContext,
+    query: ReportFilterDto,
+  ) {
+    this.validateDateRange(query);
+    if (
+      query.status &&
+      ![
+        "DRAFT",
+        "SUBMITTED",
+        "PARTIALLY_RECEIVED",
+        "RECEIVED",
+        "CANCELLED",
+      ].includes(query.status)
+    )
+      throw new BadRequestException(
+        "The status filter is not valid for purchasing reports",
+      );
+    const warehouses = await this.authorizedWarehouses(
+      context,
+      query.warehouse_id,
+    );
+    if (warehouses?.length === 0)
+      return {
+        order_status: [],
+        order_value: [],
+        received_value: [],
+        outstanding: [],
+        as_of: new Date().toISOString(),
+      };
+    const warehouseFilter = this.warehouseFilter(warehouses, "po.warehouse_id");
+    const supplierFilter = query.supplier_id
+      ? Prisma.sql`AND po.supplier_id=${query.supplier_id}::uuid`
+      : Prisma.empty;
+    const currencyFilter = query.currency
+      ? Prisma.sql`AND po.currency=${query.currency}`
+      : Prisma.empty;
+    const from = query.from ? new Date(query.from) : null;
+    const to = query.to ? this.endOfUtcDay(query.to) : null;
+    const statusFilter = query.status
+      ? Prisma.sql`AND po.status=${query.status}::"PurchaseOrderStatus"`
+      : Prisma.empty;
+    const [orderStatus, orderValue, receivedValue, outstanding] =
+      await Promise.all([
+        this.prisma.$queryRaw<
+          { status: string; count: bigint }[]
+        >(Prisma.sql`SELECT po.status::text AS status,COUNT(*) AS count FROM purchase_orders po
+        WHERE po.organization_id=${context.organizationId}::uuid ${warehouseFilter} ${supplierFilter} ${currencyFilter}
+        ${from ? Prisma.sql`AND po.order_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND po.order_date<=${to}::date` : Prisma.empty} ${statusFilter}
+        GROUP BY po.status ORDER BY po.status::text`),
+        this.prisma.$queryRaw<
+          {
+            currency: string;
+            order_count: bigint;
+            order_value: Prisma.Decimal;
+          }[]
+        >(Prisma.sql`SELECT po.currency,COUNT(*) AS order_count,COALESCE(SUM(po.subtotal),0::numeric) AS order_value
+        FROM purchase_orders po WHERE po.organization_id=${context.organizationId}::uuid AND po.status<>'CANCELLED' ${warehouseFilter} ${supplierFilter} ${currencyFilter}
+        ${from ? Prisma.sql`AND po.order_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND po.order_date<=${to}::date` : Prisma.empty} ${statusFilter}
+        GROUP BY po.currency ORDER BY po.currency`),
+        this.prisma.$queryRaw<
+          { currency: string; received_value: Prisma.Decimal }[]
+        >(Prisma.sql`SELECT po.currency,COALESCE(SUM(grl.quantity*pol.unit_cost),0::numeric) AS received_value
+        FROM goods_receipt_lines grl JOIN goods_receipts gr ON gr.organization_id=grl.organization_id AND gr.id=grl.receipt_id
+        JOIN purchase_orders po ON po.organization_id=gr.organization_id AND po.id=gr.purchase_order_id
+        JOIN purchase_order_lines pol ON pol.organization_id=grl.organization_id AND pol.id=grl.purchase_order_line_id
+        WHERE po.organization_id=${context.organizationId}::uuid ${warehouseFilter} ${supplierFilter} ${currencyFilter}
+        ${from ? Prisma.sql`AND gr.received_at>=${from}` : Prisma.empty} ${to ? Prisma.sql`AND gr.received_at<=${to}` : Prisma.empty}
+        GROUP BY po.currency ORDER BY po.currency`),
+        this.prisma.$queryRaw<
+          {
+            currency: string;
+            unit_code: string;
+            outstanding_value: Prisma.Decimal;
+            outstanding_quantity: Prisma.Decimal;
+          }[]
+        >(Prisma.sql`SELECT po.currency,
+        COALESCE(SUM((pol.ordered_quantity-pol.received_quantity)*pol.unit_cost),0::numeric) AS outstanding_value,
+        u.code AS unit_code, COALESCE(SUM(pol.ordered_quantity-pol.received_quantity),0::numeric) AS outstanding_quantity
+        FROM purchase_orders po JOIN purchase_order_lines pol ON pol.organization_id=po.organization_id AND pol.purchase_order_id=po.id
+        JOIN units u ON u.organization_id=pol.organization_id AND u.id=pol.unit_id
+        WHERE po.organization_id=${context.organizationId}::uuid AND po.status NOT IN ('CANCELLED','RECEIVED') ${warehouseFilter} ${supplierFilter} ${currencyFilter}
+        ${from ? Prisma.sql`AND po.order_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND po.order_date<=${to}::date` : Prisma.empty} ${statusFilter}
+        GROUP BY po.currency,u.code ORDER BY po.currency,u.code`),
+      ]);
+    return {
+      order_status: orderStatus.map((row) => ({
+        status: row.status,
+        count: Number(row.count),
+      })),
+      order_value: orderValue.map((row) => ({
+        ...row,
+        order_count: Number(row.order_count),
+      })),
+      received_value: receivedValue,
+      outstanding,
+      as_of: new Date().toISOString(),
+      outstanding_value_is_payable: false,
+    };
+  }
+
+  async salesTrends(context: OrganizationContext, query: ReportFilterDto) {
+    this.validateDateRange(query);
+    const warehouses = await this.authorizedWarehouses(
+      context,
+      query.warehouse_id,
+    );
+    if (warehouses?.length === 0)
+      return {
+        period: query.period ?? "day",
+        orders: [],
+        fulfilled: [],
+        invoices: [],
+        collections: [],
+      };
+    const bucket = query.period ?? "day";
+    const warehouseFilter = this.warehouseFilter(warehouses, "so.warehouse_id");
+    const customerFilter = query.customer_id
+      ? Prisma.sql`AND so.customer_id=${query.customer_id}::uuid`
+      : Prisma.empty;
+    const currencyFilter = query.currency
+      ? Prisma.sql`AND so.currency=${query.currency}`
+      : Prisma.empty;
+    const from = query.from ? new Date(query.from) : null;
+    const to = query.to ? this.endOfUtcDay(query.to) : null;
+    const [orders, fulfilled, invoices, collections] = await Promise.all([
+      this.prisma.$queryRaw<
+        {
+          period: Date;
+          currency: string;
+          order_count: bigint;
+          order_value: Prisma.Decimal;
+        }[]
+      >(Prisma.sql`
+        SELECT date_trunc(${bucket},so.order_date::timestamp)::date AS period,so.currency,COUNT(*) AS order_count,
+          COALESCE(SUM(so.total) FILTER (WHERE so.status<>'CANCELLED'),0::numeric) AS order_value
+        FROM sales_orders so
+        WHERE so.organization_id=${context.organizationId}::uuid ${warehouseFilter} ${customerFilter} ${currencyFilter}
+          ${from ? Prisma.sql`AND so.order_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND so.order_date<=${to}::date` : Prisma.empty}
+        GROUP BY 1,2 ORDER BY 1,2 LIMIT 500`),
+      this.prisma.$queryRaw<
+        {
+          period: Date;
+          currency: string;
+          unit_code: string;
+          fulfilled_quantity: Prisma.Decimal;
+        }[]
+      >(Prisma.sql`
+        SELECT date_trunc(${bucket},f.posted_at AT TIME ZONE 'UTC')::date AS period,so.currency,sol.unit_code,
+          COALESCE(SUM(fl.quantity),0::numeric) AS fulfilled_quantity
+        FROM sales_fulfillments f
+        JOIN sales_orders so ON so.organization_id=f.organization_id AND so.id=f.sales_order_id
+        JOIN sales_fulfillment_lines fl ON fl.organization_id=f.organization_id AND fl.fulfillment_id=f.id
+        JOIN sales_order_lines sol ON sol.organization_id=fl.organization_id AND sol.id=fl.sales_order_line_id
+        WHERE so.organization_id=${context.organizationId}::uuid ${warehouseFilter} ${customerFilter} ${currencyFilter}
+          ${from ? Prisma.sql`AND f.posted_at>=${from}` : Prisma.empty} ${to ? Prisma.sql`AND f.posted_at<=${to}` : Prisma.empty}
+        GROUP BY 1,2,3 ORDER BY 1,2,3 LIMIT 500`),
+      this.prisma.$queryRaw<
+        { period: Date; currency: string; invoice_value: Prisma.Decimal }[]
+      >(Prisma.sql`
+        SELECT date_trunc(${bucket},i.issue_date::timestamp)::date AS period,i.currency,
+          COALESCE(SUM(i.total_amount),0::numeric) AS invoice_value
+        FROM invoices i JOIN sales_orders so ON so.organization_id=i.organization_id AND so.id=i.sales_order_id
+        WHERE i.organization_id=${context.organizationId}::uuid AND i.status='ISSUED'
+          ${warehouseFilter} ${customerFilter} ${currencyFilter}
+          ${from ? Prisma.sql`AND i.issue_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND i.issue_date<=${to}::date` : Prisma.empty}
+        GROUP BY 1,2 ORDER BY 1,2 LIMIT 500`),
+      this.prisma.$queryRaw<
+        {
+          period: Date;
+          currency: string;
+          collected: Prisma.Decimal;
+          reversed: Prisma.Decimal;
+        }[]
+      >(Prisma.sql`
+        SELECT date_trunc(${bucket},p.payment_date::timestamp)::date AS period,p.currency,
+          COALESCE(SUM(CASE WHEN r.id IS NULL THEN p.amount ELSE 0::numeric END),0::numeric) AS collected,
+          COALESCE(SUM(CASE WHEN r.id IS NOT NULL THEN r.amount ELSE 0::numeric END),0::numeric) AS reversed
+        FROM customer_payments p JOIN payment_allocations a ON a.organization_id=p.organization_id AND a.payment_id=p.id
+        JOIN invoices i ON i.organization_id=a.organization_id AND i.id=a.invoice_id
+        JOIN sales_orders so ON so.organization_id=i.organization_id AND so.id=i.sales_order_id
+        LEFT JOIN payment_reversals r ON r.organization_id=p.organization_id AND r.payment_id=p.id
+        WHERE p.organization_id=${context.organizationId}::uuid AND i.status='ISSUED'
+          ${warehouseFilter} ${customerFilter} ${currencyFilter}
+          ${from ? Prisma.sql`AND p.payment_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND p.payment_date<=${to}::date` : Prisma.empty}
+        GROUP BY 1,2 ORDER BY 1,2 LIMIT 500`),
+    ]);
+    return {
+      period: bucket,
+      orders: orders.map((row) => ({
+        ...row,
+        order_count: Number(row.order_count),
+      })),
+      fulfilled,
+      invoices,
+      collections,
+    };
+  }
+
+  async purchasingTrends(context: OrganizationContext, query: ReportFilterDto) {
+    this.validateDateRange(query);
+    const warehouses = await this.authorizedWarehouses(
+      context,
+      query.warehouse_id,
+    );
+    if (warehouses?.length === 0)
+      return { period: query.period ?? "day", orders: [], received: [] };
+    const bucket = query.period ?? "day";
+    const warehouseFilter = this.warehouseFilter(warehouses, "po.warehouse_id");
+    const supplierFilter = query.supplier_id
+      ? Prisma.sql`AND po.supplier_id=${query.supplier_id}::uuid`
+      : Prisma.empty;
+    const currencyFilter = query.currency
+      ? Prisma.sql`AND po.currency=${query.currency}`
+      : Prisma.empty;
+    const from = query.from ? new Date(query.from) : null;
+    const to = query.to ? this.endOfUtcDay(query.to) : null;
+    const [orders, received] = await Promise.all([
+      this.prisma.$queryRaw<
+        {
+          period: Date;
+          currency: string;
+          order_count: bigint;
+          order_value: Prisma.Decimal;
+        }[]
+      >(Prisma.sql`
+        SELECT date_trunc(${bucket},po.order_date::timestamp)::date AS period,po.currency,COUNT(*) AS order_count,
+          COALESCE(SUM(po.subtotal) FILTER (WHERE po.status<>'CANCELLED'),0::numeric) AS order_value
+        FROM purchase_orders po WHERE po.organization_id=${context.organizationId}::uuid ${warehouseFilter} ${supplierFilter} ${currencyFilter}
+          ${from ? Prisma.sql`AND po.order_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND po.order_date<=${to}::date` : Prisma.empty}
+        GROUP BY 1,2 ORDER BY 1,2 LIMIT 500`),
+      this.prisma.$queryRaw<
+        { period: Date; currency: string; received_value: Prisma.Decimal }[]
+      >(Prisma.sql`
+        SELECT date_trunc(${bucket},gr.received_at AT TIME ZONE 'UTC')::date AS period,po.currency,
+          COALESCE(SUM(grl.quantity*pol.unit_cost),0::numeric) AS received_value
+        FROM goods_receipt_lines grl JOIN goods_receipts gr ON gr.organization_id=grl.organization_id AND gr.id=grl.receipt_id
+        JOIN purchase_orders po ON po.organization_id=gr.organization_id AND po.id=gr.purchase_order_id
+        JOIN purchase_order_lines pol ON pol.organization_id=grl.organization_id AND pol.id=grl.purchase_order_line_id
+        WHERE po.organization_id=${context.organizationId}::uuid ${warehouseFilter} ${supplierFilter} ${currencyFilter}
+          ${from ? Prisma.sql`AND gr.received_at>=${from}` : Prisma.empty} ${to ? Prisma.sql`AND gr.received_at<=${to}` : Prisma.empty}
+        GROUP BY 1,2 ORDER BY 1,2 LIMIT 500`),
+    ]);
+    return {
+      period: bucket,
+      orders: orders.map((row) => ({
+        ...row,
+        order_count: Number(row.order_count),
+      })),
+      received,
+    };
+  }
+
+  async receivablesAging(context: OrganizationContext, query: ReportFilterDto) {
+    this.validateDateRange(query);
+    const warehouses = await this.authorizedWarehouses(
+      context,
+      query.warehouse_id,
+    );
+    if (warehouses?.length === 0)
+      return {
+        as_of: new Date().toISOString(),
+        basis: "current_state",
+        data: [],
+      };
+    const warehouseFilter = this.warehouseFilter(warehouses, "so.warehouse_id");
+    const customerFilter = query.customer_id
+      ? Prisma.sql`AND i.customer_id=${query.customer_id}::uuid`
+      : Prisma.empty;
+    const currencyFilter = query.currency
+      ? Prisma.sql`AND i.currency=${query.currency}`
+      : Prisma.empty;
+    const from = query.from ? new Date(query.from) : null;
+    const to = query.to ? this.endOfUtcDay(query.to) : null;
+    const data = await this.prisma.$queryRaw<
+      {
+        currency: string;
+        no_due_date: bigint;
+        not_yet_due: Prisma.Decimal;
+        days_1_30: Prisma.Decimal;
+        days_31_60: Prisma.Decimal;
+        days_61_90: Prisma.Decimal;
+        over_90: Prisma.Decimal;
+      }[]
+    >(Prisma.sql`WITH effective AS (
+      SELECT a.organization_id,a.invoice_id,SUM(CASE WHEN r.id IS NULL THEN a.amount ELSE 0::numeric END) AS paid
+      FROM payment_allocations a JOIN customer_payments p ON p.organization_id=a.organization_id AND p.id=a.payment_id
+      LEFT JOIN payment_reversals r ON r.organization_id=p.organization_id AND r.payment_id=p.id GROUP BY a.organization_id,a.invoice_id
+    ), balance AS (
+      SELECT i.id,i.currency,i.due_date,i.total_amount-COALESCE(e.paid,0::numeric) AS outstanding FROM invoices i
+      JOIN sales_orders so ON so.organization_id=i.organization_id AND so.id=i.sales_order_id LEFT JOIN effective e ON e.organization_id=i.organization_id AND e.invoice_id=i.id
+      WHERE i.organization_id=${context.organizationId}::uuid AND i.status='ISSUED' AND i.total_amount>COALESCE(e.paid,0::numeric)
+        ${warehouseFilter} ${customerFilter} ${currencyFilter} ${from ? Prisma.sql`AND i.issue_date>=${from}::date` : Prisma.empty} ${to ? Prisma.sql`AND i.issue_date<=${to}::date` : Prisma.empty}
+    ) SELECT currency,COUNT(*) FILTER (WHERE due_date IS NULL) AS no_due_date,
+      COALESCE(SUM(outstanding) FILTER (WHERE due_date IS NOT NULL AND due_date>=CURRENT_DATE),0::numeric) AS not_yet_due,
+      COALESCE(SUM(outstanding) FILTER (WHERE due_date<CURRENT_DATE AND due_date>=CURRENT_DATE-30),0::numeric) AS days_1_30,
+      COALESCE(SUM(outstanding) FILTER (WHERE due_date<CURRENT_DATE-30 AND due_date>=CURRENT_DATE-60),0::numeric) AS days_31_60,
+      COALESCE(SUM(outstanding) FILTER (WHERE due_date<CURRENT_DATE-60 AND due_date>=CURRENT_DATE-90),0::numeric) AS days_61_90,
+      COALESCE(SUM(outstanding) FILTER (WHERE due_date<CURRENT_DATE-90),0::numeric) AS over_90
+      FROM balance GROUP BY currency ORDER BY currency`);
+    return {
+      as_of: new Date().toISOString(),
+      basis: "current_state",
+      data: data.map((row) => ({
+        ...row,
+        no_due_date: Number(row.no_due_date),
+      })),
+    };
+  }
+
   private async authorizedWarehouses(
     context: OrganizationContext,
     requestedId?: string,

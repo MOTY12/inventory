@@ -82,9 +82,9 @@ export class RecordPaymentDto {
 }
 
 export class VoidInvoiceDto {
-  @IsString() @MaxLength(500) reason!: string;
+  @IsString() @Matches(/\S/) @MaxLength(500) reason!: string;
 }
 
 export class ReversePaymentDto {
-  @IsString() @MaxLength(500) reason!: string;
+  @IsString() @Matches(/\S/) @MaxLength(500) reason!: string;
 }

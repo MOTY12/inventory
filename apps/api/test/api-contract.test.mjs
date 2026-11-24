@@ -8,6 +8,7 @@ import {
   validationExceptionFactory,
 } from "../dist/common/api-exception.filter.js";
 import { PaginationQueryDto } from "../dist/common/pagination-query.dto.js";
+import { ReportFilterDto } from "../dist/reporting/reporting.dto.js";
 import { PasswordHasher } from "../dist/identity/password-hasher.js";
 import { JwtService } from "@nestjs/jwt";
 import { AccessTokenService } from "../dist/identity/access-token.service.js";
@@ -176,6 +177,23 @@ test("pagination DTO rejects out of range values and transforms valid query valu
   );
 });
 
+test("business report filters accept ISO currencies and reject malformed values", async () => {
+  const pipe = new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    exceptionFactory: validationExceptionFactory,
+  });
+  const metadata = { type: "query", metatype: ReportFilterDto };
+  const valid = await pipe.transform(
+    { currency: "NGN", from: "2026-01-01" },
+    metadata,
+  );
+  assert.equal(valid.currency, "NGN");
+  await assert.rejects(pipe.transform({ currency: "ngn" }, metadata));
+  await assert.rejects(pipe.transform({ currency: "NGNN" }, metadata));
+});
+
 test("unknown routes use a consistent not found envelope", () => {
   assert.deepEqual(toApiError(new NotFoundException(), "request-456"), {
     error: {
@@ -257,11 +275,40 @@ test("running API responds with request IDs and Swagger document", async () => {
     );
     assert.equal(barcodeLookup.status, 401);
 
+    for (const [path, method] of [
+      ["/api/v1/organizations/current/sales/invoices", "GET"],
+      ["/api/v1/organizations/current/sales/invoices/summary", "GET"],
+      ["/api/v1/organizations/current/sales/invoices", "POST"],
+      [
+        "/api/v1/organizations/current/sales/invoices/00000000-0000-4000-8000-000000000001/pdf",
+        "GET",
+      ],
+      ["/api/v1/organizations/current/sales/payments", "GET"],
+      ["/api/v1/organizations/current/sales/payments", "POST"],
+      ["/api/v1/organizations/current/sales/tax-rates", "GET"],
+      [
+        "/api/v1/organizations/current/sales/customers/00000000-0000-4000-8000-000000000001/financial-summary",
+        "GET",
+      ],
+    ]) {
+      const response = await fetch(`${baseUrl}${path}`, { method });
+      assert.equal(
+        response.status,
+        401,
+        `${method} ${path} must require a bearer token`,
+      );
+    }
+
     for (const report of [
       "inventory-summary",
       "valuation",
       "movements",
       "low-stock",
+      "sales/summary",
+      "sales/trends",
+      "purchases/summary",
+      "purchases/trends",
+      "receivables/aging",
     ]) {
       const response = await fetch(
         `${baseUrl}/api/v1/organizations/current/reports/${report}`,
@@ -345,6 +392,19 @@ test("running API responds with request IDs and Swagger document", async () => {
     assert.ok(spec.paths["/api/v1/organizations/current/reports/valuation"]);
     assert.ok(spec.paths["/api/v1/organizations/current/reports/movements"]);
     assert.ok(spec.paths["/api/v1/organizations/current/reports/low-stock"]);
+    assert.ok(
+      spec.paths["/api/v1/organizations/current/reports/sales/summary"],
+    );
+    assert.ok(spec.paths["/api/v1/organizations/current/reports/sales/trends"]);
+    assert.ok(
+      spec.paths["/api/v1/organizations/current/reports/purchases/summary"],
+    );
+    assert.ok(
+      spec.paths["/api/v1/organizations/current/reports/purchases/trends"],
+    );
+    assert.ok(
+      spec.paths["/api/v1/organizations/current/reports/receivables/aging"],
+    );
     assert.ok(spec.paths["/api/v1/organizations/current/reports/exports"]);
     assert.ok(
       spec.paths[
@@ -354,6 +414,19 @@ test("running API responds with request IDs and Swagger document", async () => {
     assert.ok(
       spec.paths["/api/v1/organizations/current/catalog/products/by-barcode"],
     );
+    for (const path of [
+      "/api/v1/organizations/current/sales/invoices",
+      "/api/v1/organizations/current/sales/invoices/{invoiceId}",
+      "/api/v1/organizations/current/sales/invoices/{invoiceId}/issue",
+      "/api/v1/organizations/current/sales/invoices/{invoiceId}/void",
+      "/api/v1/organizations/current/sales/invoices/{invoiceId}/pdf",
+      "/api/v1/organizations/current/sales/payments",
+      "/api/v1/organizations/current/sales/payments/{paymentId}/reverse",
+      "/api/v1/organizations/current/sales/tax-rates",
+      "/api/v1/organizations/current/sales/customers/{customerId}/financial-summary",
+    ]) {
+      assert.ok(spec.paths[path], `OpenAPI must register ${path}`);
+    }
 
     for (
       let attempt = 0;

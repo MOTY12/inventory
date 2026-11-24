@@ -8,7 +8,8 @@
 - **Prisma migration status:** Resolved. The additive SALES-004 migration was applied to local `inventory_dev`; `npx prisma migrate status --config prisma.config.ts` reports 21 migrations and database schema up to date. No reset or deletion occurred.
 
 - **QUALITY-001 authenticated workflow UAT:** INV-010's scanner component acceptance passed in headless Chrome: native Enter once, repeated quantity increment, rapid order, unknown-code feedback/no quantity change, recovery, focus, and no parent submit. The authenticated new-sales-order, PO-receiving, and sales-picking pages were not exercised end-to-end; track that broader manual/browser workflow evidence under QUALITY-001. INV-010's documented acceptance is complete.
-- **SALES-004 acceptance:** Explicit owner approval DEC-010 removes the financial-policy blocker. Backend and frontend workflows plus isolated PostgreSQL coverage are implemented, but authenticated browser/controller UAT, concurrent independent invoice numbering, void/tax-update edge cases and some database trigger cases remain. SALES-004 is IN_PROGRESS; REPORT-002 remains downstream until it is complete.
+- **SALES-004 acceptance:** DEC-010 is approved; expanded isolated PostgreSQL and authenticated HTTP/controller coverage passed 3/3, including numbering, void/tax/reversal, immutability, auth/tenant/warehouse scope and non-mutation. Interactive authenticated browser UAT remains unverified because no local inventory UI was available in the browser. SALES-004 remains IN_PROGRESS and is not counted complete.
+- **REPORT-002 acceptance:** Sales/purchase/receivables summary, aging, daily/weekly/monthly trends and a live-data UI are implemented; authenticated API queries pass in the temporary PostgreSQL suite. Product/customer/supplier performance, expanded test fixtures, CSV export integration, query performance evidence and browser UAT remain. REPORT-002 is IN_PROGRESS; completed count remains 30/47.
 - **Report performance:** All export types, queue/storage, private service download, retries and expiry passed isolated integration, but a representative large-tenant performance benchmark was not run.
 - **Dependency audit:** Current `npm audit --omit=dev --audit-level=high` could not reach `registry.npmjs.org` (`ENOTFOUND`). Earlier installation reported seven lockfile advisories (4 moderate, 3 high) without full advisory detail. No clean audit is claimed.
 - **Docker CLI:** `docker compose ps` is blocked by access to the Docker daemon socket. PostgreSQL, Redis and S3Mock endpoints were reachable and the isolated integration suites used them successfully; Docker health itself is not claimed for this session.
@@ -17,8 +18,7 @@
 
 ## Completed verification in this session
 
-- Full `npm test`: 57 passed, 0 failed, 3 opt-in PostgreSQL suites skipped; web tests 2/2. SALES-004 isolated PostgreSQL suite: 2 passed, 0 failed, 0 skipped. Typecheck, lint, format, Prisma validation, migration status (21/21), production build and diff check passed.
-- Migration deploy succeeded after an initial sandbox schema-engine failure. No application data was reset or deleted. The passing integration test created and dropped its own uniquely named temporary schema.
+- Current explicit SALES-004 plus REPORT-002 PostgreSQL suite: 3 passed, 0 failed, 0 skipped; it uses a uniquely named temporary schema. Workspace checks passed: `npm test` 59 API/shared pass, 0 fail, 3 opt-in suites skipped, web 2/2; typecheck, lint, format, production build, Prisma validation and diff check passed. Read-only migration status is 21/21. Migration deploy succeeded in prior work; no application data was reset or deleted.
 
 ## Production hardening and policy gates
 

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { plainToInstance } from "class-transformer";
+import { validateSync } from "class-validator";
 import { Prisma } from "../dist/generated/prisma/client.js";
 import { MembershipRole } from "../dist/generated/prisma/enums.js";
 import {
@@ -8,6 +10,10 @@ import {
 } from "../dist/sales/invoice-calculations.js";
 import { renderInvoicePdf } from "../dist/sales/invoice-pdf.js";
 import { roleHasCapability } from "../dist/organizations/access-policy.js";
+import {
+  ReversePaymentDto,
+  VoidInvoiceDto,
+} from "../dist/sales/invoices.dto.js";
 
 const decimal = (value) => new Prisma.Decimal(value);
 
@@ -84,5 +90,20 @@ test("finance routes are allowed for finance and owners, not sales or warehouse 
   assert.equal(
     roleHasCapability(MembershipRole.WAREHOUSE_CLERK, "finance:write"),
     false,
+  );
+});
+
+test("invoice void and payment reversal DTOs reject blank audit reasons", () => {
+  assert.ok(
+    validateSync(plainToInstance(VoidInvoiceDto, { reason: "  " })).length > 0,
+  );
+  assert.ok(
+    validateSync(plainToInstance(ReversePaymentDto, { reason: "" })).length > 0,
+  );
+  assert.equal(
+    validateSync(
+      plainToInstance(VoidInvoiceDto, { reason: "Customer request" }),
+    ).length,
+    0,
   );
 });
