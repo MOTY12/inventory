@@ -1,5 +1,13 @@
 # Session log
 
+# 2026-11-24 — Acceptance checkpoint and safe resume
+
+- Resumed on `develop` at `4079799` (`update the inventory`); actual worktree was clean. Corrected stale progress references to `c961de7` and stale claims of uncommitted application files. No source code, user credentials or business records were changed; no commit, push, deploy, migration, reset or deletion occurred.
+- Re-ran opt-in suites with disposable PostgreSQL schemas: `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs apps/api/test/sales-invoices.postgres.integration.test.mjs` passed **16/16**, 0 skipped, in 61.5s. The first sandbox attempt was denied local socket access (`EPERM`); the approved rerun passed. Coverage includes report reconciliation/filters, product/customer/supplier workflows, PO partial/full receipts, transfer dispatch/receipt/replay, reservation races, and authenticated invoice/payment/report controller paths.
+- Re-ran `npm test`: API/shared 59 passed, 0 failed, 3 opt-in PostgreSQL suites skipped; web 2 passed. `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build` (Next Webpack; 29 routes), and `npm run db:validate --workspace=@inventory/api` passed. Read-only migration status: 22 found, schema current.
+- Chrome remained authenticated to the named QA workspace; inspected its empty Suppliers screen without mutation. Final API readiness probe returned HTTP 000 because the API process was no longer listening, although an earlier readiness probe in this session returned HTTP 200. Do not claim the service remains running.
+- No roadmap task met all acceptance conditions. Count remains **30/47**. SALES-004 and REPORT-002 remain IN_PROGRESS; QUALITY-001 remains NOT_STARTED pending REPORT-002 and SALES-004. Missing evidence: populated browser workflow/download capture, report role/tenant matrix closure, safe representative query plans, and one complete combined business lifecycle. No reusable fixture utility was implemented in this checkpoint; this is the first implementation step recorded in `next-session.md`.
+
 # 2026-11-23 — INV-010 barcode component acceptance
 
 - Resumed on `develop` at `4a6dbde`; worktree clean. No production code changes were needed. Used a temporary page to render the existing scanner; removed the page and its temporary public-route exception afterward.

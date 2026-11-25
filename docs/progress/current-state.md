@@ -4,7 +4,7 @@
 
 ## Repository and roadmap
 
-- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD `c961de7` (`updatae reporting`). Worktree contains four application/test files plus progress/roadmap documentation changes and a new QUALITY-001 preparation document. No commit, push, deployment, migration application, database reset, or data deletion was performed.
+- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD `4079799` (`update the inventory`). Worktree was clean at session start. No source files were changed, and no commit, push, deployment, migration application, database reset, or data deletion was performed.
 - Completed tasks: **30/47**, counted from individual ledger entries. No task newly completed. SALES-004 and REPORT-002 remain IN_PROGRESS; QUALITY-001 remains NOT_STARTED because REPORT-002 is unfinished.
 - Local `inventory_dev` PostgreSQL at `localhost:5433` is reachable. Read-only Prisma status: 22 migrations found, schema up to date. Prisma schema validation passed.
 
@@ -23,7 +23,10 @@
 - Default `npm test`: API/shared **59 passed, 0 failed, 3 opt-in PostgreSQL skipped**; web **2 passed, 0 failed**.
 - Passed after implementation: `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build` (Next Webpack production build; 29 routes), and `npm run db:validate --workspace=@inventory/api`.
 - Read-only `npx prisma migrate status --config prisma.config.ts`: **22 migrations found; schema up to date**.
-- `git diff --check` passed before the current documentation edits; rerun at handoff.
+- This session reran `RUN_POSTGRES_INTEGRATION=1 node --test apps/api/test/inventory.postgres.integration.test.mjs apps/api/test/sales-invoices.postgres.integration.test.mjs`: **16 passed, 0 failed, 0 skipped** in 61.5 seconds against isolated PostgreSQL schemas. The sandboxed attempt first failed with local socket `EPERM`; the authorized local-DB rerun passed.
+- This session reran `npm test`: API/shared **59 passed, 0 failed, 3 opt-in PostgreSQL skipped**; web **2 passed, 0 failed**. Also passed `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run db:validate --workspace=@inventory/api`, `npm run build`, and read-only migration status (22/22 current).
+- A final readiness probe to `http://127.0.0.1:4000/api/v1/health/ready` returned HTTP 000 because the API process was no longer listening at that moment. Do not describe the API as currently running; an earlier probe in this session returned HTTP 200.
+- Current-session browser review confirmed the authenticated QA workspace and empty Suppliers list. It did not create or alter business records. The earlier browser report review and its limitations remain as recorded above.
 
 ## Task status and remaining gaps
 
@@ -34,6 +37,6 @@
 
 ## Runtime and constraints
 
-- Local Postgres, Redis and S3Mock were available to completed isolated tests. API and web development servers were running during browser acceptance (ports 4000 and 3002; port 3000 was left untouched).
+- Local Postgres, Redis and S3Mock were available to completed isolated tests. The QA browser was available on port 3002; API readiness was unavailable on port 4000 at final recheck. Port 3000 was left untouched.
 - No schema migration was needed for this session's changes. No existing database data was reset or deleted.
 - No commit or push. Registry audit and broader release/security gaps remain recorded in `docs/progress/blockers.md`.

@@ -4,10 +4,10 @@
 
 ## Resume facts
 
-- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD `c961de7` (`updatae reporting`). Four application/test files and the progress/roadmap documentation edits plus `docs/operations/quality-001-acceptance.md` remain uncommitted. Preserve these and inspect the diff before edits. No commit, push, deploy, migration application or DB reset occurred.
+- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD `4079799` (`update the inventory`). The worktree was clean at session start. No source files were changed. No commit, push, deploy, migration application or DB reset occurred.
 - Roadmap count remains **30/47**. SALES-004 and REPORT-002 are IN_PROGRESS; QUALITY-001 is NOT_STARTED until REPORT-002 acceptance passes.
 - PostgreSQL `inventory_dev` at `localhost:5433` is reachable; read-only migration status confirms 22/22 current. The interrupted full-suite attempt does not replace completed test results.
-- The QA Chrome session is signed in on the test workspace `Quality 001 QA Workspace` at `http://localhost:3002`. Do not record or change account credentials. It has no sales/invoice/payment report data. A product was created during UI exploration and a related stock-count document remains DRAFT/unposted; no movement was posted.
+- The authenticated QA Chrome session is on `Quality 001 QA Workspace` at `http://localhost:3002`. Do not record or change account credentials. It has no sales/invoice/payment report data. A product was created during earlier UI exploration and a related stock-count document remains DRAFT/unposted; no movement was posted. This session only inspected the empty Suppliers screen and did not mutate records.
 
 ## Changes in the previous session
 
@@ -23,17 +23,18 @@
 - `npm test`: API/shared **59 passed, 0 failed, 3 opt-in suites skipped**; web **2 passed, 0 failed**.
 - Passed: `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build` (Next Webpack build, 29 routes), `npm run db:validate --workspace=@inventory/api`.
 - Read-only `npx prisma migrate status --config prisma.config.ts`: 22 migrations found; database schema up to date.
-- Rerun `git diff --check` after documentation edits. No verification result may be inferred from the interrupted rerun.
+- This session reran the two opt-in DB files (`inventory.postgres.integration.test.mjs` and `sales-invoices.postgres.integration.test.mjs`): **16 passed, 0 failed, 0 skipped** in 61.5 seconds using isolated schemas. Default `npm test`: **59 API/shared passed, 3 opt-in DB suites skipped; 2 web passed**. Typecheck, lint, format check, build and Prisma validation passed again.
+- Final API readiness probe failed to connect (HTTP 000); service was not listening at the final check. It had returned HTTP 200 earlier in this session. Restart the API before further browser/API acceptance.
 
 ## Exact next implementation/acceptance steps
 
-1. Resume with REPORT-002 acceptance. Inspect current diffs and test the completed filter/security matrix via opt-in PostgreSQL; split suites if the combined runner stalls, and report an interrupted test accurately.
-2. Add focused disposable-DB coverage for purchasing multi-currency pagination and export filter/result consistency. Verify cross-tenant resource denial, ungranted warehouse denial, finance role/capability denial, revoked requester behavior and stable sort ties for each report/export surface.
-3. Run a safe representative `EXPLAIN ANALYZE` using a sufficiently populated disposable fixture; record query, fixture row counts and actual timings. Do not run on customer production data.
-4. In authenticated Chrome, seed/use an authorized disposable QA scenario only through existing supported UI/API workflows. Verify report filters produce rows and download an actual CSV file. Then test SALES-004 invoice issue, partial/multiple payment, reversal, PDF and customer history using a valid sales order; do not alter/reset credentials.
-5. Complete SALES-004 and REPORT-002 only when documented acceptance evidence is complete. Until then keep task statuses and count at 30/47.
-6. Only after REPORT-002 is satisfied, execute QUALITY-001's receive → stock → transfer → sale → fulfill/payment → report end-to-end reconciliation, including ledger/reservation/balance equality and retry idempotency. `docs/operations/quality-001-acceptance.md` is a preparation-only scenario; all actual results there must remain “Not run” until executed.
-7. Run required checks and refresh `current-state.md`, `session-log.md`, `pending-tasks.md`, `blockers.md`, task ledger and this checkpoint. Do not commit/push unless separately directed.
+1. Start the local API again and confirm readiness; leave unrelated port 3000 untouched. Confirm PostgreSQL/Redis/S3Mock health and retain the current 22/22 schema without reset.
+2. Build the requested reusable QA fixture workflow as a local-only tool that authenticates through supported APIs, requires the exact `Quality 001 QA Workspace` target (or an isolated test organization), uses unique run IDs, persists a secret-free resumable manifest, and never posts or deletes the pre-existing draft count/product. Test safety gates and resume behavior before seeding.
+3. Resume SALES-004 browser acceptance using populated, run-scoped fixtures: draft/edit/tax/discount/issue, PDF file capture, partial/multiple payments, reversal/replacement, overpayment and void permissions, customer history, workspace/role behavior, and responsive/error/loading states. Do not change credentials.
+4. Resume REPORT-002 with populated fixtures: verify multi-currency pagination and currency-separated ordering, all four financial CSV types, captured and parsed downloads against API values, tenant/warehouse/role denial, and permission revocation.
+5. Run safe `EXPLAIN (ANALYZE, BUFFERS)` queries only on a sufficiently populated disposable schema. Record the exact query, fixture volume, timings and plan evidence; do not query production data.
+6. Keep SALES-004 and REPORT-002 IN_PROGRESS until acceptance evidence is complete. Only then execute the named `COMPLETE_INVENTORY_BUSINESS_LIFECYCLE` scenario in `docs/operations/quality-001-acceptance.md`, reconciling procurement, transfer, reservations, picking, fulfillment, invoice/payment, reports, ledger and balances including duplicate retries.
+7. Update task statuses, count and all progress docs from evidence. No commit/push unless separately directed.
 
 ## Remaining gaps
 
