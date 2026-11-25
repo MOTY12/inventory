@@ -1,14 +1,17 @@
 import {
   chmod,
+  lstat,
   mkdir,
   open,
   readFile,
+  realpath,
   rename,
   unlink,
   writeFile,
 } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve, sep } from "node:path";
 import { randomUUID } from "node:crypto";
+import { QA_SCENARIOS } from "./scenarios/registry.mjs";
 
 const SECRET_KEY =
   /(access.?token|refresh.?token|password|secret|credential|authorization|cookie)/i;
@@ -46,7 +49,60 @@ const RESOURCE_COLLECTIONS = [
   "fulfillments",
   "invoices",
   "payments",
+  "exports",
 ];
+
+export async function ensureManifestDirectory(
+  directory,
+  { create = true } = {},
+) {
+  if (
+    typeof directory !== "string" ||
+    !directory ||
+    directory.includes("\0") ||
+    directory.split(/[\\/]/).includes("..") ||
+    directory.startsWith("/") ||
+    /^[A-Za-z]:/.test(directory)
+  ) {
+    throw new Error("QA manifest directory must be repository-relative");
+  }
+  const root = await realpath(process.cwd());
+  const target = resolve(root, directory);
+  const fromRoot = relative(root, target);
+  if (
+    !fromRoot ||
+    fromRoot === ".." ||
+    fromRoot.startsWith(`..${sep}`) ||
+    fromRoot.startsWith(sep)
+  ) {
+    throw new Error("QA manifest directory escaped the repository");
+  }
+  let current = root;
+  for (const segment of fromRoot.split(sep).filter(Boolean)) {
+    current = resolve(current, segment);
+    let info;
+    try {
+      info = await lstat(current);
+    } catch (error) {
+      if (error.code !== "ENOENT" || !create) throw error;
+      await mkdir(current, { mode: 0o700 });
+      info = await lstat(current);
+    }
+    if (info.isSymbolicLink() || !info.isDirectory())
+      throw new Error("QA manifest directory cannot contain symlinks or files");
+    const actual = await realpath(current);
+    const actualRelative = relative(root, actual);
+    if (
+      actualRelative === ".." ||
+      actualRelative.startsWith(`..${sep}`) ||
+      actualRelative.startsWith(sep)
+    ) {
+      throw new Error("QA manifest directory resolved outside the repository");
+    }
+  }
+  await chmod(target, 0o700);
+  return target;
+}
 
 export function validateManifest(manifest) {
   assertManifestSafe(manifest);
@@ -57,14 +113,17 @@ export function validateManifest(manifest) {
     !manifest ||
     typeof manifest !== "object" ||
     Array.isArray(manifest) ||
-    manifest.schemaVersion !== 1 ||
+    ![1, 2].includes(manifest.schemaVersion) ||
     !/^qa-[a-zA-Z0-9-]{12,80}$/.test(manifest.runId || "") ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       manifest.organizationId || "",
     ) ||
     !["development", "test"].includes(manifest.environment) ||
-    (manifest.scenarioName !== undefined &&
+    (manifest.schemaVersion === 1 &&
+      manifest.scenarioName !== undefined &&
       manifest.scenarioName !== "baseline") ||
+    (manifest.schemaVersion === 2 &&
+      !QA_SCENARIOS[manifest.scenarioName || "baseline"]) ||
     typeof manifest.stage !== "string" ||
     !manifest.resources ||
     typeof manifest.resources !== "object" ||
@@ -87,6 +146,12 @@ export function validateManifest(manifest) {
     fail();
   }
   for (const collection of RESOURCE_COLLECTIONS) {
+    if (
+      manifest.schemaVersion === 1 &&
+      collection === "exports" &&
+      manifest.resources.exports === undefined
+    )
+      continue;
     const items = manifest.resources[collection];
     if (
       !Array.isArray(items) ||
@@ -115,7 +180,7 @@ export function createManifest({
   scenarioName = "baseline",
 }) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     runId,
     environment,
     scenarioName,
@@ -138,6 +203,7 @@ export function createManifest({
       fulfillments: [],
       invoices: [],
       payments: [],
+      exports: [],
     },
     expected: {
       currency: "NGN",

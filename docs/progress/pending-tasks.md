@@ -6,7 +6,7 @@ This summary is subordinate to the task ledger in `docs/implementation/task-brea
 
 ## Current implementation
 
-- **QUALITY-001 — IN_PROGRESS (harness implementation only):** API-driven baseline fixture commands now validate the local API/database fingerprint, exact QA organization and active OWNER, use exact resource recovery and per-run locks, persist stable idempotency keys, and independently verify movements, reservations, cost, balances and payment reversal totals. QA generator tests pass 11/11. Its live scenario remains NOT RUN and is gated by SALES-004/REPORT-002 acceptance and missing local QA account settings.
+- **QUALITY-001 — IN_PROGRESS (harness implementation only):** API-driven baseline plus a document-state scenario registry. Document-state fixture operations cover PO DRAFT/SUBMITTED/PARTIALLY_RECEIVED/RECEIVED/CANCELLED and sales DRAFT/CONFIRMED/PARTIALLY_FULFILLED/FULFILLED/CANCELLED. QA tests pass 14/14, including mock API-shaped resume without duplicate PO/SO creation and a symlink-containment check. Neither fixture has been run against the live QA API. Invoice states, multi-currency, authorization accounts and CSV export reconciliation are not implemented. Operational acceptance remains gated by SALES-004/REPORT-002 and missing QA settings.
 - **REPORT-003 — COMPLETED:** All four CSV exports, queue/storage integration, service-authenticated downloads, multi-warehouse movement ordering, historical/current WAC, NGN/USD separation, low-stock values, transient retry, expiry object deletion and expired-download denial passed isolated tests. See task ledger and next-session checkpoint.
 
 ## Current next-stage work
@@ -26,7 +26,7 @@ This summary is subordinate to the task ledger in `docs/implementation/task-brea
 - Registry-backed dependency audit remains unknown; prior audit could not reach npm registry and install output reported seven advisories (4 moderate, 3 high).
 - Large-export performance benchmark and authenticated browser Reports UAT remain broader hardening/UAT gaps.
 
-Checkpoint 2026-11-25: three isolated PostgreSQL suites passed 26/26 in this session. Default tests passed 60 API/shared, 2 web, with 3 opt-in PostgreSQL suites skipped. QA harness unit tests passed 11/11. See `current-state.md` and `next-session.md` for exact live-runtime blockers and next steps. Migration status is 22/22.
+Checkpoint 2026-11-25: three isolated PostgreSQL suites passed 26/26. Default tests passed 60 API/shared and 2 web, with 3 opt-in PostgreSQL suites skipped. QA tests passed 14/14. Typecheck, lint, formatting, API build, isolated web production build (29 routes), and Prisma validation passed. Migration status is 22/22. The document-state fixture was not authenticated/seeded; see `current-state.md` and `next-session.md` for blockers and steps.
 
 ## Environment evidence
 

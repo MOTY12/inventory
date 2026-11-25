@@ -1,6 +1,6 @@
 # QUALITY-001 end-to-end acceptance preparation
 
-**Status:** HARNESS IMPLEMENTED — OPERATIONAL ACCEPTANCE NOT RUN
+**Status:** HARNESS IN PROGRESS — OPERATIONAL ACCEPTANCE NOT RUN
 **Updated:** 2026-11-25 (Africa/Lagos)
 **Prerequisite:** REPORT-002 acceptance must pass before this scenario is executed.
 
@@ -34,9 +34,10 @@ This document defines the intended deterministic local QA scenario. It is not ev
 **Actual outcome:** Not run.  
 **Reason:** SALES-004 and REPORT-002 acceptance remains IN_PROGRESS. The local API-driven fixture generator is implemented, but seed execution stopped before authentication because `NODE_ENV`/`QA_ENVIRONMENT` are not configured in `.env`; when explicitly set for the attempt, `QA_ORGANIZATION_ID` was also missing. CLI credentials are absent. No API request or mutation occurred.
 **Source hardening:** Before any authenticated run, the generator now verifies the active OWNER and exact QA organization directly in the configured database and compares the API's development-only live database fingerprint. Baseline recovery now matches exact document attributes, uses exact decimal quantities, rejects ambiguity, serializes per-run execution with a lock, and verifies movement, reservation, WAC and payment reconciliation. Baseline gross payments are NGN 220,000, reversals NGN 60,000, effective payments NGN 160,000, and fulfillment cost NGN 100,000.
+**Additional scenario implementation:** A registry now selects `baseline` or `document-states`; manifests created by new runs are schema v2 and valid schema-v1 baseline manifests remain compatible. The document-state scenario builds six PO and five sales-order statuses through ordinary authenticated API routes and verifies status plus exact ordered/received/picked/fulfilled quantities. Its test uses an API-shaped fake and checks that resume does not increase PO/SO counts; it is not a live API/DB execution. Invoice lifecycle variants, NGN/USD comparison, authorization users, CSV reconciliation, and browser journeys are not implemented or run.
 **Fixture organization/branch/warehouses:** Not created for this scenario.  
 **Document IDs and expected/actual quantities or amounts:** Not run.  
-**Tests/browser evidence:** QA generator unit/safety tests passed 11/11 after harness hardening; existing isolated PostgreSQL suites passed 26/26. No generator seed, browser invoice lifecycle, PDF/CSV file capture or named E2E execution occurred.
+**Tests/browser evidence:** QA generator tests passed 14/14; existing isolated PostgreSQL suites passed 26/26. No generator seed, browser invoice lifecycle, PDF/CSV file capture or named E2E execution occurred.
 **Ledger/balance/reservation reconciliation:** Not run.  
 **Authorization and idempotency outcomes:** Not run.  
 **Remaining prerequisite:** Configure the explicitly approved QA organization UUID and existing OWNER account credentials in ignored local `.env`; run `qa:seed` and `qa:verify`; complete REPORT-002 filter/security, multi-currency pagination/export and performance evidence plus SALES-004 browser acceptance. Then run this named scenario separately and record actual data.

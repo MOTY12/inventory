@@ -9,12 +9,18 @@ import {
 import {
   acquireRunLock,
   createManifest,
+  ensureManifestDirectory,
   loadManifest,
   manifestPath,
   newRunId,
   operationKey,
   saveManifest,
 } from "./manifest.mjs";
+import { selectQaScenario } from "./scenarios/registry.mjs";
+import {
+  seedDocumentStates,
+  verifyDocumentStates,
+} from "./scenarios/document-states.mjs";
 
 const ROOT = "/organizations/current";
 const list = (value) =>
@@ -73,12 +79,7 @@ export function oneOrNone(matches, label) {
 }
 
 export function qaScenarioFromEnvironment(env) {
-  const scenarioName = env.QA_SCENARIO || "baseline";
-  if (scenarioName !== "baseline")
-    throw new Error(
-      `Unsupported QA_SCENARIO=${scenarioName}; currently supported scenario: baseline`,
-    );
-  return scenarioName;
+  return selectQaScenario(env).id;
 }
 
 async function allPages(api, path, filters, pageSize = 100) {
@@ -356,7 +357,7 @@ export async function seedQaRun(env = process.env, { resume = false } = {}) {
   const runId = resume ? env.QA_RUN_ID : newRunId();
   if (resume && !runId)
     throw new Error("Set QA_RUN_ID to the existing run to resume");
-  const directory = runManifestDirectory(env);
+  const directory = await ensureManifestDirectory(runManifestDirectory(env));
   const release = await acquireRunLock(runId, directory);
   try {
     return await seedQaRunLocked(env, { resume, runId, directory });
@@ -514,6 +515,17 @@ async function seedQaRunLocked(env, { resume, runId, directory }) {
       destination = warehouses[1],
       supplier = suppliers[0],
       customer = customers[0];
+
+    if (scenarioName === "document-states") {
+      await seedDocumentStates(api, manifest, save, {
+        products,
+        unit,
+        supplier,
+        customer,
+        source,
+      });
+      return { manifest, path };
+    }
 
     currentOperation = "procurement.create_po";
     let po = await recoverPurchaseOrder(api, manifest, {
@@ -953,7 +965,10 @@ export async function verifyQaRun(env = process.env) {
   const runId = env.QA_RUN_ID;
   if (!runId) throw new Error("Set QA_RUN_ID to the run manifest to verify");
   const scenarioName = qaScenarioFromEnvironment(env);
-  const path = manifestPath(runId, runManifestDirectory(env));
+  const directory = await ensureManifestDirectory(runManifestDirectory(env), {
+    create: false,
+  });
+  const path = manifestPath(runId, directory);
   const manifest = await loadManifest(path);
   if (
     manifest.organizationId !== organization.id ||
@@ -963,6 +978,17 @@ export async function verifyQaRun(env = process.env) {
     throw new Error(
       "QA manifest does not match the authorized organization/environment",
     );
+  if (scenarioName === "document-states") {
+    if (!manifest.scenarioResult)
+      throw new Error("Manifest has no document-state scenario result");
+    const documentStateReport = await verifyDocumentStates(api, manifest);
+    return {
+      runId,
+      organizationId: organization.id,
+      stage: manifest.stage,
+      checks: documentStateReport.checks,
+    };
+  }
   const ids = manifest.scenario;
   if (!ids) throw new Error("Manifest has no completed operational scenario");
   const po = await api.get(

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -13,6 +13,7 @@ import {
   acquireRunLock,
   assertManifestSafe,
   createManifest,
+  ensureManifestDirectory,
   loadManifest,
   manifestPath,
   newRunId,
@@ -35,6 +36,8 @@ import {
   scaled,
   transferMatches,
 } from "./workflow.mjs";
+import { verifyDocumentStates } from "./scenarios/document-states.mjs";
+import { seedDocumentStates } from "./scenarios/document-states.mjs";
 
 const base = () => ({
   NODE_ENV: "development",
@@ -94,7 +97,7 @@ test("QA safety gate rejects production, missing or mismatched org, and remote t
   );
 });
 
-test("scenario selection defaults to baseline and rejects unsupported scenarios", () => {
+test("scenario registry selects only implemented workflows", () => {
   assert.equal(qaScenarioFromEnvironment({}), "baseline");
   assert.equal(
     qaScenarioFromEnvironment({ QA_SCENARIO: "baseline" }),
@@ -102,7 +105,11 @@ test("scenario selection defaults to baseline and rejects unsupported scenarios"
   );
   assert.throws(
     () => qaScenarioFromEnvironment({ QA_SCENARIO: "multi-currency" }),
-    /currently supported scenario: baseline/,
+    /supported scenarios: baseline, document-states/,
+  );
+  assert.equal(
+    qaScenarioFromEnvironment({ QA_SCENARIO: "document-states" }),
+    "document-states",
   );
 });
 
@@ -250,6 +257,251 @@ test("manifest schema rejects malformed collections and unsafe manifest director
   assert.throws(
     () => runManifestDirectory({ QA_MANIFEST_DIR: "/tmp/qa" }),
     /repository-relative/,
+  );
+  const legacy = { ...manifest, schemaVersion: 1 };
+  delete legacy.resources.exports;
+  assert.equal(validateManifest(legacy), legacy);
+  assert.throws(
+    () => validateManifest({ ...manifest, scenarioName: "multi-currency" }),
+    /Malformed or unsupported/,
+  );
+});
+
+test("manifest directory rejects symlinks that resolve outside the repository", async () => {
+  const root = await mkdtemp(join(process.cwd(), ".qa-containment-test-"));
+  try {
+    await symlink(tmpdir(), join(root, "outside"), "dir");
+    const directory = `${root.slice(process.cwd().length + 1)}/outside/run`;
+    await assert.rejects(
+      ensureManifestDirectory(directory),
+      /symlinks|outside the repository/,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("document-state verifier checks live statuses against the manifest", async () => {
+  const expectedPurchase = [
+    "DRAFT",
+    "SUBMITTED",
+    "PARTIALLY_RECEIVED",
+    "RECEIVED",
+    "CANCELLED",
+    "RECEIVED",
+  ];
+  const expectedSales = [
+    "DRAFT",
+    "CONFIRMED",
+    "PARTIALLY_FULFILLED",
+    "FULFILLED",
+    "CANCELLED",
+  ];
+  const purchaseQuantities = [
+    ["2", "0"],
+    ["2", "0"],
+    ["2", "1"],
+    ["10", "10"],
+    ["2", "0"],
+    ["10", "10"],
+  ];
+  const salesQuantities = [
+    ["1", "0", "0"],
+    ["1", "0", "0"],
+    ["2", "1", "1"],
+    ["2", "2", "2"],
+    ["1", "0", "0"],
+  ];
+  const resources = [
+    ...expectedPurchase.map((status, index) => ({
+      id: `po-${index}`,
+      status,
+      lines: [
+        {
+          orderedQuantity: `${purchaseQuantities[index][0]}.000000`,
+          receivedQuantity: `${purchaseQuantities[index][1]}.000000`,
+        },
+      ],
+    })),
+    ...expectedSales.map((status, index) => ({
+      id: `so-${index}`,
+      status,
+      lines: [
+        {
+          orderedQuantity: `${salesQuantities[index][0]}.000000`,
+          pickedQuantity: `${salesQuantities[index][1]}.000000`,
+          fulfilledQuantity: `${salesQuantities[index][2]}.000000`,
+        },
+      ],
+    })),
+  ];
+  const api = {
+    get: async (path) => resources.find((item) => path.endsWith(item.id)),
+  };
+  const manifest = {
+    scenarioResult: {
+      purchaseOrders: resources.slice(0, 6).map(({ id, status, lines }) => ({
+        id,
+        status,
+        orderedQuantity: lines[0].orderedQuantity,
+        receivedQuantity: lines[0].receivedQuantity,
+      })),
+      salesOrders: resources.slice(6).map(({ id, status, lines }) => ({
+        id,
+        status,
+        orderedQuantity: lines[0].orderedQuantity,
+        pickedQuantity: lines[0].pickedQuantity,
+        fulfilledQuantity: lines[0].fulfilledQuantity,
+      })),
+    },
+  };
+  const result = await verifyDocumentStates(api, manifest);
+  assert.equal(Object.values(result.checks).length, 11);
+  assert.ok(Object.values(result.checks).every(Boolean));
+  await assert.rejects(
+    verifyDocumentStates(api, {
+      scenarioResult: {
+        ...manifest.scenarioResult,
+        salesOrders: [{ id: "so-0", status: "FULFILLED" }],
+      },
+    }),
+    /Document-state verification failed/,
+  );
+});
+
+test("document-state scenario creates and resumes multiple real-shaped documents without duplicates", async () => {
+  const purchaseOrders = new Map();
+  const salesOrders = new Map();
+  const replayed = new Map();
+  let serial = 0;
+  const api = {
+    async get(path) {
+      const id = path.split("/").at(-1).split("?")[0];
+      if (path.includes("/purchase-orders/"))
+        return structuredClone(purchaseOrders.get(id));
+      if (path.includes("/sales/orders/"))
+        return structuredClone(salesOrders.get(id));
+      if (path.includes("/purchase-orders?"))
+        return { data: [...purchaseOrders.values()] };
+      return { data: [...salesOrders.values()] };
+    },
+    async post(path, body, idempotencyKey) {
+      if (idempotencyKey && replayed.has(idempotencyKey))
+        return replayed.get(idempotencyKey);
+      let result;
+      if (path.endsWith("/purchase-orders")) {
+        const id = `po-${++serial}`;
+        result = {
+          id,
+          number: id,
+          status: "DRAFT",
+          supplierId: body.supplierId,
+          warehouseId: body.warehouseId,
+          currency: body.currency,
+          lines: body.lines.map((line, index) => ({
+            id: `${id}-line-${index}`,
+            productId: line.productId,
+            unitId: line.unitId,
+            orderedQuantity: `${line.quantity}.000000`,
+            receivedQuantity: "0.000000",
+            unitCost: `${line.unitCost}.0000`,
+          })),
+        };
+        purchaseOrders.set(id, result);
+      } else if (
+        path.includes("/purchase-orders/") &&
+        path.endsWith("/submit")
+      ) {
+        const order = purchaseOrders.get(path.split("/").at(-2));
+        order.status = "SUBMITTED";
+        result = order;
+      } else if (
+        path.includes("/purchase-orders/") &&
+        path.endsWith("/cancel")
+      ) {
+        const order = purchaseOrders.get(path.split("/").at(-2));
+        order.status = "CANCELLED";
+        result = order;
+      } else if (
+        path.includes("/purchase-orders/") &&
+        path.endsWith("/receipts")
+      ) {
+        const order = purchaseOrders.get(path.split("/").at(-2));
+        const line = order.lines[0];
+        line.receivedQuantity = `${Number(line.receivedQuantity) + Number(body.lines[0].quantity)}.000000`;
+        order.status =
+          Number(line.receivedQuantity) === Number(line.orderedQuantity)
+            ? "RECEIVED"
+            : "PARTIALLY_RECEIVED";
+        result = { id: `receipt-${serial}-${line.receivedQuantity}` };
+      } else if (path.endsWith("/sales/orders")) {
+        const id = `so-${++serial}`;
+        result = {
+          id,
+          number: id,
+          status: "DRAFT",
+          ...body,
+          lines: body.lines.map((line, index) => ({
+            id: `${id}-line-${index}`,
+            productId: line.productId,
+            orderedQuantity: `${line.quantity}.000000`,
+            pickedQuantity: "0.000000",
+            fulfilledQuantity: "0.000000",
+          })),
+        };
+        salesOrders.set(id, result);
+      } else if (path.includes("/sales/orders/") && path.endsWith("/confirm")) {
+        const order = salesOrders.get(path.split("/").at(-2));
+        order.status = "CONFIRMED";
+        result = order;
+      } else if (path.includes("/sales/orders/") && path.endsWith("/cancel")) {
+        const order = salesOrders.get(path.split("/").at(-2));
+        order.status = "CANCELLED";
+        result = order;
+      } else if (path.includes("/sales/orders/") && path.endsWith("/picks")) {
+        const order = salesOrders.get(path.split("/").at(-2));
+        order.lines[0].pickedQuantity = `${Number(order.lines[0].pickedQuantity) + Number(body.lines[0].quantity)}.000000`;
+        result = { id: `pick-${serial}-${order.lines[0].pickedQuantity}` };
+      } else if (
+        path.includes("/sales/orders/") &&
+        path.endsWith("/fulfillments")
+      ) {
+        const order = salesOrders.get(path.split("/").at(-2));
+        order.lines[0].fulfilledQuantity = `${Number(order.lines[0].fulfilledQuantity) + Number(body.lines[0].quantity)}.000000`;
+        order.status =
+          Number(order.lines[0].fulfilledQuantity) ===
+          Number(order.lines[0].orderedQuantity)
+            ? "FULFILLED"
+            : "PARTIALLY_FULFILLED";
+        result = {
+          id: `fulfillment-${serial}-${order.lines[0].fulfilledQuantity}`,
+        };
+      } else throw new Error(`Unexpected fake API route ${path}`);
+      if (idempotencyKey) replayed.set(idempotencyKey, structuredClone(result));
+      return structuredClone(result);
+    },
+  };
+  const manifest = createManifest({
+    organizationId: base().QA_ORGANIZATION_ID,
+  });
+  const save = async () => {};
+  const context = {
+    products: Array.from({ length: 6 }, (_, i) => ({ id: `product-${i + 1}` })),
+    unit: { id: "unit-1" },
+    supplier: { id: "supplier-1", name: "QA supplier" },
+    customer: { id: "customer-1" },
+    source: { id: "warehouse-1" },
+  };
+  await seedDocumentStates(api, manifest, save, context);
+  assert.equal(Object.keys(manifest.scenarioResult).includes("scenario"), true);
+  assert.equal(purchaseOrders.size, 6);
+  assert.equal(salesOrders.size, 5);
+  const counts = [purchaseOrders.size, salesOrders.size];
+  await seedDocumentStates(api, manifest, save, context);
+  assert.deepEqual([purchaseOrders.size, salesOrders.size], counts);
+  assert.equal(
+    (await verifyDocumentStates(api, manifest)).checks.sales_4_fulfilled,
+    true,
   );
 });
 

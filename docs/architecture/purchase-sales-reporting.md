@@ -47,3 +47,7 @@ Known acceptance gaps: report PostgreSQL fixtures now cover partial/full receipt
 ## Local QA target verification
 
 The development/test API readiness response includes a SHA-256 fingerprint of the live PostgreSQL database, schema, server address and port; production omits this field. The QA runner compares this with a direct read-only PostgreSQL connection before login/mutation and verifies the exact organization plus an active OWNER account. This prevents a CLI `.env` pointing to one local database from silently seeding through an API connected to another. The fingerprint contains no credentials and is accepted only from the required loopback HTTP API.
+
+## QA scenario coverage status
+
+The QA tooling registry currently supports `baseline` and `document-states`. The latter uses the authenticated PO and sales-order APIs to create representative lifecycle statuses; it does not yet seed invoice variants, authorization identities, cross-currency transaction sets, or REPORT-003 artifacts. These are fixture/testing gaps, not changes to reporting semantics or accounting requirements. New manifests use schema v2 while the loader retains valid v1 baseline compatibility. Neither scenario's operational acceptance is implied by unit tests or a production build.

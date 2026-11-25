@@ -1,5 +1,11 @@
 # Session log
 
+# 2026-11-25 — QA scenario registry and document-state fixtures
+
+- Resumed on `develop` at `8d3e044`; initial worktree was clean. Added a fail-closed scenario registry for `baseline` and `document-states`, schema-v2 manifests with v1 baseline compatibility, symlink-resolved manifest-directory containment, and resumable fixture operations through the existing authenticated API for PO DRAFT/SUBMITTED/PARTIALLY_RECEIVED/RECEIVED/CANCELLED and SO DRAFT/CONFIRMED/PARTIALLY_FULFILLED/FULFILLED/CANCELLED states. Added live-status/quantity verifier and mock API-shaped duplicate-free resume test. Invoice lifecycle, multi-currency, authorization identities, financial exports and authenticated browser acceptance remain unimplemented/unrun.
+- `npm run qa:test`: **14/14 passed**. `npm test`: **60 API/shared passed, 3 opt-in PostgreSQL skipped; web 2/2 passed**. Explicit PostgreSQL suites passed **10/10**, **13/13**, and **3/3**, total **26/26**; first sandbox attempts failed with EPERM/database unavailable and approved local reruns passed using isolated schemas. Typecheck, lint, format, API build, isolated-copy Next Webpack build (29 routes), Prisma validation, migration status (22/22), and `git diff --check` passed.
+- Docker Compose reports PostgreSQL, Redis and S3Mock healthy. Started and left local API/web dev servers running. Readiness returned HTTP 200; a read-only CLI PostgreSQL identity query matched the API fingerprint. Chrome rendered the login page; no credentials were entered. QA configuration names still absent: `NODE_ENV`, `QA_ENVIRONMENT`, `QA_API_BASE_URL`, `QA_ORGANIZATION_ID`, `QA_ORGANIZATION_NAME`, `QA_EMAIL`, `QA_PASSWORD`; `DATABASE_URL` is present. No scenario seed, authenticated browser journey, migration, reset, data deletion, commit, push or deployment occurred. Completed count remains **30/47**.
+
 # 2026-11-25 — QA fixture generator implementation
 
 - Resumed on `develop`, HEAD `b520e51`; worktree was clean at start. Added the local QA fixture generator, commands, tests, guide and checkpoint updates. No application-domain source or Prisma migration changed; no commit, push, deploy, DB reset, business-record mutation or credential change occurred.
