@@ -3,6 +3,14 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "../../features/auth/session-provider";
+import {
+  DataTable,
+  type DataTableColumn,
+} from "../../components/ui/data-table";
+import { PageHeader } from "../../components/ui/page-header";
+import { StatusBadge } from "../../components/ui/status-badge";
+import { ConfirmDialog } from "../../components/ui/confirm-dialog";
+import { Drawer } from "../../components/ui/drawer";
 
 type Supplier = {
   id: string;
@@ -41,6 +49,24 @@ const fields = [
   ["countryCode", "Country code"],
   ["termsNotes", "Terms notes"],
 ] as const;
+const fieldGroups: { title: string; keys: readonly string[] }[] = [
+  {
+    title: "Contact information",
+    keys: ["contactName", "email", "phone", "website"],
+  },
+  {
+    title: "Address",
+    keys: [
+      "addressLine1",
+      "addressLine2",
+      "city",
+      "region",
+      "postalCode",
+      "countryCode",
+    ],
+  },
+  { title: "Purchasing notes", keys: ["termsNotes"] },
+] as const;
 
 function SuppliersPage() {
   const { organization, authenticatedRequest } = useSession();
@@ -48,6 +74,7 @@ function SuppliersPage() {
   const [editing, setEditing] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<Supplier | null>(null);
   const [auditHistory, setAuditHistory] = useState<{
     supplierId: string;
     events: AuditEvent[];
@@ -55,6 +82,7 @@ function SuppliersPage() {
   const [name, setName] = useState("");
   const [values, setValues] = useState<Record<string, string>>({});
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [status, setStatus] = useState<"ACTIVE" | "ARCHIVED">("ACTIVE");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -66,6 +94,76 @@ function SuppliersPage() {
   const canWrite = ["OWNER", "ADMIN", "MANAGER", "BUYER"].includes(
     organization?.role ?? "",
   );
+  const columns: DataTableColumn<Supplier>[] = [
+    {
+      key: "name",
+      header: "Supplier",
+      render: (supplier) => (
+        <button
+          className="ui-primary-cell ui-cell-button"
+          aria-expanded={selected === supplier.id}
+          aria-label={`${selected === supplier.id ? "Hide" : "Show"} details for ${supplier.name}`}
+          onClick={() =>
+            setSelected(selected === supplier.id ? null : supplier.id)
+          }
+          type="button"
+        >
+          {supplier.name}
+        </button>
+      ),
+    },
+    {
+      key: "contact",
+      header: "Contact",
+      render: (supplier) => supplier.contactName || "—",
+    },
+    {
+      key: "email",
+      header: "Email",
+      render: (supplier) => supplier.email || "—",
+    },
+    {
+      key: "phone",
+      header: "Phone",
+      render: (supplier) => supplier.phone || "—",
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (supplier) => <StatusBadge status={supplier.status} />,
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      render: (supplier) =>
+        canWrite ? (
+          <div className="ui-row-actions">
+            <button
+              className="ui-quiet-button"
+              onClick={() => edit(supplier)}
+              type="button"
+            >
+              Edit
+            </button>
+            <button
+              className="ui-quiet-button ui-danger-button"
+              disabled={busy}
+              onClick={() => setArchiveTarget(supplier)}
+              type="button"
+            >
+              Archive
+            </button>
+          </div>
+        ) : (
+          <span className="ui-muted-cell">—</span>
+        ),
+    },
+  ];
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
   const reload = useCallback(async () => {
     const version = ++requestVersion.current;
@@ -85,7 +183,7 @@ function SuppliersPage() {
         page_size: "20",
         status,
       });
-      if (query.trim()) params.set("q", query.trim());
+      if (debouncedQuery) params.set("q", debouncedQuery);
       const result = await authenticatedRequest<Page<Supplier>>(
         `${endpoint}?${params}`,
       );
@@ -100,7 +198,7 @@ function SuppliersPage() {
     } finally {
       if (version === requestVersion.current) setLoading(false);
     }
-  }, [authenticatedRequest, organization, page, query, status]);
+  }, [authenticatedRequest, organization, page, debouncedQuery, status]);
 
   useEffect(() => {
     void Promise.resolve().then(reload);
@@ -140,7 +238,6 @@ function SuppliersPage() {
     setValues(
       Object.fromEntries(fields.map(([key]) => [key, supplier[key] ?? ""])),
     );
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -172,19 +269,20 @@ function SuppliersPage() {
     }
   }
 
-  async function archive(supplier: Supplier) {
-    if (!window.confirm(`Archive ${supplier.name}?`)) return;
+  async function archive() {
+    if (!archiveTarget) return;
     setBusy(true);
     setError("");
     setNotice("");
     try {
       await authenticatedRequest(
-        `${endpoint}/${supplier.id}/archive`,
+        `${endpoint}/${archiveTarget.id}/archive`,
         {},
         "PATCH",
       );
       setNotice("Supplier archived.");
-      if (selected === supplier.id) setSelected(null);
+      if (selected === archiveTarget.id) setSelected(null);
+      setArchiveTarget(null);
       await reload();
     } catch (cause) {
       setError(
@@ -196,34 +294,28 @@ function SuppliersPage() {
   }
 
   return (
-    <main className="products-page">
-      <header className="products-heading">
-        <div>
-          <Link href="/" className="catalog-back">
-            ← Dashboard
-          </Link>
-          <p className="catalog-eyebrow">PURCHASING</p>
-          <h1>Suppliers</h1>
-          <p>
-            Keep supplier contacts and delivery addresses organized for your
-            workspace.
-          </p>
-        </div>
-        {canWrite && (
-          <button
-            aria-controls="supplier-editor"
-            aria-expanded={formOpen || Boolean(editing)}
-            className="button button-primary"
-            onClick={() => {
-              clearForm();
-              setFormOpen(true);
-            }}
-            type="button"
-          >
-            ＋ Add supplier
-          </button>
-        )}
-      </header>
+    <div className="ui-page">
+      <PageHeader
+        eyebrow="PURCHASING"
+        title="Suppliers"
+        description="Keep supplier contacts and delivery addresses organized for your business."
+        action={
+          canWrite ? (
+            <button
+              aria-controls="supplier-editor"
+              aria-expanded={formOpen || Boolean(editing)}
+              className="button button-primary"
+              onClick={() => {
+                clearForm();
+                setFormOpen(true);
+              }}
+              type="button"
+            >
+              Add supplier
+            </button>
+          ) : undefined
+        }
+      />
       {notice && (
         <p className="catalog-notice" role="status">
           {notice}
@@ -243,81 +335,91 @@ function SuppliersPage() {
       )}
       {!organization ? (
         <section className="catalog-empty">
-          <h2>Choose a workspace first</h2>
+          <h2>Choose a business first</h2>
           <Link className="primary-button" href="/organizations">
-            Manage organizations
+            Business settings
           </Link>
         </section>
       ) : (
         <>
           {canWrite && (formOpen || editing) && (
-            <form
-              className="product-editor"
+            <Drawer
               id="supplier-editor"
-              onSubmit={save}
+              open={Boolean(formOpen || editing)}
+              title={editing ? "Edit supplier" : "Add supplier"}
+              description="Maintain the supplier details used by purchasing."
+              onClose={clearForm}
             >
-              <div className="catalog-panel-heading">
-                <div>
-                  <span className="catalog-eyebrow">
-                    {editing ? "EDIT SUPPLIER" : "NEW SUPPLIER"}
-                  </span>
-                  <h2>{editing ? "Update supplier" : "Add a supplier"}</h2>
-                </div>
-                {editing && (
-                  <button
-                    type="button"
-                    className="catalog-text-button"
-                    onClick={clearForm}
-                  >
-                    Cancel edit
-                  </button>
-                )}
-              </div>
-              <div className="product-form-grid">
-                <label>
-                  Supplier name
-                  <input
-                    required
-                    minLength={2}
-                    maxLength={180}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </label>
-                {fields.map(([key, label]) => (
-                  <label key={key}>
-                    {label}
-                    <input
-                      maxLength={key === "termsNotes" ? 1000 : 500}
-                      type={
-                        key === "email"
-                          ? "email"
-                          : key === "website"
-                            ? "url"
-                            : "text"
-                      }
-                      value={values[key] ?? ""}
-                      onChange={(e) =>
-                        setValues((current) => ({
-                          ...current,
-                          [key]: e.target.value,
-                        }))
-                      }
-                    />
-                  </label>
+              <form className="ui-drawer-form" onSubmit={save}>
+                <section className="ui-form-section">
+                  <h3>Supplier information</h3>
+                  <div className="product-form-grid">
+                    <label>
+                      Supplier name
+                      <input
+                        autoFocus
+                        required
+                        minLength={2}
+                        maxLength={180}
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                      />
+                    </label>
+                  </div>
+                </section>
+                {fieldGroups.map((group) => (
+                  <section className="ui-form-section" key={group.title}>
+                    <h3>{group.title}</h3>
+                    <div className="product-form-grid">
+                      {fields
+                        .filter(([key]) => group.keys.includes(key))
+                        .map(([key, label]) => (
+                          <label key={key}>
+                            {label}
+                            <input
+                              maxLength={key === "termsNotes" ? 1000 : 500}
+                              type={
+                                key === "email"
+                                  ? "email"
+                                  : key === "website"
+                                    ? "url"
+                                    : "text"
+                              }
+                              value={values[key] ?? ""}
+                              onChange={(e) =>
+                                setValues((current) => ({
+                                  ...current,
+                                  [key]: e.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                        ))}
+                    </div>
+                  </section>
                 ))}
-              </div>
-              <button className="primary-button" disabled={busy}>
-                {busy
-                  ? "Saving…"
-                  : editing
-                    ? "Save supplier"
-                    : "Create supplier"}
-              </button>
-            </form>
+                <div className="ui-drawer-actions">
+                  <button
+                    className="button button-secondary"
+                    disabled={busy}
+                    onClick={clearForm}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                  <button className="button button-primary" disabled={busy}>
+                    {busy
+                      ? "Saving…"
+                      : editing
+                        ? "Save supplier"
+                        : "Create supplier"}
+                  </button>
+                </div>
+              </form>
+            </Drawer>
           )}
-          <section className="product-list-panel">
-            <div className="catalog-panel-heading">
+          <section className="ui-list-panel">
+            <div className="ui-list-heading">
               <div>
                 <span className="catalog-eyebrow">DIRECTORY</span>
                 <h2>
@@ -328,7 +430,7 @@ function SuppliersPage() {
               </div>
               <span className="catalog-count">{total} total</span>
             </div>
-            <div className="supplier-filters">
+            <div className="ui-filter-toolbar">
               <label className="supplier-search">
                 Search suppliers
                 <input
@@ -354,74 +456,18 @@ function SuppliersPage() {
                 </select>
               </label>
             </div>
-            {loading ? (
-              <p role="status" className="catalog-loading">
-                Loading suppliers…
-              </p>
-            ) : suppliers.length === 0 ? (
-              <div className="catalog-empty">
-                <h3>No suppliers found</h3>
-                <p>Create a supplier or change your search.</p>
-              </div>
-            ) : (
-              <div className="product-table-wrap">
-                <table className="product-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Contact</th>
-                      <th>Email</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {suppliers.map((supplier) => (
-                      <tr key={supplier.id}>
-                        <td>
-                          <button
-                            className="catalog-text-button"
-                            aria-expanded={selected === supplier.id}
-                            aria-label={`${selected === supplier.id ? "Hide" : "Show"} details for ${supplier.name}`}
-                            onClick={() =>
-                              setSelected(
-                                selected === supplier.id ? null : supplier.id,
-                              )
-                            }
-                          >
-                            {supplier.name}
-                          </button>
-                        </td>
-                        <td>{supplier.contactName || supplier.phone || "—"}</td>
-                        <td>{supplier.email || "—"}</td>
-                        <td>{supplier.status}</td>
-                        <td>
-                          {canWrite && (
-                            <>
-                              <button
-                                className="catalog-text-button"
-                                onClick={() => edit(supplier)}
-                                type="button"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                className="catalog-text-button"
-                                disabled={busy}
-                                onClick={() => void archive(supplier)}
-                                type="button"
-                              >
-                                Archive
-                              </button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <DataTable
+              columns={columns}
+              rows={suppliers}
+              rowKey={(supplier) => supplier.id}
+              loading={loading}
+              emptyTitle={
+                query.trim() || status !== "ACTIVE"
+                  ? "No suppliers match these filters"
+                  : "No suppliers yet"
+              }
+              emptyDescription="Add a supplier or adjust your search and status filters."
+            />
             {selected &&
               suppliers
                 .filter((s) => s.id === selected)
@@ -459,7 +505,7 @@ function SuppliersPage() {
                     )}
                   </article>
                 ))}
-            <nav className="product-pagination" aria-label="Supplier pages">
+            <nav className="ui-pagination" aria-label="Supplier pages">
               <button
                 className="catalog-secondary-link"
                 disabled={page <= 1 || loading}
@@ -477,9 +523,18 @@ function SuppliersPage() {
               </button>
             </nav>
           </section>
+          <ConfirmDialog
+            open={Boolean(archiveTarget)}
+            title="Archive this supplier?"
+            description={`${archiveTarget?.name ?? "This supplier"} will be removed from the active supplier list. Existing purchase history is retained.`}
+            confirmLabel="Archive supplier"
+            busy={busy}
+            onConfirm={() => void archive()}
+            onCancel={() => setArchiveTarget(null)}
+          />
         </>
       )}
-    </main>
+    </div>
   );
 }
 

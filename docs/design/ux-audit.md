@@ -1,5 +1,7 @@
 # Stockroom UX audit
 
+> Historical audit from 2026-11-07. The current route inventory, redesign findings and browser evidence are tracked in [ui-ux-audit.md](ui-ux-audit.md) and [ui-acceptance-results.md](ui-acceptance-results.md), updated 2026-11-25. This file records the earlier shell/dashboard pass and is not current acceptance evidence.
+
 **Date:** 2026-11-07
 
 ## Reference review

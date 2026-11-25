@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "../styles/tokens.css";
 import "./globals.css";
 import { SessionProvider } from "../features/auth/session-provider";
 import { ApplicationFrame } from "../components/workspace-shell";

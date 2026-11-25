@@ -4,9 +4,18 @@
 
 ## Resume facts
 
-- Repository `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD at session start `b97445d` (`update registrrry`). Changes are uncommitted; preserve them. No commit/push/deploy or database migration/reset/deletion occurred.
+- Repository `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD at UI session start `0493aab` (`update the pending task`). UI changes are uncommitted; preserve them with any later QA work. No commit/push/deploy or database migration/reset/deletion occurred.
 - Roadmap count **30/47**. No task newly completed. SALES-004, REPORT-002 and QUALITY-001 remain IN_PROGRESS; QUALITY-001 operational acceptance is NOT RUN.
 - API readiness returned HTTP 200 and `/login` on port 3000 returned HTTP 200. Docker PostgreSQL/Redis/S3Mock are healthy. The API is running. The existing Next server on port 3000 responds; a second server start exited because the development lock is already owned. The existing process was left untouched. QA OWNER/org variables are still absent; no QA business data was created.
+
+## Current UI redesign checkpoint
+
+- Initial design tokens and shared `PageHeader`, `DataTable`, `StatusBadge`, `Drawer` and `ConfirmDialog` are implemented.
+- Customers and Suppliers directory pages now share the list pattern, use debounced server-side search and grouped create/edit forms in a drawer. Backend APIs and request payloads are unchanged. Supplier archive confirmation is implemented but not browser-tested.
+- Shell/user-facing routes display “Business” where appropriate. Full application redesign is not complete; 34 routes are inventoried in `docs/design/ui-ux-audit.md`, and all routes besides Customers and Suppliers still need detailed review/adoption.
+- Browser showed populated customer/supplier lists at desktop size. Customer list at 390×844 had no page-level overflow (document width equaled viewport); table content scrolls in its own region. Initial mobile form review exposed a cramped layout, corrected by moving the form to the shared drawer and applying one column on mobile. The browser returned to sign-in during hot reload, so the corrected drawer, form actions and supplier confirmation remain unverified. One transient customer Unauthorized alert disappeared on route revisit; investigate before acceptance.
+- No before/after screenshots were saved as files. No records, credentials, API policy or database changes were made.
+- Final checks after the last UI source/CSS update passed: typecheck, lint, format check, default tests, production build (29 routes) and diff check. Default tests had 3 opt-in PostgreSQL skips; UI-specific component tests were not added. Backend roadmap stays **30/47**; UI progress does not affect task count.
 
 ## Implemented since the previous checkpoint
 
@@ -29,10 +38,11 @@
 
 ## Exact next steps
 
-1. Inspect `git status` and changed source/document diffs; preserve all uncommitted changes. Do not commit or push.
-2. Configure the explicitly approved development QA OWNER identity in ignored `.env` without printing values or changing credentials. If unavailable, do not mutate QA business data.
-3. Run `QA_SCENARIO=authorization npm run qa:seed` with separately configured approved disposable identities/IDs (`QA_AUTH_*`) and verify/replay it. Then add isolated integration coverage for membership/grant revocation and export-download authorization. Do not revoke real users or weaken the OWNER mutation gate. Cross-currency payment allocation is not directly testable because payment currency is inherited from its invoice.
-4. When the approved QA organization and OWNER values are present, run `QA_SCENARIO=document-states npm run qa:seed`, record the run ID, then matching `qa:verify` and `qa:resume`; reconcile documents, payments/reversals and inventory movements/balances.
-5. Run and verify `QA_SCENARIO=multi-currency npm run qa:seed` and `QA_SCENARIO=financial-exports npm run qa:seed`; record currency totals, export IDs/statuses, downloaded CSV rows and resume behavior. Do not treat mocked tests as live evidence.
-6. Complete authenticated SALES-004 and REPORT-002 browser workflows, role/tenant/warehouse denial checks, verified file downloads and disposable-schema EXPLAIN measurements. Only afterward execute `COMPLETE_INVENTORY_BUSINESS_LIFECYCLE` for QUALITY-001.
-7. Recalculate progress from task entries; keep **30/47** until every task acceptance condition passes, then update these progress notes with exact evidence. No commits or pushes requested.
+1. Inspect `git status` and changed source/document diffs; preserve all UI changes. Do not commit or push.
+2. Final checks are recorded in `docs/design/ui-acceptance-results.md`: `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run build`, and `git diff --check` passed. Rerun them after any code changes.
+3. With the approved development account available, visually recheck `/customers` and `/suppliers` at desktop and 390px after hot reload. Check drawer layout, form open/cancel/validation, supplier archive-dialog cancel, keyboard focus and role-aware actions without submitting or archiving business records. Investigate the transient customer Unauthorized banner using browser diagnostics.
+4. Save screenshots in a gitignored QA evidence directory if the local browser runtime can export them; capture a populated desktop list and mobile list/drawer. Record evidence paths and viewport sizes.
+5. Continue Phase 2 with Products and Categories/Units: review actual route/API behavior, adopt shared UI, verify existing business behavior, then update the route matrix.
+6. Continue Branches/Warehouses, then inventory operations and transactions in dependency order. Preserve backend authorization and do not mark pages accepted from build output alone.
+7. Keep backend roadmap progress **30/47** until individual acceptance criteria pass. Track redesign separately in `docs/design/ui-redesign-progress.md`.
+8. Resume pending QA financial and authorization scenarios only when approved OWNER, organization and actor settings are available; never print credentials or mutate unapproved business data.

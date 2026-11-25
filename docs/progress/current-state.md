@@ -4,9 +4,19 @@
 
 ## Repository and roadmap
 
-- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD at session start `b97445d` (`update registrrry`). Worktree was clean at session start. Current changes are uncommitted QA scenario code and progress documentation.
+- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD at session start `0493aab` (`update the pending task`). Worktree was clean at session start. Current changes include the uncommitted UI redesign slice below; no pre-existing changes were overwritten.
 - Roadmap remains **30/47**. SALES-004, REPORT-002 and QUALITY-001 remain IN_PROGRESS. No task became complete; fixture code and mocked verification do not meet operational acceptance.
 - No commit, push, deployment, migration application, database reset, deletion, or credential change occurred.
+
+## UI redesign slice (2026-11-25)
+
+- Added initial UI tokens in `apps/web/src/styles/tokens.css` and reusable `PageHeader`, `DataTable`, `StatusBadge`, `Drawer` and `ConfirmDialog` components under `apps/web/src/components/ui/`.
+- Updated `/customers` and `/suppliers` to use consistent headers, debounced server-side filters, table layout, statuses and pagination. Existing form payloads/endpoints were preserved; create/edit forms are organized into sections inside a shared drawer. Supplier archive now asks for confirmation before the existing archive API call.
+- Updated user-facing shell labels from Workspace to Business where appropriate; API paths and organization terminology remain unchanged.
+- Added audit, system, information architecture, journey, component, progress and acceptance docs under `docs/design/`. The full 34-route inventory is captured, but detailed audit/redesign remains pending for other routes. No backend roadmap task was marked complete; count remains **30/47**.
+- Chrome showed populated customer/supplier lists. Customer page briefly displayed an Unauthorized banner while rows remained visible; it disappeared on route revisit and its cause is unresolved. A 390×844 customer-list viewport had `document.documentElement.scrollWidth === 390`. Initial mobile form review found cramped fields; the editor was moved to the shared drawer and its CSS corrected, but hot reload returned Chrome to sign-in before the corrected drawer could be rechecked. No form was submitted and no business data was changed. No screenshot files were saved.
+- No database, API contract, credentials, business records, authorization rules or financial behavior were changed.
+- Final checks after the debounce and drawer changes: `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run build`, and `git diff --check` all passed. `npm test`: 60 API/shared passed, 0 failed, 3 opt-in PostgreSQL suites skipped; web tests 2 passed, 0 failed. The build generated 29 routes. No new UI-specific component tests were added.
 
 ## QA implementation in this session
 

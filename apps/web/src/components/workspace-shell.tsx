@@ -68,7 +68,7 @@ const groups = [
     label: "ADMINISTRATION",
     links: [
       { href: "/locations", label: "Branches & warehouses", icon: "locations" },
-      { href: "/organizations", label: "Workspace settings", icon: "settings" },
+      { href: "/organizations", label: "Business settings", icon: "settings" },
       { href: "/tax-rates", label: "Tax rates", icon: "settings" },
     ],
   },
@@ -92,7 +92,7 @@ const names: Record<string, string> = {
   "tax-rates": "Tax rates",
   "sales-orders": "Sales orders",
   reports: "Inventory reports",
-  organizations: "Workspace settings",
+  organizations: "Business settings",
 };
 
 function Icon({ name }: { name: string }) {
@@ -251,7 +251,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
       return "Transfer details";
     if (first === "customers" && pathname.split("/").length > 2)
       return "Customer details";
-    return names[first] ?? "Workspace";
+    return names[first] ?? "Business";
   }, [pathname]);
 
   async function selectOrganization(id: string) {
@@ -370,25 +370,25 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             {collapsed ? "»" : "«"}
           </button>
           <div aria-label="Breadcrumb" className="breadcrumbs">
-            <Link href="/">Workspace</Link>
+            <Link href="/">Business</Link>
             <span aria-hidden="true">/</span>
             <strong>{title}</strong>
           </div>
           <div className="topbar-actions">
             <div className="topbar-workspace">
-              <label htmlFor="workspace-select">Workspace</label>
+              <label htmlFor="business-select">Business</label>
               <select
-                aria-label="Switch organization"
+                aria-label="Switch business"
                 className="workspace-select"
                 disabled={switching || organizations.length < 2}
-                id="workspace-select"
+                id="business-select"
                 onChange={(event) =>
                   void selectOrganization(event.target.value)
                 }
                 value={organization?.id ?? ""}
               >
                 <option value="">
-                  {organization?.name ?? "Select workspace"}
+                  {organization?.name ?? "Select business"}
                 </option>
                 {organizations.map((item) => (
                   <option key={item.id} value={item.id}>
