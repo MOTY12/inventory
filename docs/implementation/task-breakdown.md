@@ -1,6 +1,6 @@
 # Numbered task breakdown
 
-Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001 through FOUNDATION-009, ARCH-001, INV-001 through INV-010, PROCUREMENT-001 through PROCUREMENT-003, SALES-001 through SALES-003, REPORT-001, and REPORT-003 are COMPLETED; PROD-002, ARCH-002, SALES-004, REPORT-002, QUALITY-002, and QUALITY-003 are IN_PROGRESS; remaining tasks are NOT_STARTED. Completed count: 30/47, counted from 47 unique task entries. SALES-004/REPORT-002 verification is recorded below and in `docs/progress/current-state.md`. REPORT-003 and INV-010 evidence is dated 2026-11-23. Authenticated report-page acceptance has begun; complete operational workflow acceptance remains tracked under QUALITY-001 after dependencies are met.
+Status: vocabulary: NOT_STARTED, IN_PROGRESS, BLOCKED, COMPLETED. DOC-001, PROD-001, FOUNDATION-001 through FOUNDATION-009, ARCH-001, INV-001 through INV-010, PROCUREMENT-001 through PROCUREMENT-003, SALES-001 through SALES-003, REPORT-001, and REPORT-003 are COMPLETED; PROD-002, ARCH-002, SALES-004, REPORT-002, QUALITY-001, QUALITY-002, and QUALITY-003 are IN_PROGRESS; remaining tasks are NOT_STARTED. Completed count: 30/47, counted from 47 unique task entries. SALES-004/REPORT-002 verification and QUALITY-001 fixture-harness progress are recorded below and in `docs/progress/current-state.md`. REPORT-003 and INV-010 evidence is dated 2026-11-23. The QUALITY-001 operational scenario remains NOT RUN until dependencies and authorized fixture execution are available.
 
 ## Phase 0–2: research, product, architecture
 
@@ -205,7 +205,7 @@ Description: Queue scoped report exports and securely serve expiring download. P
 ### QUALITY-001: End-to-end operational workflow
 
 **Files/modules affected:** tests/e2e/, tests/security/, docs/operations/.
-Description: Test receive → stock → transfer → sale → fulfill/payment → report. Priority: P0. Dependencies: report and workflow tasks. Deliverables: E2E suite. Acceptance: deterministic scenario and audit/ledger reconciliation. Tests: named E2E scenario. Status: NOT_STARTED.
+Description: Test receive → stock → transfer → sale → fulfill/payment → report. Priority: P0. Dependencies: report and workflow tasks. Deliverables: E2E suite. Acceptance: deterministic scenario and audit/ledger reconciliation. Tests: named E2E scenario. Status: IN_PROGRESS (2026-11-25). Added local-only API-driven fixture commands, strict target/OWNER checks, secret-free resumable manifests, stable idempotency keys, deterministic NGN operational path, read-only reconciliation verifier, QA safety/retry/manifest tests and `docs/operations/qa-fixture-guide.md`. Safety tests pass 6/6. The live generator has not run: `QA_ORGANIZATION_ID`, exact organization name, and CLI credentials are absent from local configuration. SALES-004/REPORT-002 remain open and block formal QUALITY-001 execution; no scenario data or completion evidence is claimed. Current count remains 30/47.
 
 ### QUALITY-002: Security and tenant isolation review
 

@@ -1,7 +1,7 @@
 # QUALITY-001 end-to-end acceptance preparation
 
-**Status:** PREPARATION ONLY — NOT RUN  
-**Updated:** 2026-11-24 (Africa/Lagos)  
+**Status:** HARNESS IMPLEMENTED — OPERATIONAL ACCEPTANCE NOT RUN
+**Updated:** 2026-11-25 (Africa/Lagos)
 **Prerequisite:** REPORT-002 acceptance must pass before this scenario is executed.
 
 This document defines the intended deterministic local QA scenario. It is not evidence that the workflow has run. Do not mark QUALITY-001 complete until an authorized isolated organization/warehouse fixture has been exercised end-to-end and the exact actual values, IDs, checks and outcomes are recorded.
@@ -32,13 +32,13 @@ This document defines the intended deterministic local QA scenario. It is not ev
 ## Actual execution record
 
 **Actual outcome:** Not run.  
-**Reason:** REPORT-002 remains IN_PROGRESS; current browser QA workspace has no eligible sales/invoice/payment data.  
+**Reason:** SALES-004 and REPORT-002 acceptance remains IN_PROGRESS. The local API-driven fixture generator is implemented, but seed execution stopped before authentication because `NODE_ENV`/`QA_ENVIRONMENT` are not configured in `.env`; when explicitly set for the attempt, `QA_ORGANIZATION_ID` was also missing. CLI credentials are absent. No API request or mutation occurred.
 **Fixture organization/branch/warehouses:** Not created for this scenario.  
 **Document IDs and expected/actual quantities or amounts:** Not run.  
-**Tests/browser evidence:** Not run.  
+**Tests/browser evidence:** QA generator unit/safety tests passed 6/6. No generator seed, browser lifecycle, PDF/CSV file capture or named E2E execution occurred.
 **Ledger/balance/reservation reconciliation:** Not run.  
 **Authorization and idempotency outcomes:** Not run.  
-**Remaining prerequisite:** Complete REPORT-002 filter/security matrix, multi-currency pagination/export checks, performance evidence, and authenticated populated-browser acceptance; complete SALES-004 UI acceptance.
+**Remaining prerequisite:** Configure the explicitly approved QA organization UUID and existing OWNER account credentials in ignored local `.env`; run `qa:seed` and `qa:verify`; complete REPORT-002 filter/security, multi-currency pagination/export and performance evidence plus SALES-004 browser acceptance. Then run this named scenario separately and record actual data.
 
 ## Execution evidence to attach when run
 

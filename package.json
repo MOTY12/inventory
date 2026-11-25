@@ -18,6 +18,10 @@
     "format": "prettier --write \"apps/**/*.{ts,tsx,css,json}\" \"packages/**/*.{ts,tsx,json,mjs}\" \"scripts/**/*.mjs\" \"*.{json,mjs}\"",
     "format:check": "prettier --check \"apps/**/*.{ts,tsx,css,json}\" \"packages/**/*.{ts,tsx,json,mjs}\" \"scripts/**/*.mjs\" \"*.{json,mjs}\"",
     "validate:env": "npm run build --workspace=@inventory/shared && node scripts/validate-local-env.mjs",
+    "qa:seed": "node --env-file-if-exists=.env scripts/qa/seed.mjs",
+    "qa:resume": "node --env-file-if-exists=.env scripts/qa/seed.mjs --resume",
+    "qa:verify": "node --env-file-if-exists=.env scripts/qa/verify.mjs",
+    "qa:test": "node --test scripts/qa/*.test.mjs",
     "test": "npm run build --workspace=@inventory/shared && npm run build --workspace=@inventory/api && node --test packages/shared/test/*.test.mjs apps/api/test/*.test.mjs && node --experimental-strip-types --test apps/web/test/*.test.mjs",
     "typecheck": "npm run build --workspace=@inventory/shared && npm run typecheck --workspaces --if-present"
   },

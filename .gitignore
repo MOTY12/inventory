@@ -3,6 +3,7 @@ apps/api/src/generated/prisma/
 .next/
 dist/
 coverage/
+.qa-runs/
 .env
 .env.*
 !.env.example
