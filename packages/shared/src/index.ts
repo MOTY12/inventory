@@ -3,6 +3,10 @@ import { z } from "zod";
 export const serviceStatusSchema = z.object({
   service: z.string().min(1),
   status: z.enum(["ok", "degraded"]),
+  databaseIdentity: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
 });
 
 export type ServiceStatus = z.infer<typeof serviceStatusSchema>;

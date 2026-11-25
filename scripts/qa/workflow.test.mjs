@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -10,6 +10,7 @@ import {
   QA_ORGANIZATION_NAME,
 } from "./safety.mjs";
 import {
+  acquireRunLock,
   assertManifestSafe,
   createManifest,
   loadManifest,
@@ -17,9 +18,23 @@ import {
   newRunId,
   operationKey,
   saveManifest,
+  validateManifest,
 } from "./manifest.mjs";
 import { ApiClient } from "./api-client.mjs";
-import { assertQaChecks } from "./workflow.mjs";
+import {
+  databaseIdentityFingerprint,
+  verifyQaDatabaseTarget,
+} from "./database-target.mjs";
+import {
+  assertQaChecks,
+  oneOrNone,
+  purchaseOrderMatches,
+  qaScenarioFromEnvironment,
+  runManifestDirectory,
+  salesOrderMatches,
+  scaled,
+  transferMatches,
+} from "./workflow.mjs";
 
 const base = () => ({
   NODE_ENV: "development",
@@ -79,6 +94,18 @@ test("QA safety gate rejects production, missing or mismatched org, and remote t
   );
 });
 
+test("scenario selection defaults to baseline and rejects unsupported scenarios", () => {
+  assert.equal(qaScenarioFromEnvironment({}), "baseline");
+  assert.equal(
+    qaScenarioFromEnvironment({ QA_SCENARIO: "baseline" }),
+    "baseline",
+  );
+  assert.throws(
+    () => qaScenarioFromEnvironment({ QA_SCENARIO: "multi-currency" }),
+    /currently supported scenario: baseline/,
+  );
+});
+
 test("only the explicitly authorized organization owner is accepted", () => {
   const id = base().QA_ORGANIZATION_ID;
   assert.throws(
@@ -109,6 +136,71 @@ test("only the explicitly authorized organization owner is accepted", () => {
   );
 });
 
+test("database target verification matches the API's live connection and owner", async () => {
+  const env = base();
+  const identity = {
+    database: "inventory_dev",
+    schema: "public",
+    serverAddress: "127.0.0.1",
+    serverPort: 5432,
+  };
+  class FakeClient {
+    async connect() {}
+    async end() {}
+    async query(sql) {
+      if (sql.includes("current_database")) return { rows: [identity] };
+      return {
+        rowCount: 1,
+        rows: [{ role: "OWNER", status: "ACTIVE", userStatus: "ACTIVE" }],
+      };
+    }
+  }
+  const fetchImpl = async (url, options) => {
+    assert.equal(url, `${env.QA_API_BASE_URL}/health/ready`);
+    assert.equal(options.redirect, "error");
+    return new Response(
+      JSON.stringify({
+        databaseIdentity: databaseIdentityFingerprint(identity),
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+  assert.equal(
+    await verifyQaDatabaseTarget(env, env.QA_API_BASE_URL, {
+      fetchImpl,
+      Client: FakeClient,
+    }),
+    true,
+  );
+  class MemberClient extends FakeClient {
+    async query(sql) {
+      if (sql.includes("organizations o"))
+        return {
+          rowCount: 1,
+          rows: [{ role: "MEMBER", status: "ACTIVE", userStatus: "ACTIVE" }],
+        };
+      return super.query(sql);
+    }
+  }
+  await assert.rejects(
+    verifyQaDatabaseTarget(env, env.QA_API_BASE_URL, {
+      fetchImpl,
+      Client: MemberClient,
+    }),
+    /active OWNER/,
+  );
+  await assert.rejects(
+    verifyQaDatabaseTarget(env, env.QA_API_BASE_URL, {
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ databaseIdentity: "wrong" }), {
+          status: 200,
+        }),
+      Client: FakeClient,
+    }),
+    /does not match/,
+  );
+});
+
 test("manifest IDs are unique, atomically resumable, and contain no auth secrets", async () => {
   const first = newRunId();
   const second = newRunId();
@@ -124,6 +216,7 @@ test("manifest IDs are unique, atomically resumable, and contain no auth secrets
     manifest.completedOperations.push("master-data");
     const path = manifestPath(first, directory);
     await saveManifest(manifest, path);
+    assert.equal((await stat(path)).mode & 0o777, 0o600);
     const resumed = await loadManifest(path);
     assert.equal(resumed.runId, first);
     assert.equal(resumed.idempotencyKeys["receive-60"], key);
@@ -136,6 +229,39 @@ test("manifest IDs are unique, atomically resumable, and contain no auth secrets
       /Secret-like/,
     );
     assert.throws(() => manifestPath("../escape"), /Invalid QA run/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("manifest schema rejects malformed collections and unsafe manifest directories", () => {
+  const manifest = createManifest({
+    organizationId: base().QA_ORGANIZATION_ID,
+  });
+  assert.equal(validateManifest(manifest), manifest);
+  assert.throws(
+    () => validateManifest({ ...manifest, resources: {} }),
+    /Malformed or unsupported/,
+  );
+  assert.throws(
+    () => runManifestDirectory({ QA_MANIFEST_DIR: "../outside" }),
+    /repository-relative/,
+  );
+  assert.throws(
+    () => runManifestDirectory({ QA_MANIFEST_DIR: "/tmp/qa" }),
+    /repository-relative/,
+  );
+});
+
+test("one run cannot execute concurrently and can safely resume after release", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "qa-lock-"));
+  const id = newRunId();
+  try {
+    const release = await acquireRunLock(id, directory);
+    await assert.rejects(acquireRunLock(id, directory), /already active/);
+    await release();
+    const releaseAfterResume = await acquireRunLock(id, directory);
+    await releaseAfterResume();
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -177,4 +303,80 @@ test("API client never retries a non-idempotent mutation and reuses command keys
 test("independent QA reconciliation fails when any expected invariant is false", () => {
   assert.equal(assertQaChecks({ ledger: true, stock: true }), true);
   assert.throws(() => assertQaChecks({ ledger: true, stock: false }), /stock/);
+});
+
+test("recovery requires exact scenario attributes and rejects ambiguity", () => {
+  const supplier = { id: "supplier-1" };
+  const customer = { id: "customer-1" };
+  const warehouse = { id: "warehouse-1" };
+  const source = { id: "source-1" };
+  const product = { id: "product-1" };
+  const unit = { id: "unit-1" };
+  const po = {
+    supplierId: supplier.id,
+    warehouseId: source.id,
+    currency: "NGN",
+    lines: [
+      {
+        productId: product.id,
+        unitId: unit.id,
+        orderedQuantity: "100.000000",
+        unitCost: "5000.0000",
+      },
+    ],
+  };
+  const order = {
+    customerId: customer.id,
+    warehouseId: warehouse.id,
+    currency: "NGN",
+    notes: "QA qa-20261125-abcdef12",
+    lines: [
+      {
+        productId: product.id,
+        unitId: unit.id,
+        orderedQuantity: "20.000000",
+        unitPrice: "8000.0000",
+      },
+    ],
+  };
+  const transfer = {
+    sourceWarehouseId: source.id,
+    destinationWarehouseId: warehouse.id,
+    note: "QA qa-20261125-abcdef12",
+    lines: [{ productId: product.id, requestedQuantity: "30.000000" }],
+  };
+  assert.equal(
+    purchaseOrderMatches(po, { supplier, warehouse: source, product, unit }),
+    true,
+  );
+  assert.equal(
+    salesOrderMatches(order, {
+      customer,
+      warehouse,
+      product,
+      unit,
+      runId: "qa-20261125-abcdef12",
+    }),
+    true,
+  );
+  assert.equal(
+    transferMatches(transfer, {
+      source,
+      destination: warehouse,
+      product,
+      runId: "qa-20261125-abcdef12",
+    }),
+    true,
+  );
+  assert.equal(
+    purchaseOrderMatches(
+      { ...po, lines: [{ ...po.lines[0], unitCost: "5000.0001" }] },
+      { supplier, warehouse: source, product, unit },
+    ),
+    false,
+  );
+  assert.equal(scaled("0.000001", 6), 1n);
+  assert.equal(scaled("-0.000001", 6), -1n);
+  assert.equal(oneOrNone([po], "order"), po);
+  assert.throws(() => oneOrNone([po, po], "order"), /Ambiguous/);
 });

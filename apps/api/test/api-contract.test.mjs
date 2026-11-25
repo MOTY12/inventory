@@ -17,6 +17,40 @@ import {
   issueRefreshToken,
 } from "../dist/identity/refresh-token.js";
 import { PrismaService } from "../dist/database/prisma.service.js";
+import { HealthController } from "../dist/health/health.controller.js";
+import { databaseIdentityFingerprint } from "../dist/health/database-identity.js";
+
+test("development readiness exposes only a non-secret fingerprint of the live database identity", async () => {
+  const priorNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "development";
+  const identity = {
+    database: "inventory_dev",
+    schema: "public",
+    serverAddress: "127.0.0.1",
+    serverPort: 5432,
+  };
+  const controller = new HealthController({
+    isReady: () => true,
+    $queryRaw: async () => [identity],
+  });
+  try {
+    const status = await controller.ready();
+    assert.deepEqual(status, {
+      service: "inventory-api",
+      status: "ok",
+      databaseIdentity: databaseIdentityFingerprint(identity),
+    });
+    assert.match(status.databaseIdentity, /^[a-f0-9]{64}$/);
+    process.env.NODE_ENV = "production";
+    assert.deepEqual(await controller.ready(), {
+      service: "inventory-api",
+      status: "ok",
+    });
+  } finally {
+    if (priorNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = priorNodeEnv;
+  }
+});
 
 test("password hasher stores an Argon2id verifier and checks candidates safely", async () => {
   const hasher = new PasswordHasher();

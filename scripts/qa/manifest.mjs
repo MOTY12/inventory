@@ -1,4 +1,12 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  open,
+  readFile,
+  rename,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -21,15 +29,96 @@ export function assertManifestSafe(value, path = "manifest") {
   }
 }
 
+const RESOURCE_COLLECTIONS = [
+  "branches",
+  "warehouses",
+  "units",
+  "categories",
+  "products",
+  "suppliers",
+  "customers",
+  "purchaseOrders",
+  "receipts",
+  "transferReceipts",
+  "transfers",
+  "salesOrders",
+  "picks",
+  "fulfillments",
+  "invoices",
+  "payments",
+];
+
+export function validateManifest(manifest) {
+  assertManifestSafe(manifest);
+  const fail = () => {
+    throw new Error("Malformed or unsupported QA manifest");
+  };
+  if (
+    !manifest ||
+    typeof manifest !== "object" ||
+    Array.isArray(manifest) ||
+    manifest.schemaVersion !== 1 ||
+    !/^qa-[a-zA-Z0-9-]{12,80}$/.test(manifest.runId || "") ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      manifest.organizationId || "",
+    ) ||
+    !["development", "test"].includes(manifest.environment) ||
+    (manifest.scenarioName !== undefined &&
+      manifest.scenarioName !== "baseline") ||
+    typeof manifest.stage !== "string" ||
+    !manifest.resources ||
+    typeof manifest.resources !== "object" ||
+    Array.isArray(manifest.resources) ||
+    !manifest.idempotencyKeys ||
+    typeof manifest.idempotencyKeys !== "object" ||
+    Array.isArray(manifest.idempotencyKeys) ||
+    !Array.isArray(manifest.completedOperations) ||
+    !manifest.completedOperations.every((item) => typeof item === "string") ||
+    !Array.isArray(manifest.failedOperations) ||
+    !manifest.failedOperations.every(
+      (item) =>
+        item &&
+        typeof item.operation === "string" &&
+        typeof item.error === "string" &&
+        typeof item.at === "string",
+    ) ||
+    !Number.isFinite(Date.parse(manifest.updatedAt))
+  ) {
+    fail();
+  }
+  for (const collection of RESOURCE_COLLECTIONS) {
+    const items = manifest.resources[collection];
+    if (
+      !Array.isArray(items) ||
+      !items.every((item) => item && typeof item.id === "string")
+    ) {
+      fail();
+    }
+  }
+  for (const [operation, key] of Object.entries(manifest.idempotencyKeys)) {
+    if (
+      !/^[a-z0-9-]{1,80}$/i.test(operation) ||
+      typeof key !== "string" ||
+      key.length < 1 ||
+      key.length > 160
+    ) {
+      fail();
+    }
+  }
+  return manifest;
+}
+
 export function createManifest({
   runId = newRunId(),
   organizationId,
   environment = "development",
+  scenarioName = "baseline",
 }) {
   return {
     schemaVersion: 1,
     runId,
     environment,
+    scenarioName,
     organizationId,
     stage: "initialized",
     resources: {
@@ -62,6 +151,8 @@ export function createManifest({
       finalOrganizationQuantity: "80",
       finalInventoryValue: "400000",
       invoiceValue: "160000",
+      grossPayments: "220000",
+      reversedPayments: "60000",
       effectivePayments: "160000",
       receivables: "0",
     },
@@ -79,30 +170,77 @@ export function manifestPath(runId, directory = ".qa-runs") {
 }
 
 export async function saveManifest(manifest, path) {
-  assertManifestSafe(manifest);
+  validateManifest(manifest);
   manifest.updatedAt = new Date().toISOString();
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-  const temp = `${path}.${process.pid}.tmp`;
+  await chmod(dirname(path), 0o700);
+  const temp = `${path}.${process.pid}.${randomUUID()}.tmp`;
   await writeFile(temp, `${JSON.stringify(manifest, null, 2)}\n`, {
     mode: 0o600,
-    flag: "w",
+    flag: "wx",
   });
   await rename(temp, path);
 }
 
 export async function loadManifest(path) {
   const manifest = JSON.parse(await readFile(path, "utf8"));
-  assertManifestSafe(manifest);
-  if (
-    manifest.schemaVersion !== 1 ||
-    !manifest.organizationId ||
-    !manifest.runId
-  )
-    throw new Error("Unsupported or invalid QA manifest");
-  return manifest;
+  return validateManifest(manifest);
 }
 
 export function operationKey(manifest, operation) {
   manifest.idempotencyKeys[operation] ??= `${manifest.runId}-${operation}`;
   return manifest.idempotencyKeys[operation];
+}
+
+export async function acquireRunLock(runId, directory = ".qa-runs") {
+  const path = manifestPath(runId, directory);
+  const lockPath = `${path}.lock`;
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  await chmod(dirname(path), 0o700);
+  const token = randomUUID();
+  const content = `${JSON.stringify({ pid: process.pid, token, createdAt: Date.now() })}\n`;
+  let handle;
+  try {
+    handle = await open(lockPath, "wx", 0o600);
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    let stale = false;
+    try {
+      const lock = JSON.parse(await readFile(lockPath, "utf8"));
+      if (!Number.isInteger(lock.pid) || typeof lock.token !== "string") {
+        throw new Error(
+          "Invalid QA run lock; remove it only after confirming no run is active",
+        );
+      }
+      try {
+        process.kill(lock.pid, 0);
+      } catch (processError) {
+        if (processError.code === "ESRCH") stale = true;
+        else throw processError;
+      }
+    } catch (readError) {
+      if (readError.code === "ENOENT") return acquireRunLock(runId, directory);
+      throw readError;
+    }
+    if (!stale)
+      throw new Error(`QA run ${runId} is already active in another process`);
+    await unlink(lockPath);
+    return acquireRunLock(runId, directory);
+  }
+  try {
+    await handle.writeFile(content);
+    await handle.close();
+  } catch (error) {
+    await handle.close().catch(() => {});
+    await unlink(lockPath).catch(() => {});
+    throw error;
+  }
+  return async () => {
+    try {
+      const lock = JSON.parse(await readFile(lockPath, "utf8"));
+      if (lock.token === token) await unlink(lockPath);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  };
 }

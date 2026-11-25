@@ -1,4 +1,5 @@
 import { ApiClient } from "./api-client.mjs";
+import { verifyQaDatabaseTarget } from "./database-target.mjs";
 import {
   assertAuthorizedOrganization,
   assertOrganizationIdentity,
@@ -6,6 +7,7 @@ import {
   QA_ORGANIZATION_NAME,
 } from "./safety.mjs";
 import {
+  acquireRunLock,
   createManifest,
   loadManifest,
   manifestPath,
@@ -17,36 +19,218 @@ import {
 const ROOT = "/organizations/current";
 const list = (value) =>
   Array.isArray(value) ? value : value?.data || value?.items || [];
+export const runManifestDirectory = (env) => {
+  const value = env.QA_MANIFEST_DIR || ".qa-runs";
+  if (
+    value.includes("\0") ||
+    value.split(/[\\/]/).includes("..") ||
+    value.startsWith("/") ||
+    /^[A-Za-z]:/.test(value)
+  ) {
+    throw new Error("QA_MANIFEST_DIR must be a safe repository-relative path");
+  }
+  return value;
+};
 const qp = (values) =>
   new URLSearchParams(
     Object.entries(values)
       .filter(([, v]) => v !== undefined)
       .map(([k, v]) => [k, String(v)]),
   ).toString();
-const scaled = (value, places = 4) => {
+export const scaled = (value, places = 4) => {
   const text = String(value ?? "0");
-  const match = /^(\d+)(?:\.(\d+))?$/.exec(text);
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(text);
   if (!match)
     throw new Error(
       `Invalid decimal returned by API for QA verification: ${text}`,
     );
-  const fraction = (match[2] || "").padEnd(places, "0");
+  const fraction = (match[3] || "").padEnd(places, "0");
   if (fraction.length > places && /[1-9]/.test(fraction.slice(places)))
     throw new Error("Unexpected precision returned by API");
-  return (
-    BigInt(match[1]) * 10n ** BigInt(places) +
-    BigInt(fraction.slice(0, places) || "0")
-  );
+  const magnitude =
+    BigInt(match[2]) * 10n ** BigInt(places) +
+    BigInt(fraction.slice(0, places) || "0");
+  return match[1] === "-" ? -magnitude : magnitude;
 };
-const formatScaled = (value, places = 4) => {
+export const formatScaled = (value, places = 4) => {
+  const sign = value < 0n ? "-" : "";
+  const absolute = value < 0n ? -value : value;
   const factor = 10n ** BigInt(places);
-  const whole = value / factor;
-  const fraction = (value % factor)
+  const whole = absolute / factor;
+  const fraction = (absolute % factor)
     .toString()
     .padStart(places, "0")
     .replace(/0+$/, "");
-  return fraction ? `${whole}.${fraction}` : String(whole);
+  return fraction ? `${sign}${whole}.${fraction}` : `${sign}${whole}`;
 };
+
+export function oneOrNone(matches, label) {
+  if (matches.length > 1)
+    throw new Error(
+      `Ambiguous QA recovery for ${label}; refusing to select a document`,
+    );
+  return matches[0];
+}
+
+export function qaScenarioFromEnvironment(env) {
+  const scenarioName = env.QA_SCENARIO || "baseline";
+  if (scenarioName !== "baseline")
+    throw new Error(
+      `Unsupported QA_SCENARIO=${scenarioName}; currently supported scenario: baseline`,
+    );
+  return scenarioName;
+}
+
+async function allPages(api, path, filters, pageSize = 100) {
+  const result = [];
+  for (let page = 1; page <= 1000; page++) {
+    const response = await api.get(
+      `${path}?${qp({ ...filters, page, page_size: pageSize })}`,
+    );
+    const rows = list(response);
+    result.push(...rows);
+    const total = Number(response?.total);
+    if (
+      rows.length < pageSize ||
+      (Number.isFinite(total) && result.length >= total)
+    )
+      return result;
+  }
+  throw new Error(`QA recovery exceeded the safe pagination limit for ${path}`);
+}
+
+export function purchaseOrderMatches(
+  order,
+  { supplier, warehouse, product, unit },
+) {
+  const line = order.lines?.length === 1 ? order.lines[0] : undefined;
+  return (
+    order.supplierId === supplier.id &&
+    order.warehouseId === warehouse.id &&
+    order.currency === "NGN" &&
+    line?.productId === product.id &&
+    line?.unitId === unit.id &&
+    scaled(line?.orderedQuantity, 6) === 100n * 1000000n &&
+    scaled(line?.unitCost, 4) === 5000n * 10000n
+  );
+}
+
+export function salesOrderMatches(
+  order,
+  { customer, warehouse, product, unit, runId },
+) {
+  const line = order.lines?.length === 1 ? order.lines[0] : undefined;
+  return (
+    order.customerId === customer.id &&
+    order.warehouseId === warehouse.id &&
+    order.currency === "NGN" &&
+    order.notes === `QA ${runId}` &&
+    line?.productId === product.id &&
+    line?.unitId === unit.id &&
+    scaled(line?.orderedQuantity, 6) === 20n * 1000000n &&
+    scaled(line?.unitPrice, 4) === 8000n * 10000n
+  );
+}
+
+async function recoverPurchaseOrder(api, manifest, expected) {
+  const recorded = [];
+  for (const resource of manifest.resources.purchaseOrders) {
+    const order = await api.get(
+      `${ROOT}/procurement/purchase-orders/${resource.id}`,
+    );
+    if (purchaseOrderMatches(order, expected)) recorded.push(order);
+  }
+  const fromManifest = oneOrNone(recorded, "manifest purchase order");
+  if (fromManifest) return fromManifest;
+  if (manifest.resources.purchaseOrders.length)
+    throw new Error(
+      "Recorded QA purchase order does not match this run's exact scenario",
+    );
+  const candidates = await allPages(
+    api,
+    `${ROOT}/procurement/purchase-orders`,
+    {
+      q: expected.supplier.name,
+    },
+  );
+  const exact = [];
+  for (const candidate of candidates) {
+    const order = await api.get(
+      `${ROOT}/procurement/purchase-orders/${candidate.id}`,
+    );
+    if (purchaseOrderMatches(order, expected)) exact.push(order);
+  }
+  return oneOrNone(exact, "purchase order");
+}
+
+async function recoverSalesOrder(api, manifest, expected) {
+  const recorded = [];
+  for (const resource of manifest.resources.salesOrders) {
+    const order = await api.get(`${ROOT}/sales/orders/${resource.id}`);
+    if (salesOrderMatches(order, expected)) recorded.push(order);
+  }
+  const fromManifest = oneOrNone(recorded, "manifest sales order");
+  if (fromManifest) return fromManifest;
+  if (manifest.resources.salesOrders.length)
+    throw new Error(
+      "Recorded QA sales order does not match this run's exact scenario",
+    );
+  const candidates = await allPages(api, `${ROOT}/sales/orders`, {
+    customerId: expected.customer.id,
+    warehouseId: expected.warehouse.id,
+  });
+  const exact = [];
+  for (const candidate of candidates) {
+    const order = await api.get(`${ROOT}/sales/orders/${candidate.id}`);
+    if (salesOrderMatches(order, expected)) exact.push(order);
+  }
+  return oneOrNone(exact, "sales order");
+}
+
+export function transferMatches(
+  transfer,
+  { source, destination, product, runId },
+) {
+  const line = transfer.lines?.length === 1 ? transfer.lines[0] : undefined;
+  return (
+    transfer.sourceWarehouseId === source.id &&
+    transfer.destinationWarehouseId === destination.id &&
+    transfer.note === `QA ${runId}` &&
+    line?.productId === product.id &&
+    scaled(line?.requestedQuantity, 6) === 30n * 1000000n
+  );
+}
+
+async function recoverTransfer(api, manifest, expected) {
+  const recorded = [];
+  for (const resource of manifest.resources.transfers) {
+    const transfer = await api.get(
+      `${ROOT}/inventory/transfers/${resource.id}`,
+    );
+    if (transferMatches(transfer, expected)) recorded.push(transfer);
+  }
+  const fromManifest = oneOrNone(recorded, "manifest transfer");
+  if (fromManifest) return fromManifest;
+  if (manifest.resources.transfers.length)
+    throw new Error(
+      "Recorded QA transfer does not match this run's exact scenario",
+    );
+  const candidates = await allPages(api, `${ROOT}/inventory/transfers`, {});
+  const exact = [];
+  for (const candidate of candidates) {
+    if (
+      candidate.sourceWarehouseId !== expected.source.id ||
+      candidate.destinationWarehouseId !== expected.destination.id
+    ) {
+      continue;
+    }
+    const transfer = await api.get(
+      `${ROOT}/inventory/transfers/${candidate.id}`,
+    );
+    if (transferMatches(transfer, expected)) exact.push(transfer);
+  }
+  return oneOrNone(exact, "warehouse transfer");
+}
 
 export async function connectQa(env = process.env) {
   const safe = assertSafeTarget(env);
@@ -54,6 +238,7 @@ export async function connectQa(env = process.env) {
     baseUrl: safe.apiBaseUrl,
     timeoutMs: Number(env.QA_HTTP_TIMEOUT_MS || 15000),
   });
+  await verifyQaDatabaseTarget(env, safe.apiBaseUrl);
   await api.login(env.QA_EMAIL, env.QA_PASSWORD);
   const memberships = await api.get("/organizations");
   assertAuthorizedOrganization(memberships, safe.organizationId);
@@ -167,21 +352,35 @@ async function ensureWarehouse(api, manifest, save, branchId, name, code) {
 }
 
 export async function seedQaRun(env = process.env, { resume = false } = {}) {
-  const { api, organization } = await connectQa(env);
+  qaScenarioFromEnvironment(env);
   const runId = resume ? env.QA_RUN_ID : newRunId();
   if (resume && !runId)
     throw new Error("Set QA_RUN_ID to the existing run to resume");
-  const path = manifestPath(runId, env.QA_MANIFEST_DIR || ".qa-runs");
+  const directory = runManifestDirectory(env);
+  const release = await acquireRunLock(runId, directory);
+  try {
+    return await seedQaRunLocked(env, { resume, runId, directory });
+  } finally {
+    await release();
+  }
+}
+
+async function seedQaRunLocked(env, { resume, runId, directory }) {
+  const { api, organization } = await connectQa(env);
+  const path = manifestPath(runId, directory);
+  const scenarioName = qaScenarioFromEnvironment(env);
   const manifest = resume
     ? await loadManifest(path)
     : createManifest({
         runId,
         organizationId: organization.id,
         environment: env.QA_ENVIRONMENT,
+        scenarioName,
       });
   if (
     manifest.organizationId !== organization.id ||
-    manifest.environment !== env.QA_ENVIRONMENT
+    manifest.environment !== env.QA_ENVIRONMENT ||
+    (manifest.scenarioName || "baseline") !== scenarioName
   )
     throw new Error(
       "QA manifest target or environment does not match the authorized session",
@@ -317,11 +516,12 @@ export async function seedQaRun(env = process.env, { resume = false } = {}) {
       customer = customers[0];
 
     currentOperation = "procurement.create_po";
-    let po = list(
-      await api.get(
-        `${ROOT}/procurement/purchase-orders?${qp({ q: supplier.name, page: 1, page_size: 100 })}`,
-      ),
-    ).find((x) => x.supplierId === supplier.id);
+    let po = await recoverPurchaseOrder(api, manifest, {
+      supplier,
+      warehouse: source,
+      product,
+      unit,
+    });
     if (!po) {
       po = await api.post(`${ROOT}/procurement/purchase-orders`, {
         supplierId: supplier.id,
@@ -364,9 +564,16 @@ export async function seedQaRun(env = process.env, { resume = false } = {}) {
       customerId: customer.id,
     };
     await save();
-    if (Number(poLine.receivedQuantity || 0) < 60) {
+    const receivedAfterFirst = scaled(poLine.receivedQuantity, 6);
+    const firstReceiptTarget = 60n * 1000000n;
+    if (receivedAfterFirst < firstReceiptTarget) {
       const receipt = {
-        lines: [{ purchaseOrderLineId: poLine.id, quantity: "60" }],
+        lines: [
+          {
+            purchaseOrderLineId: poLine.id,
+            quantity: formatScaled(firstReceiptTarget - receivedAfterFirst, 6),
+          },
+        ],
       };
       const first = await operation(
         api,
@@ -396,13 +603,25 @@ export async function seedQaRun(env = process.env, { resume = false } = {}) {
     }
     po = await api.get(`${ROOT}/procurement/purchase-orders/${po.id}`);
     const poLineCurrent = po.lines.find((x) => x.id === poLine.id);
-    if (Number(poLineCurrent.receivedQuantity) < 100) {
+    const receivedAfterPartial = scaled(poLineCurrent.receivedQuantity, 6);
+    const fullReceiptTarget = 100n * 1000000n;
+    if (receivedAfterPartial < fullReceiptTarget) {
       const second = await operation(
         api,
         manifest,
         `${ROOT}/procurement/purchase-orders/${po.id}/receipts`,
         "POST",
-        { lines: [{ purchaseOrderLineId: poLine.id, quantity: "40" }] },
+        {
+          lines: [
+            {
+              purchaseOrderLineId: poLine.id,
+              quantity: formatScaled(
+                fullReceiptTarget - receivedAfterPartial,
+                6,
+              ),
+            },
+          ],
+        },
         "po-receive-40",
         save,
       );
@@ -422,25 +641,12 @@ export async function seedQaRun(env = process.env, { resume = false } = {}) {
     }
     await save();
     currentOperation = "inventory.create_transfer";
-    const transferCandidates = list(
-      await api.get(
-        `${ROOT}/inventory/transfers?${qp({ page: 1, page_size: 100 })}`,
-      ),
-    ).filter(
-      (x) =>
-        x.sourceWarehouseId === source.id &&
-        x.destinationWarehouseId === destination.id,
-    );
-    let transfer;
-    for (const candidate of transferCandidates) {
-      const detail = await api.get(
-        `${ROOT}/inventory/transfers/${candidate.id}`,
-      );
-      if (detail.note === `QA ${runId}`) {
-        transfer = detail;
-        break;
-      }
-    }
+    let transfer = await recoverTransfer(api, manifest, {
+      source,
+      destination,
+      product,
+      runId,
+    });
     if (!transfer) {
       transfer = await api.post(`${ROOT}/inventory/transfers`, {
         sourceWarehouseId: source.id,
@@ -488,13 +694,14 @@ export async function seedQaRun(env = process.env, { resume = false } = {}) {
     }
     transfer = await api.get(`${ROOT}/inventory/transfers/${transfer.id}`);
     const transferLine = transfer.lines[0];
-    const received = transferLine.receivedQuantity || "0";
-    if (Number(received) < 30) {
+    const received = scaled(transferLine.receivedQuantity, 6);
+    const transferTarget = 30n * 1000000n;
+    if (received < transferTarget) {
       const receipt = {
         lines: [
           {
             transferLineId: transferLine.id,
-            quantity: String(30 - Number(received)),
+            quantity: formatScaled(transferTarget - received, 6),
           },
         ],
       };
@@ -525,13 +732,13 @@ export async function seedQaRun(env = process.env, { resume = false } = {}) {
     }
     await save();
 
-    let sales = list(
-      await api.get(
-        `${ROOT}/sales/orders?${qp({ q: `QA ${suffix}`, page: 1, page_size: 100 })}`,
-      ),
-    ).find(
-      (x) => x.customerId === customer.id && x.warehouseId === destination.id,
-    );
+    let sales = await recoverSalesOrder(api, manifest, {
+      customer,
+      warehouse: destination,
+      product,
+      unit,
+      runId,
+    });
     if (!sales) {
       operationKey(manifest, "sales-order-create");
       await save();
@@ -547,16 +754,10 @@ export async function seedQaRun(env = process.env, { resume = false } = {}) {
         manifest.idempotencyKeys["sales-order-create"],
       );
       manifest.completedOperations.push("sales-order-create");
-      manifest.resources.salesOrders.push({
-        id: sales.id,
-        number: sales.number,
-      });
+      await remember(manifest, "salesOrders", sales, { number: sales.number });
       await save();
     } else if (!manifest.resources.salesOrders.some((x) => x.id === sales.id)) {
-      manifest.resources.salesOrders.push({
-        id: sales.id,
-        number: sales.number,
-      });
+      await remember(manifest, "salesOrders", sales, { number: sales.number });
       await save();
     }
     if (sales.status === "DRAFT")
@@ -655,12 +856,19 @@ export async function seedQaRun(env = process.env, { resume = false } = {}) {
         save,
       );
     const due = String(invoice.totalAmount || "160000");
-    const half = formatScaled(scaled(due) / 2n);
+    const reversedAmount = 60000n * 10000n;
+    const invoiceAmount = scaled(due);
+    if (invoiceAmount !== 160000n * 10000n)
+      throw new Error(
+        "Baseline QA invoice does not match the expected NGN 160000 amount",
+      );
+    const firstAmount = formatScaled(invoiceAmount - reversedAmount);
+    const secondAmount = formatScaled(reversedAmount);
     manifest.scenarioDate ??= new Date().toISOString().slice(0, 10);
     await save();
     const paymentBody = {
       invoiceId: invoice.id,
-      amount: half,
+      amount: firstAmount,
       method: "BANK_TRANSFER",
       paymentDate: manifest.scenarioDate,
     };
@@ -670,7 +878,7 @@ export async function seedQaRun(env = process.env, { resume = false } = {}) {
       `${ROOT}/sales/payments`,
       "POST",
       paymentBody,
-      "payment-half-1",
+      "payment-100000",
       save,
     );
     if (!manifest.resources.payments.some((p) => p.id === first.id)) {
@@ -686,8 +894,8 @@ export async function seedQaRun(env = process.env, { resume = false } = {}) {
       manifest,
       `${ROOT}/sales/payments`,
       "POST",
-      paymentBody,
-      "payment-half-2",
+      { ...paymentBody, amount: secondAmount },
+      "payment-60000",
       save,
     );
     if (!manifest.resources.payments.some((p) => p.id === second.id)) {
@@ -698,23 +906,23 @@ export async function seedQaRun(env = process.env, { resume = false } = {}) {
       });
       await save();
     }
-    operationKey(manifest, "payment-reverse-half-2");
+    operationKey(manifest, "payment-reverse-60000");
     await save();
     await api.post(
       `${ROOT}/sales/payments/${second.id}/reverse`,
       { reason: `QA replacement payment ${runId}` },
-      manifest.idempotencyKeys["payment-reverse-half-2"],
+      manifest.idempotencyKeys["payment-reverse-60000"],
     );
-    if (!manifest.completedOperations.includes("payment-reverse-half-2"))
-      manifest.completedOperations.push("payment-reverse-half-2");
+    if (!manifest.completedOperations.includes("payment-reverse-60000"))
+      manifest.completedOperations.push("payment-reverse-60000");
     await save();
     const replacement = await operation(
       api,
       manifest,
       `${ROOT}/sales/payments`,
       "POST",
-      paymentBody,
-      "payment-replacement",
+      { ...paymentBody, amount: secondAmount },
+      "payment-replacement-60000",
       save,
     );
     if (!manifest.resources.payments.some((p) => p.id === replacement.id)) {
@@ -744,11 +952,13 @@ export async function verifyQaRun(env = process.env) {
   const { api, organization } = await connectQa(env);
   const runId = env.QA_RUN_ID;
   if (!runId) throw new Error("Set QA_RUN_ID to the run manifest to verify");
-  const path = manifestPath(runId, env.QA_MANIFEST_DIR || ".qa-runs");
+  const scenarioName = qaScenarioFromEnvironment(env);
+  const path = manifestPath(runId, runManifestDirectory(env));
   const manifest = await loadManifest(path);
   if (
     manifest.organizationId !== organization.id ||
-    manifest.environment !== env.QA_ENVIRONMENT
+    manifest.environment !== env.QA_ENVIRONMENT ||
+    (manifest.scenarioName || "baseline") !== scenarioName
   )
     throw new Error(
       "QA manifest does not match the authorized organization/environment",
@@ -796,9 +1006,11 @@ export async function verifyQaRun(env = process.env) {
   const allocations = list(
     await api.get(`${ROOT}/sales/invoices/${ids.invoiceId}/payments`),
   );
-  const effective = allocations
-    .filter((a) => !a.payment?.reversal)
+  const gross = allocations.reduce((n, a) => n + scaled(a.amount), 0n);
+  const reversed = allocations
+    .filter((a) => a.payment?.reversal)
     .reduce((n, a) => n + scaled(a.amount), 0n);
+  const effective = gross - reversed;
   const sourceQty = scaled(source?.onHand, 6);
   const destQty = scaled(dest?.onHand, 6);
   const inventoryValue =
@@ -811,6 +1023,40 @@ export async function verifyQaRun(env = process.env) {
     `${ROOT}/reports/purchases/products?${qp({ product_id: ids.productId, currency: "NGN", page: 1, page_size: 100 })}`,
   );
   const reportRows = [...list(salesReport), ...list(purchaseReport)];
+  const movementReport = await api.get(
+    `${ROOT}/reports/movements?${qp({ product_id: ids.productId, page: 1, page_size: 100 })}`,
+  );
+  const movements = list(movementReport);
+  const movementQuantity = (type) =>
+    movements
+      .filter((movement) => movement.movementType === type)
+      .reduce((sum, movement) => sum + scaled(movement.quantityDelta, 6), 0n);
+  const fulfillmentMovements = movements.filter(
+    (movement) => movement.movementType === "SALE_FULFILLMENT",
+  );
+  const costOfGoodsScaled = fulfillmentMovements.reduce(
+    (sum, movement) =>
+      sum +
+      (-scaled(movement.quantityDelta, 6) *
+        scaled(movement.costPerBaseUnit, 4)) /
+        1000000n,
+    0n,
+  );
+  const purchaseReceipts = list(
+    await api.get(
+      `${ROOT}/procurement/purchase-orders/${ids.purchaseOrderId}/receipts`,
+    ),
+  );
+  const transferReceipts = list(transfer.receipts);
+  const salesPicks = list(
+    await api.get(`${ROOT}/sales/orders/${ids.salesOrderId}/picks`),
+  );
+  const fulfillments = list(
+    await api.get(`${ROOT}/sales/orders/${ids.salesOrderId}/fulfillments`),
+  );
+  const reservation = order.lines?.find(
+    (line) => line.id === ids.salesOrderLineId,
+  )?.reservation;
   const checks = {
     purchaseReceived:
       scaled(
@@ -820,7 +1066,9 @@ export async function verifyQaRun(env = process.env) {
       ) ===
       100n * 1000000n,
     purchaseOrderValue: scaled(po.subtotal) === 500000n * 10000n,
+    purchaseReceiptCount: purchaseReceipts.length === 2,
     transferReceived: transfer.status === "RECEIVED",
+    transferReceiptCount: transferReceipts.length === 1,
     salesFulfilled:
       scaled(
         order.lines?.find((x) => x.id === ids.salesOrderLineId)
@@ -828,15 +1076,31 @@ export async function verifyQaRun(env = process.env) {
         6,
       ) ===
       20n * 1000000n,
+    salesPickCount: salesPicks.length === 2,
+    salesFulfillmentCount: fulfillments.length === 2,
+    reservationConsumed:
+      reservation?.status === "CONSUMED" &&
+      scaled(reservation?.fulfilledQuantity, 6) === 20n * 1000000n &&
+      scaled(reservation?.releasedQuantity, 6) === 0n,
     salesOrderValue: scaled(order.total) === 160000n * 10000n,
     sourceQuantity: sourceQty === 70n * 1000000n,
     destinationQuantity: destQty === 10n * 1000000n,
     organizationQuantity: sourceQty + destQty === 80n * 1000000n,
     inventoryValuation: inventoryValue === 400000n * 10000000000n,
     invoiceValue: scaled(invoice.totalAmount) === 160000n * 10000n,
+    grossPayments: gross === 220000n * 10000n,
+    reversedPayments: reversed === 60000n * 10000n,
     effectivePayments: effective === 160000n * 10000n,
     zeroOutstanding: scaled(invoice.outstandingAmount) === 0n,
     paidStatus: invoice.paymentStatus === "PAID",
+    receiptMovementQuantity: movementQuantity("RECEIPT") === 100n * 1000000n,
+    transferOutMovementQuantity:
+      movementQuantity("TRANSFER_OUT") === -30n * 1000000n,
+    transferInMovementQuantity:
+      movementQuantity("TRANSFER_IN") === 30n * 1000000n,
+    fulfillmentMovementQuantity:
+      movementQuantity("SALE_FULFILLMENT") === -20n * 1000000n,
+    costOfGoods: costOfGoodsScaled === 100000n * 10000n,
     customerHistoryReconciles:
       scaled(customerNgn?.outstanding) === 0n &&
       scaled(customerNgn?.paid) === 160000n * 10000n,
@@ -860,6 +1124,10 @@ export async function verifyQaRun(env = process.env) {
       purchaseOrderValue: po.subtotal,
       salesOrderValue: order.total,
       effectivePayments: formatScaled(effective),
+      grossPayments: formatScaled(gross),
+      reversedPayments: formatScaled(reversed),
+      costOfGoods: formatScaled(costOfGoodsScaled),
+      movementCount: movements.length,
       outstanding: invoice.outstandingAmount,
       ledger: reconciliation,
     },

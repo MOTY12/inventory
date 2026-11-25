@@ -4,34 +4,34 @@
 
 ## Resume facts
 
-- Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`, HEAD `b520e51` (`Update the md`). Worktree has uncommitted QA tool and progress changes; preserve and inspect them. Changed/new paths: `.gitignore`, `package.json`, `scripts/qa/{api-client,manifest,safety,seed,verify,workflow,workflow.test}.mjs`, `docs/operations/qa-fixture-guide.md`, `docs/progress/{current-state,next-session,session-log}.md`, `docs/implementation/{master-plan,task-breakdown}.md`, `docs/operations/quality-001-acceptance.md`.
-- No commit, push, deploy, migration, reset, deletion or QA business mutation. Source-only generated `apps/web/tsconfig.tsbuildinfo` was restored.
-- Roadmap: **30/47 completed**. SALES-004 and REPORT-002 remain IN_PROGRESS. QUALITY-001 is IN_PROGRESS for harness work, but its named operational scenario is NOT RUN and remains dependency-gated.
-- Docker services PostgreSQL/Redis/S3Mock are healthy. API readiness and frontend `/login` returned HTTP 200 on ports 4000 and 3002. API and web dev processes were started; port 3000 was untouched. Prisma status: 22 migrations found and current.
-- CLI target inputs are absent: no QA organization ID/name and no QA email/password are configured in the ignored `.env`. Seed was attempted with explicit development mode and stopped safely at the missing organization UUID before authentication or mutation. No manifest was produced.
+- Repository `/Users/newuser/Documents/GitHub/inventory`, branch `develop`. Session began at `5ab2723`; preserve current uncommitted implementation. Completed roadmap count remains **30/47**.
+- Changed/new paths: `apps/api/src/health/{health.controller.ts,database-identity.ts}`, `apps/api/test/api-contract.test.mjs`, `packages/shared/src/index.ts`, `scripts/qa/{database-target.mjs,manifest.mjs,workflow.mjs,workflow.test.mjs}`, `docs/architecture/purchase-sales-reporting.md`, `docs/operations/{qa-fixture-guide.md,quality-001-acceptance.md}`, `docs/implementation/{master-plan.md,task-breakdown.md}`, `docs/progress/{blockers.md,completed-tasks.md,current-state.md,next-session.md,pending-tasks.md,session-log.md}`.
+- No commit/push/deploy/migration/reset/deletion occurred. No QA fixture records or manifest were created.
+- SALES-004 and REPORT-002 remain IN_PROGRESS; QUALITY-001 is IN_PROGRESS for harness code only, and its operational scenario is NOT RUN. No task newly completed.
 
-## Implemented
+## Implemented this session
 
-- Local commands: `npm run qa:seed`, `npm run qa:resume`, `npm run qa:verify`, `npm run qa:test`.
-- API client authenticates with the existing login and refresh-cookie/CSRF flow, selects a membership-validated organization, sends request IDs, times out, surfaces safe error codes, and only retries GET or commands with stable idempotency keys.
-- Local safety rejects non-development/test modes, non-loopback/wrong-port API, remote/non-dev database, missing/mismatched organization target, missing credentials, non-member accounts, and non-owner roles.
-- Atomic mode-0600 manifests in gitignored `.qa-runs` store run ID, environment/organization, current stage, resource IDs, expected quantities/money, stable idempotency keys and completed/failed operations without auth secrets.
-- Seed path uses supported APIs to build run-scoped branch/warehouse/catalog/supplier/customer records and execute the deterministic NGN PO receive → transfer → sale reserve/pick/fulfill → invoice → partial payment/reversal/replacement scenario. Verify reads documents, balances, ledger reconciliation, allocations and sales/purchase product reports.
-- Explicit limitations: no alternate document states, USD scenario, separate tenant/restricted user, export fixture or performance data generator yet. Those remain part of the unclosed acceptance work.
+- Read-only local QA target verification directly checks database/schema, exact organization, and active OWNER membership; compares the API's non-production readiness fingerprint to the CLI database connection before login or mutation.
+- Baseline recovery now uses manifest IDs and exact scenario attributes, pages candidate documents and fails on ambiguity/mismatch. Corrected transfer line matching to `requestedQuantity`. Quantity reconciliation uses signed scaled `BigInt` rather than JS `Number`.
+- Added atomic shape validation for schema-v1 manifests, 0600 manifest files/0700 directory, strict safe relative manifest directory, and per-run exclusive locking with safe stale-PID recovery.
+- Baseline invoice lifecycle now expects NGN 100,000 + 60,000 gross, reverses the 60,000 payment, then replaces it. Verification now checks gross/reversed/effective amounts, 100,000 cost of goods, reservation consumption, movements and document counts in addition to balances/WAC/customer/report/ledger invariants.
+- Added `QA_SCENARIO=baseline`; unsupported selectors fail closed. Other requested scenario datasets (document states, USD, restricted/second tenant and exports) remain to be implemented.
 
-## Verification completed
+## Verification results
 
-- `npm run qa:test`: **6 passed, 0 failed, 0 skipped**.
-- `npm test`: API/shared **59 passed, 0 failed, 3 opt-in PostgreSQL skipped**; web **2 passed, 0 failed**.
-- `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build` (Webpack; 29 routes), `npm run db:validate --workspace=@inventory/api`, Prisma migration status (22/22 current), QA syntax checks, and `git diff --check` passed.
-- QA seed attempts exited 1 before authentication/mutation: plain command lacked `NODE_ENV`/`QA_ENVIRONMENT`; explicit development mode then stopped at missing `QA_ORGANIZATION_ID`. This is not a generator runtime pass. No populated data, browser workflow, CSV download or quality E2E is claimed.
-- Prior session's opt-in 16/16 PostgreSQL suite results are prior evidence only; no PostgreSQL integration suite was rerun specifically for the QA script.
+- `npm run qa:test`: **11 pass, 0 fail, 0 skipped**.
+- `npm test`: **60 API/shared pass, 0 fail, 3 opt-in PG skipped; web 2 pass, 0 fail**.
+- Opt-in PG suites individually passed: `postgres.integration.test.mjs` **10/10**; `inventory.postgres.integration.test.mjs` **13/13**; `sales-invoices.postgres.integration.test.mjs` **3/3**. Total **26/26**, no skips. They used temporary schemas; no dev data reset/deleted.
+- `npm run typecheck`, `npm run lint`, `npm run format:check`, API build, isolated-copy Next Webpack production build (**29 routes**), Prisma validation, read-only migration status (**22/22 current**), and `git diff --check` passed.
+- Docker Compose showed PostgreSQL, Redis and S3Mock healthy. API readiness returned HTTP 200; a live database identity fingerprint matched the CLI DB identity. API process was stopped after this verification. The existing Next dev process on port 3000 was left untouched; port 3002 was unavailable due the existing `apps/web` lock. No browser workflow was run.
+- `.env` variable names missing: `NODE_ENV`, `QA_ENVIRONMENT`, `QA_API_BASE_URL`, `QA_ORGANIZATION_ID`, `QA_ORGANIZATION_NAME`, `QA_EMAIL`, `QA_PASSWORD`. `DATABASE_URL` is set. Do not print or share its credentials.
+- `qa:seed` was not run because explicit QA mode/account/organization are missing; no login or mutation was attempted. No CSV download, browser PDF, multi-currency scenario, EXPLAIN plan, or QA acceptance completion is claimed.
 
-## Exact next steps
+## Exact next actions
 
-1. Add to ignored `.env`: `NODE_ENV=development`, `QA_ENVIRONMENT=development`, `QA_API_BASE_URL=http://localhost:4000/api/v1`, local development `DATABASE_URL`, `QA_ORGANIZATION_ID=<approved UUID>`, `QA_ORGANIZATION_NAME=Quality 001 QA Workspace`, `QA_EMAIL=<active OWNER email>`, and `QA_PASSWORD=<existing password>`. Do not alter credentials or share the password in chat.
-2. Run `npm run qa:test`; then `npm run qa:seed`. Record the emitted run ID. Resume with `QA_RUN_ID=<id> npm run qa:resume`; verify with `QA_RUN_ID=<id> npm run qa:verify`. Stop if identity or reconciliation fails.
-3. Extend fixtures for all required states, NGN+USD, role/tenant scope and all four export types; run browser invoice/PDF/payment and report/filter/CSV acceptance on the generated run.
-4. Capture safe representative EXPLAIN ANALYZE evidence on a sufficiently populated disposable schema. Do not use production customer data.
-5. Only once SALES-004 and REPORT-002 criteria pass, run `COMPLETE_INVENTORY_BUSINESS_LIFECYCLE` and reconcile every expected amount, movement, reservation, balance, report and retry.
-6. Update task statuses, task count and progress docs from actual evidence. Keep QUALITY-001 IN_PROGRESS and **30/47** until full criteria are satisfied. Do not commit or push unless separately directed.
+1. Add the seven missing QA variable names in ignored `.env` with values for the approved existing QA organization and OWNER account. Never alter existing passwords or create unauthorized accounts.
+2. Start API with `NODE_ENV=development npm run dev:api`; verify readiness is 200 and API/CLI database fingerprints match. Keep port 3000 untouched. Resolve Next dev lock before attempting port 3002.
+3. Run `npm run qa:test`, then `QA_SCENARIO=baseline npm run qa:seed`; record the run ID. Run `QA_RUN_ID=<id> npm run qa:resume` and `QA_RUN_ID=<id> npm run qa:verify`; inspect whether the completed resume leaves record/movement/allocation counts unchanged.
+4. Extend the fixture generator with documented supported scenarios for document states, NGN/USD reporting, separate authorization sessions, and four report exports. Add isolated integration and parser/reconciliation tests; do not claim scenarios before they execute.
+5. Use a populated disposable DB schema for performance measurements. Complete authenticated SALES-004 browser/PDF/payment and REPORT-002 filter/security/browser-download acceptance. Then run `COMPLETE_INVENTORY_BUSINESS_LIFECYCLE` and update IDs/evidence.
+6. Keep SALES-004, REPORT-002 and QUALITY-001 open and count at **30/47** until all required criteria pass. Do not push/deploy. No new commit was created in this session.
