@@ -3,6 +3,13 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "../../../features/auth/session-provider";
+import {
+  DataTable,
+  type DataTableColumn,
+} from "../../../components/ui/data-table";
+import { PageHeader } from "../../../components/ui/page-header";
+import { StatusBadge } from "../../../components/ui/status-badge";
+import { Drawer } from "../../../components/ui/drawer";
 
 type Page<T> = {
   data: T[];
@@ -53,6 +60,7 @@ export function ReorderingPage({
   const [products, setProducts] = useState<Product[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [editing, setEditing] = useState<Rule | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [productId, setProductId] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
   const [minimum, setMinimum] = useState("");
@@ -72,6 +80,128 @@ export function ReorderingPage({
     "BUYER",
     "WAREHOUSE_CLERK",
   ].includes(organization?.role ?? "");
+  const ruleColumns: DataTableColumn<Rule>[] = [
+    {
+      key: "product",
+      header: "Product",
+      render: (r) => (
+        <>
+          {r.product.name}
+          <small>{r.product.sku}</small>
+        </>
+      ),
+    },
+    { key: "warehouse", header: "Warehouse", render: (r) => r.warehouse.name },
+    {
+      key: "available",
+      header: "Available",
+      align: "right",
+      render: (r) => `${r.availableQuantity} ${r.product.baseUnit.code}`,
+    },
+    {
+      key: "minimum",
+      header: "Reorder level",
+      align: "right",
+      render: (r) => `${r.minimumQuantity} ${r.product.baseUnit.code}`,
+    },
+    {
+      key: "target",
+      header: "Target quantity",
+      align: "right",
+      render: (r) => `${r.targetQuantity} ${r.product.baseUnit.code}`,
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (r) => <StatusBadge status={r.status} />,
+    },
+    {
+      key: "alert",
+      header: "Alert",
+      render: (r) => <StatusBadge status={r.alert?.status ?? "ACTIVE"} />,
+    },
+    ...(canWrite
+      ? [
+          {
+            key: "actions",
+            header: "Actions",
+            render: (r: Rule) => (
+              <div className="ui-row-actions">
+                <button
+                  className="ui-quiet-button"
+                  onClick={() => beginEdit(r)}
+                  type="button"
+                >
+                  Edit
+                </button>
+                <button
+                  className="ui-quiet-button"
+                  disabled={busy}
+                  onClick={() => void setStatus(r)}
+                  type="button"
+                >
+                  {r.status === "ACTIVE" ? "Pause" : "Enable"}
+                </button>
+              </div>
+            ),
+          },
+        ]
+      : []),
+  ];
+  const alertColumns: DataTableColumn<Alert>[] = [
+    {
+      key: "product",
+      header: "Product",
+      render: (a) => (
+        <Link className="ui-primary-cell" href={`/products/${a.product.id}`}>
+          {a.product.name}
+          <small>{a.product.sku}</small>
+        </Link>
+      ),
+    },
+    { key: "warehouse", header: "Warehouse", render: (a) => a.warehouse.name },
+    {
+      key: "onHand",
+      header: "On hand",
+      align: "right",
+      render: (a) => `${a.onHandQuantity} ${a.product.baseUnit.code}`,
+    },
+    {
+      key: "reserved",
+      header: "Reserved",
+      align: "right",
+      render: (a) => a.reservedQuantity,
+    },
+    {
+      key: "available",
+      header: "Available",
+      align: "right",
+      render: (a) => a.availableQuantity,
+    },
+    {
+      key: "incoming",
+      header: "Incoming",
+      align: "right",
+      render: (a) => a.incomingQuantity,
+    },
+    {
+      key: "minimum",
+      header: "Reorder level",
+      align: "right",
+      render: (a) => a.minimumQuantity,
+    },
+    {
+      key: "suggested",
+      header: "Suggested",
+      align: "right",
+      render: (a) => a.suggestedQuantity,
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (a) => <StatusBadge status={a.status} />,
+    },
+  ];
 
   const load = useCallback(async () => {
     if (!organization) {
@@ -124,6 +254,7 @@ export function ReorderingPage({
 
   function beginEdit(rule: Rule) {
     setEditing(rule);
+    setFormOpen(true);
     setProductId(rule.productId);
     setWarehouseId(rule.warehouseId);
     setMinimum(rule.minimumQuantity);
@@ -131,6 +262,7 @@ export function ReorderingPage({
   }
   function clearForm() {
     setEditing(null);
+    setFormOpen(false);
     setProductId("");
     setWarehouseId("");
     setMinimum("");
@@ -212,39 +344,54 @@ export function ReorderingPage({
   }
 
   return (
-    <main className="inventory-page">
-      <header className="products-heading">
-        <div>
-          <p className="catalog-eyebrow">STOCK CONTROL</p>
-          <h1>{alertsOnly ? "Low stock" : "Reorder rules"}</h1>
-          <p>
-            {alertsOnly
-              ? "Review available stock against configured thresholds. Incoming purchase orders are excluded."
-              : "Set warehouse-specific thresholds and replenishment targets."}
-          </p>
-        </div>
-        <nav className="catalog-actions">
-          <Link
-            className="catalog-secondary-link"
-            href="/inventory/reorder-rules"
-          >
-            Reorder rules
-          </Link>
-          <Link className="catalog-secondary-link" href="/inventory/low-stock">
-            Low stock
-          </Link>
-          {alertsOnly && canWrite && (
-            <button
-              className="button-secondary"
-              disabled={busy}
-              onClick={evaluate}
-              type="button"
+    <main className="ui-page inventory-page">
+      <PageHeader
+        eyebrow="STOCK CONTROL"
+        title={alertsOnly ? "Low stock" : "Reorder rules"}
+        description={
+          alertsOnly
+            ? "Identify products that need replenishment based on available stock."
+            : "Configure stock thresholds to identify products that need replenishment."
+        }
+        action={
+          <nav className="ui-page-actions">
+            <Link
+              className="catalog-secondary-link"
+              href="/inventory/reorder-rules"
             >
-              Evaluate now
-            </button>
-          )}
-        </nav>
-      </header>
+              Reorder rules
+            </Link>
+            <Link
+              className="catalog-secondary-link"
+              href="/inventory/low-stock"
+            >
+              Low stock
+            </Link>
+            {alertsOnly && canWrite && (
+              <button
+                className="button-secondary"
+                disabled={busy}
+                onClick={evaluate}
+                type="button"
+              >
+                Evaluate now
+              </button>
+            )}
+            {!alertsOnly && canWrite && (
+              <button
+                className="button button-primary"
+                onClick={() => {
+                  clearForm();
+                  setFormOpen(true);
+                }}
+                type="button"
+              >
+                Add reorder rule
+              </button>
+            )}
+          </nav>
+        }
+      />
       {notice && (
         <p className="catalog-notice" role="status">
           {notice}
@@ -257,7 +404,7 @@ export function ReorderingPage({
       )}
       {alertsOnly ? (
         <section className="panel">
-          <div className="products-toolbar">
+          <div className="products-toolbar ui-filter-toolbar">
             <label>
               Search
               <input
@@ -294,49 +441,20 @@ export function ReorderingPage({
               No open low-stock alerts. Rules are evaluated every five minutes.
             </p>
           ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Product</th>
-                    <th>Warehouse</th>
-                    <th>On hand</th>
-                    <th>Reserved</th>
-                    <th>Available</th>
-                    <th>Incoming</th>
-                    <th>Minimum</th>
-                    <th>Suggested</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {alerts.map((a) => (
-                    <tr key={a.id}>
-                      <td>
-                        <Link href={`/products/${a.product.id}`}>
-                          {a.product.name}
-                        </Link>
-                        <small>{a.product.sku}</small>
-                      </td>
-                      <td>{a.warehouse.name}</td>
-                      <td>
-                        {a.onHandQuantity} {a.product.baseUnit.code}
-                      </td>
-                      <td>{a.reservedQuantity}</td>
-                      <td>{a.availableQuantity}</td>
-                      <td>0</td>
-                      <td>{a.minimumQuantity}</td>
-                      <td>{a.suggestedQuantity}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={alertColumns}
+              rows={alerts}
+              rowKey={(a) => a.id}
+              loading={loading}
+              emptyTitle="No low-stock alerts"
+              emptyDescription="All tracked products are above their configured thresholds."
+            />
           )}
           <p className="form-hint">
             Available = on hand − reserved. Incoming quantities are excluded; no
             purchase order is created automatically.
           </p>
-          <nav className="catalog-actions" aria-label="Low-stock pagination">
+          <nav className="ui-pagination" aria-label="Low-stock pagination">
             <button
               className="button-secondary"
               disabled={page <= 1 || loading}
@@ -358,83 +476,103 @@ export function ReorderingPage({
         </section>
       ) : (
         <>
-          {canWrite && (
-            <form className="panel form-grid" onSubmit={save}>
-              <h2>{editing ? "Edit reorder rule" : "Create reorder rule"}</h2>
-              {!editing && (
-                <>
-                  <label>
-                    Product
-                    <select
-                      required
-                      value={productId}
-                      onChange={(e) => setProductId(e.target.value)}
-                    >
-                      <option value="">Select product</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} · {p.sku}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Warehouse
-                    <select
-                      required
-                      value={warehouseId}
-                      onChange={(e) => setWarehouseId(e.target.value)}
-                    >
-                      <option value="">Select warehouse</option>
-                      {warehouses.map((w) => (
-                        <option key={w.id} value={w.id}>
-                          {w.name} · {w.code}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </>
-              )}
-              <label>
-                Minimum available quantity
-                <input
-                  required
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={minimum}
-                  onChange={(e) => setMinimum(e.target.value)}
-                />
-              </label>
-              <label>
-                Target available quantity
-                <input
-                  required
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={target}
-                  onChange={(e) => setTarget(e.target.value)}
-                />
-              </label>
-              <div className="catalog-actions">
-                <button className="button-primary" disabled={busy}>
-                  {busy ? "Saving…" : editing ? "Save changes" : "Create rule"}
-                </button>
-                {editing && (
+          {canWrite && formOpen && (
+            <Drawer
+              open
+              onClose={clearForm}
+              title={editing ? "Edit reorder rule" : "Add reorder rule"}
+              description="Set a threshold and replenishment target for one warehouse."
+            >
+              <form
+                className="ui-drawer-form ui-drawer-form-grid"
+                onSubmit={save}
+              >
+                {!editing && (
+                  <>
+                    <label>
+                      Product
+                      <select
+                        required
+                        value={productId}
+                        onChange={(e) => setProductId(e.target.value)}
+                      >
+                        <option value="">Select product</option>
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} · {p.sku}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Warehouse
+                      <select
+                        required
+                        value={warehouseId}
+                        onChange={(e) => setWarehouseId(e.target.value)}
+                      >
+                        <option value="">Select warehouse</option>
+                        {warehouses.map((w) => (
+                          <option key={w.id} value={w.id}>
+                            {w.name} · {w.code}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </>
+                )}
+                <label>
+                  Minimum available quantity
+                  <input
+                    required
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={minimum}
+                    onChange={(e) => setMinimum(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Target available quantity
+                  <input
+                    required
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={target}
+                    onChange={(e) => setTarget(e.target.value)}
+                  />
+                </label>
+                <div className="ui-drawer-actions">
                   <button
+                    className="button button-secondary"
                     type="button"
-                    className="button-secondary"
                     onClick={clearForm}
                   >
                     Cancel
                   </button>
-                )}
-              </div>
-            </form>
+                  <button className="button button-primary" disabled={busy}>
+                    {busy
+                      ? "Saving…"
+                      : editing
+                        ? "Save changes"
+                        : "Create rule"}
+                  </button>
+                  {editing && (
+                    <button
+                      type="button"
+                      className="button-secondary"
+                      onClick={clearForm}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </form>
+            </Drawer>
           )}
           <section className="panel">
-            <div className="products-toolbar">
+            <div className="products-toolbar ui-filter-toolbar">
               <label>
                 Search
                 <input
@@ -462,72 +600,15 @@ export function ReorderingPage({
               </label>
               <span>{total} rules</span>
             </div>
-            {loading ? (
-              <p role="status">Loading reorder rules…</p>
-            ) : rules.length === 0 ? (
-              <p className="empty-state">
-                No reorder rules yet. Create one to track a product’s available
-                stock.
-              </p>
-            ) : (
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Product</th>
-                      <th>Warehouse</th>
-                      <th>Available</th>
-                      <th>Minimum</th>
-                      <th>Target</th>
-                      <th>Rule</th>
-                      <th>Alert</th>
-                      {canWrite && <th>Actions</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rules.map((r) => (
-                      <tr key={r.id}>
-                        <td>
-                          {r.product.name}
-                          <small>{r.product.sku}</small>
-                        </td>
-                        <td>{r.warehouse.name}</td>
-                        <td>
-                          {r.availableQuantity} {r.product.baseUnit.code}
-                        </td>
-                        <td>
-                          {r.minimumQuantity} {r.product.baseUnit.code}
-                        </td>
-                        <td>{r.targetQuantity}</td>
-                        <td>{r.status}</td>
-                        <td>{r.alert?.status ?? "—"}</td>
-                        {canWrite && (
-                          <td>
-                            <button
-                              className="text-button"
-                              onClick={() => beginEdit(r)}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              className="text-button"
-                              disabled={busy}
-                              onClick={() => setStatus(r)}
-                            >
-                              {r.status === "ACTIVE" ? "Pause" : "Enable"}
-                            </button>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <nav
-              className="catalog-actions"
-              aria-label="Reorder rule pagination"
-            >
+            <DataTable
+              columns={ruleColumns}
+              rows={rules}
+              rowKey={(r) => r.id}
+              loading={loading}
+              emptyTitle="No reorder rules yet"
+              emptyDescription="Add a warehouse-specific rule to track available stock."
+            />
+            <nav className="ui-pagination" aria-label="Reorder rule pagination">
               <button
                 className="button-secondary"
                 disabled={page <= 1 || loading}

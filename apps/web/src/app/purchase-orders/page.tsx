@@ -4,6 +4,12 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "../../features/auth/session-provider";
 import {
+  DataTable,
+  type DataTableColumn,
+} from "../../components/ui/data-table";
+import { PageHeader } from "../../components/ui/page-header";
+import { StatusBadge } from "../../components/ui/status-badge";
+import {
   formatDecimal,
   sumLineAmounts,
 } from "../../features/procurement/decimal";
@@ -61,6 +67,50 @@ export default function PurchaseOrdersPage() {
   const canWrite = ["OWNER", "ADMIN", "MANAGER", "BUYER"].includes(
     organization?.role ?? "",
   );
+  const columns: DataTableColumn<Order>[] = [
+    {
+      key: "number",
+      header: "Purchase order",
+      render: (order) => (
+        <Link className="ui-primary-cell" href={`/purchase-orders/${order.id}`}>
+          {order.number}
+          <small>
+            {order._count.lines} lines · {order._count.receipts} receipts
+          </small>
+        </Link>
+      ),
+    },
+    {
+      key: "supplier",
+      header: "Supplier",
+      render: (order) => order.supplier.name,
+    },
+    {
+      key: "warehouse",
+      header: "Warehouse",
+      render: (order) => order.warehouse.name,
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (order) => <StatusBadge status={order.status} />,
+    },
+    {
+      key: "subtotal",
+      header: "Subtotal",
+      align: "right",
+      render: (order) => `${order.currency} ${formatDecimal(order.subtotal)}`,
+    },
+    {
+      key: "action",
+      header: "Action",
+      render: (order) => (
+        <Link className="ui-quiet-button" href={`/purchase-orders/${order.id}`}>
+          View order
+        </Link>
+      ),
+    },
+  ];
 
   const load = useCallback(async () => {
     if (!organization) {
@@ -164,36 +214,30 @@ export default function PurchaseOrdersPage() {
   const total = sumLineAmounts(lines);
 
   return (
-    <main className="products-page">
-      <header className="products-heading">
-        <div>
-          <Link href="/" className="catalog-back">
-            ← Dashboard
-          </Link>
-          <p className="catalog-eyebrow">PURCHASING</p>
-          <h1>Purchase orders</h1>
-          <p>
-            Create supplier orders, track receipts, and keep stock changes tied
-            to posted deliveries.
-          </p>
-        </div>
-        <div className="dashboard-actions">
-          <Link className="button button-secondary" href="/suppliers">
-            Suppliers
-          </Link>
-          {canWrite && (
-            <button
-              aria-controls="purchase-order-editor"
-              aria-expanded={formOpen}
-              className="button button-primary"
-              onClick={() => setFormOpen((open) => !open)}
-              type="button"
-            >
-              ＋ New purchase order
-            </button>
-          )}
-        </div>
-      </header>
+    <main className="ui-page">
+      <PageHeader
+        eyebrow="PURCHASING"
+        title="Purchase orders"
+        description="Manage supplier purchases and incoming inventory."
+        action={
+          <div className="dashboard-actions">
+            <Link className="button button-secondary" href="/suppliers">
+              Suppliers
+            </Link>
+            {canWrite && (
+              <button
+                aria-controls="purchase-order-editor"
+                aria-expanded={formOpen}
+                className="button button-primary"
+                onClick={() => setFormOpen((open) => !open)}
+                type="button"
+              >
+                ＋ New purchase order
+              </button>
+            )}
+          </div>
+        }
+      />
       {notice && (
         <p className="catalog-notice" role="status">
           {notice}
@@ -458,68 +502,22 @@ export default function PurchaseOrdersPage() {
                 </select>
               </label>
             </div>
-            {loading ? (
-              <p role="status">Loading purchase orders…</p>
-            ) : orders.length === 0 ? (
-              <div className="catalog-empty">
-                <h3>
-                  {query || status
-                    ? "No matching purchase orders"
-                    : "No purchase orders yet"}
-                </h3>
-                <p>
-                  {query || status
-                    ? "Change the search or status filter to see other orders."
-                    : "New drafts will appear here."}
-                </p>
-              </div>
-            ) : (
-              <div className="catalog-table-wrap">
-                <table className="catalog-table">
-                  <thead>
-                    <tr>
-                      <th>Order</th>
-                      <th>Supplier</th>
-                      <th>Warehouse</th>
-                      <th>Status</th>
-                      <th>Subtotal</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orders.map((order) => (
-                      <tr key={order.id}>
-                        <td>
-                          <strong>{order.number}</strong>
-                          <small>
-                            {order._count.lines} lines · {order._count.receipts}{" "}
-                            receipts
-                          </small>
-                        </td>
-                        <td>{order.supplier.name}</td>
-                        <td>{order.warehouse.name}</td>
-                        <td>
-                          <span className="status-pill">
-                            {order.status.replaceAll("_", " ")}
-                          </span>
-                        </td>
-                        <td>
-                          {order.currency} {formatDecimal(order.subtotal)}
-                        </td>
-                        <td>
-                          <Link
-                            className="catalog-text-button"
-                            href={`/purchase-orders/${order.id}`}
-                          >
-                            Open
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <DataTable
+              columns={columns}
+              rows={orders}
+              rowKey={(order) => order.id}
+              loading={loading}
+              emptyTitle={
+                query || status
+                  ? "No matching purchase orders"
+                  : "No purchase orders yet"
+              }
+              emptyDescription={
+                query || status
+                  ? "Change the search or status filter to see other orders."
+                  : "New drafts will appear here."
+              }
+            />
             <nav className="po-pagination" aria-label="Purchase order pages">
               <span>
                 {totalOrders} orders · page {page} of{" "}

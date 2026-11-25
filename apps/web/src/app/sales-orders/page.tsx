@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "../../features/auth/session-provider";
+import {
+  DataTable,
+  type DataTableColumn,
+} from "../../components/ui/data-table";
+import { PageHeader } from "../../components/ui/page-header";
+import { StatusBadge } from "../../components/ui/status-badge";
 
 type Row = {
   id: string;
@@ -66,21 +72,66 @@ export default function SalesOrdersPage() {
   const canWrite = ["OWNER", "ADMIN", "MANAGER", "SALES"].includes(
     organization?.role ?? "",
   );
+  const columns: DataTableColumn<Row>[] = [
+    {
+      key: "number",
+      header: "Sales order",
+      render: (row) => (
+        <Link className="ui-primary-cell" href={`/sales-orders/${row.id}`}>
+          {row.number}
+        </Link>
+      ),
+    },
+    { key: "customer", header: "Customer", render: (row) => row.customer.name },
+    {
+      key: "warehouse",
+      header: "Warehouse",
+      render: (row) => row.warehouse.name,
+    },
+    {
+      key: "date",
+      header: "Order date",
+      render: (row) => new Date(row.orderDate).toLocaleDateString(),
+    },
+    {
+      key: "total",
+      header: "Total",
+      align: "right",
+      render: (row) => `${row.currency} ${row.total}`,
+    },
+    {
+      key: "fulfillment",
+      header: "Fulfillment",
+      render: (row) => {
+        const done = row.lines.filter(
+          (line) =>
+            quantityUnits(line.fulfilledQuantity) >=
+            quantityUnits(line.orderedQuantity),
+        ).length;
+        return `${done} of ${row.lines.length} lines complete`;
+      },
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (row) => <StatusBadge status={row.status} />,
+    },
+  ];
 
   return (
-    <main className="page-content">
-      <header className="page-heading">
-        <div>
-          <p className="eyebrow">SALES</p>
-          <h1>Sales orders</h1>
-          <p>Track customer orders and the stock reserved for fulfillment.</p>
-        </div>
-        {canWrite && (
-          <Link className="button button-primary" href="/sales-orders/new">
-            Create sales order
-          </Link>
-        )}
-      </header>
+    <main className="ui-page">
+      <PageHeader
+        eyebrow="SALES"
+        title="Sales orders"
+        description="Manage customer orders and fulfillment."
+        action={
+          canWrite ? (
+            <Link className="button button-primary" href="/sales-orders/new">
+              New sales order
+            </Link>
+          ) : undefined
+        }
+      />
       {error && (
         <div className="error-banner" role="alert">
           {error}
@@ -124,88 +175,20 @@ export default function SalesOrdersPage() {
             </select>
           </label>
         </div>
-        {busy ? (
-          <p className="muted" role="status">
-            Loading sales orders…
-          </p>
-        ) : rows.length === 0 ? (
-          <div className="empty-state">
-            <h2>
-              {query || status
-                ? "No matching sales orders"
-                : "No sales orders yet"}
-            </h2>
-            <p>
-              {query || status
-                ? "Change the search or status filter to see other orders."
-                : "Create an order to reserve available stock for a customer."}
-            </p>
-            {canWrite && (
-              <Link href="/sales-orders/new" className="button button-primary">
-                Create sales order
-              </Link>
-            )}
-          </div>
-        ) : (
-          <div className="product-table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Order</th>
-                  <th>Customer</th>
-                  <th>Warehouse</th>
-                  <th>Date</th>
-                  <th>Total</th>
-                  <th>Fulfillment</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => {
-                  const fulfilledLines = row.lines.filter(
-                    (line) =>
-                      quantityUnits(line.fulfilledQuantity) >=
-                      quantityUnits(line.orderedQuantity),
-                  ).length;
-                  const partiallyFulfilledLines = row.lines.filter(
-                    (line) =>
-                      quantityUnits(line.fulfilledQuantity) > BigInt(0) &&
-                      quantityUnits(line.fulfilledQuantity) <
-                        quantityUnits(line.orderedQuantity),
-                  ).length;
-                  return (
-                    <tr key={row.id}>
-                      <td>
-                        <Link href={`/sales-orders/${row.id}`}>
-                          <strong>{row.number}</strong>
-                        </Link>
-                      </td>
-                      <td>{row.customer.name}</td>
-                      <td>{row.warehouse.name}</td>
-                      <td>{new Date(row.orderDate).toLocaleDateString()}</td>
-                      <td>
-                        {row.currency} {row.total}
-                      </td>
-                      <td>
-                        <strong>
-                          {fulfilledLines} of {row.lines.length} lines complete
-                        </strong>
-                        <small>
-                          {partiallyFulfilledLines} partially fulfilled
-                        </small>
-                      </td>
-                      <td>
-                        <span className="status-badge">
-                          {row.status.replaceAll("_", " ")}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <DataTable
+          columns={columns}
+          rows={rows}
+          rowKey={(row) => row.id}
+          loading={busy}
+          emptyTitle={
+            query || status ? "No matching sales orders" : "No sales orders yet"
+          }
+          emptyDescription={
+            query || status
+              ? "Change the search or status filter to see other orders."
+              : "Create an order to reserve available stock for a customer."
+          }
+        />
         <nav className="pagination-row" aria-label="Sales order pages">
           <span>
             {total} order{total === 1 ? "" : "s"}

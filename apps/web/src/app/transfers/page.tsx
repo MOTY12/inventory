@@ -2,6 +2,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "../../features/auth/session-provider";
 import Link from "next/link";
+import {
+  DataTable,
+  type DataTableColumn,
+} from "../../components/ui/data-table";
+import { PageHeader } from "../../components/ui/page-header";
+import { StatusBadge } from "../../components/ui/status-badge";
 
 type Row = {
   id: string;
@@ -78,6 +84,83 @@ export default function TransfersPage() {
     "BUYER",
     "WAREHOUSE_CLERK",
   ].includes(organization?.role ?? "");
+  const columns: DataTableColumn<Row>[] = [
+    {
+      key: "number",
+      header: "Transfer",
+      render: (r) => (
+        <Link className="ui-primary-cell" href={`/transfers/${r.id}`}>
+          {r.number}
+        </Link>
+      ),
+    },
+    { key: "source", header: "From", render: (r) => r.sourceWarehouse.name },
+    {
+      key: "destination",
+      header: "To",
+      render: (r) => r.destinationWarehouse.name,
+    },
+    {
+      key: "lines",
+      header: "Products",
+      align: "right",
+      render: (r) => r._count.lines,
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (r) => <StatusBadge status={r.status} />,
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      render: (r) => (
+        <div className="ui-row-actions">
+          {canWrite && r.status === "DRAFT" && (
+            <button
+              className="ui-quiet-button"
+              disabled={busy}
+              onClick={() => void command(r.id, "submit")}
+              type="button"
+            >
+              Submit
+            </button>
+          )}
+          {canWrite && r.status === "SUBMITTED" && (
+            <>
+              <button
+                className="ui-quiet-button"
+                disabled={busy}
+                onClick={() => void command(r.id, "cancel")}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="ui-quiet-button"
+                disabled={busy}
+                onClick={() => void command(r.id, "dispatch")}
+                type="button"
+              >
+                Dispatch
+              </button>
+            </>
+          )}
+          {canWrite &&
+            ["IN_TRANSIT", "PARTIALLY_RECEIVED"].includes(r.status) && (
+              <button
+                className="ui-quiet-button"
+                disabled={busy}
+                onClick={() => void receive(r)}
+                type="button"
+              >
+                Receive
+              </button>
+            )}
+        </div>
+      ),
+    },
+  ];
   const load = useCallback(async () => {
     if (!organization) {
       setRows([]);
@@ -273,24 +356,24 @@ export default function TransfersPage() {
     }
   }
   return (
-    <main className="page-content">
-      <header className="page-heading">
-        <div>
-          <p className="eyebrow">INVENTORY OPERATIONS</p>
-          <h1>Warehouse transfers</h1>
-          <p>Move stock between warehouses and track what is in transit.</p>
-        </div>
-        {canWrite && (
-          <button
-            className="button button-primary"
-            onClick={() => setOpen((x) => !x)}
-            disabled={!warehouses.length || !products.length || busy}
-            type="button"
-          >
-            New transfer
-          </button>
-        )}
-      </header>
+    <main className="ui-page">
+      <PageHeader
+        eyebrow="INVENTORY OPERATIONS"
+        title="Transfers"
+        description="Move and track inventory between warehouses."
+        action={
+          canWrite && (
+            <button
+              className="button button-primary"
+              onClick={() => setOpen((x) => !x)}
+              disabled={!warehouses.length || !products.length || busy}
+              type="button"
+            >
+              New transfer
+            </button>
+          )
+        }
+      />
       {error && (
         <div role="alert" className="error-banner">
           {error}
@@ -496,97 +579,18 @@ export default function TransfersPage() {
         </div>
       </section>
       <section className="panel">
-        <div className="catalog-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Transfer</th>
-                <th>From</th>
-                <th>To</th>
-                <th>Lines</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={6} role="status">
-                    Loading transfers…
-                  </td>
-                </tr>
-              ) : (
-                rows.map((r) => (
-                  <tr key={r.id}>
-                    <td>
-                      <Link href={`/transfers/${r.id}`}>
-                        <strong>{r.number}</strong>
-                      </Link>
-                    </td>
-                    <td>{r.sourceWarehouse.name}</td>
-                    <td>{r.destinationWarehouse.name}</td>
-                    <td>{r._count.lines}</td>
-                    <td>
-                      <span className="status-badge">
-                        {r.status.replaceAll("_", " ")}
-                      </span>
-                    </td>
-                    <td className="action-row">
-                      {canWrite && r.status === "DRAFT" && (
-                        <button
-                          className="button button-secondary"
-                          disabled={busy}
-                          onClick={() => void command(r.id, "submit")}
-                        >
-                          Submit
-                        </button>
-                      )}
-                      {canWrite && r.status === "SUBMITTED" && (
-                        <>
-                          <button
-                            className="button button-secondary"
-                            disabled={busy}
-                            onClick={() => void command(r.id, "cancel")}
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            className="button button-primary"
-                            disabled={busy}
-                            onClick={() => void command(r.id, "dispatch")}
-                          >
-                            Dispatch
-                          </button>
-                        </>
-                      )}
-                      {canWrite &&
-                        ["IN_TRANSIT", "PARTIALLY_RECEIVED"].includes(
-                          r.status,
-                        ) && (
-                          <button
-                            className="button button-primary"
-                            disabled={busy}
-                            onClick={() => void receive(r)}
-                          >
-                            Receive
-                          </button>
-                        )}
-                    </td>
-                  </tr>
-                ))
-              )}
-              {!loading && !rows.length && (
-                <tr>
-                  <td colSpan={6}>
-                    {total === 0
-                      ? "No warehouse transfers yet. Create a draft to begin."
-                      : "No transfers match these filters."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={columns}
+          rows={rows}
+          rowKey={(r) => r.id}
+          loading={loading}
+          emptyTitle={
+            total === 0
+              ? "No warehouse transfers yet"
+              : "No transfers match these filters"
+          }
+          emptyDescription="Create a draft to move inventory between warehouses."
+        />
         <nav className="action-row" aria-label="Transfer pages">
           <button
             className="button button-secondary"

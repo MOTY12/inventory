@@ -1741,6 +1741,14 @@ p {
   background: var(--ui-surface);
   box-shadow: var(--ui-shadow-card);
 }
+.ui-drawer-form.product-editor {
+  min-height: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
 .ui-page .panel {
   border-color: var(--ui-border);
   border-radius: var(--ui-radius-lg);
@@ -1888,6 +1896,15 @@ p {
   display: flex;
   min-height: 100%;
   flex-direction: column;
+}
+.ui-drawer-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 14px;
+}
+.ui-drawer-form-grid .ui-drawer-actions {
+  grid-column: 1 / -1;
 }
 .ui-drawer-form .ui-form-section {
   flex: 0 0 auto;

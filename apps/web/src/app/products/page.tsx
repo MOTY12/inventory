@@ -6,6 +6,14 @@ import {
   ProtectedContent,
   useSession,
 } from "../../features/auth/session-provider";
+import {
+  DataTable,
+  type DataTableColumn,
+} from "../../components/ui/data-table";
+import { PageHeader } from "../../components/ui/page-header";
+import { StatusBadge } from "../../components/ui/status-badge";
+import { Drawer } from "../../components/ui/drawer";
+import { ConfirmDialog } from "../../components/ui/confirm-dialog";
 
 type Product = {
   id: string;
@@ -35,6 +43,7 @@ function ProductManager() {
   const [units, setUnits] = useState<Choice[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<Product | null>(null);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -58,6 +67,88 @@ function ProductManager() {
   const canWrite = ["OWNER", "ADMIN", "MANAGER", "BUYER"].includes(
     organization?.role ?? "",
   );
+  const columns: DataTableColumn<Product>[] = [
+    {
+      key: "product",
+      header: "Product",
+      render: (p) => (
+        <Link className="ui-primary-cell" href={`/products/${p.id}`}>
+          {p.name}
+        </Link>
+      ),
+    },
+    {
+      key: "sku",
+      header: "SKU / barcode",
+      render: (p) => (
+        <>
+          {p.sku}
+          <small>{p.barcode || "No barcode"}</small>
+        </>
+      ),
+    },
+    {
+      key: "category",
+      header: "Category",
+      render: (p) => p.category?.name || "—",
+    },
+    {
+      key: "unit",
+      header: "Base unit",
+      render: (p) => `${p.baseUnit.name} (${p.baseUnit.code})`,
+    },
+    ...(canWrite
+      ? [
+          {
+            key: "price",
+            header: "Default cost / sale price",
+            align: "right" as const,
+            render: (p: Product) => (
+              <>
+                {p.defaultCost === null
+                  ? "—"
+                  : `${p.costCurrency ?? "—"} ${p.defaultCost}`}{" "}
+                /{" "}
+                {p.defaultSalePrice === null
+                  ? "—"
+                  : `${p.saleCurrency ?? "—"} ${p.defaultSalePrice}`}
+              </>
+            ),
+          },
+        ]
+      : []),
+    {
+      key: "status",
+      header: "Status",
+      render: (p) => <StatusBadge status={p.status} />,
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      render: (p) =>
+        p.status === "ACTIVE" && canWrite ? (
+          <div className="ui-row-actions">
+            <button
+              className="ui-quiet-button"
+              type="button"
+              onClick={() => editProduct(p)}
+            >
+              Edit
+            </button>
+            <button
+              className="ui-quiet-button ui-danger-button"
+              type="button"
+              disabled={busy}
+              onClick={() => setArchiveTarget(p)}
+            >
+              Archive
+            </button>
+          </div>
+        ) : (
+          <span className="ui-muted-cell">—</span>
+        ),
+    },
+  ];
 
   const reload = useCallback(async () => {
     if (!organization) {
@@ -172,18 +263,19 @@ function ProductManager() {
     }
   }
 
-  async function archive(product: Product) {
-    if (!window.confirm(`Archive ${product.name}?`)) return;
+  async function confirmArchive() {
+    if (!archiveTarget) return;
     setBusy(true);
     setError("");
     setNotice("");
     try {
       await authenticatedRequest(
-        `/organizations/current/catalog/products/${product.id}/archive`,
+        `/organizations/current/catalog/products/${archiveTarget.id}/archive`,
         {},
         "PATCH",
       );
       setNotice("Product archived.");
+      setArchiveTarget(null);
       await reload();
     } catch (cause) {
       setError(
@@ -196,370 +288,311 @@ function ProductManager() {
 
   return (
     <main className="products-page">
-      <header className="products-heading">
-        <div>
-          <Link href="/catalog" className="catalog-back">
-            ← Catalog setup
-          </Link>
-          <p className="catalog-eyebrow">PRODUCT CATALOG</p>
-          <h1>Products</h1>
-          <p>
-            Manage product identity, categories, units, and availability for
-            this workspace.
+      <div className="ui-page">
+        <PageHeader
+          eyebrow="PRODUCT CATALOG"
+          title="Products"
+          description="Manage your product catalog and inventory information."
+          action={
+            <>
+              <Link href="/catalog" className="button button-secondary">
+                Catalog setup
+              </Link>
+              <button
+                aria-controls="product-editor"
+                aria-expanded={formOpen || Boolean(editing)}
+                className="button button-primary"
+                onClick={() => {
+                  clearForm();
+                  setFormOpen(true);
+                }}
+                type="button"
+              >
+                ＋ Add product
+              </button>
+            </>
+          }
+        />
+        {notice && (
+          <p className="catalog-notice" role="status">
+            {notice}
           </p>
-        </div>
-        <button
-          aria-controls="product-editor"
-          aria-expanded={formOpen || Boolean(editing)}
-          className="button button-primary"
-          onClick={() => {
-            clearForm();
-            setFormOpen(true);
-          }}
-          type="button"
-        >
-          ＋ Add product
-        </button>
-      </header>
-      {notice && (
-        <p className="catalog-notice" role="status">
-          {notice}
-        </p>
-      )}
-      {error && (
-        <p className="catalog-error" role="alert">
-          {error}
-        </p>
-      )}
-      {canWrite && (formOpen || editing) && (
-        <form className="product-editor" id="product-editor" onSubmit={save}>
+        )}
+        {error && (
+          <p className="catalog-error" role="alert">
+            {error}
+          </p>
+        )}
+        {canWrite && (formOpen || editing) && (
+          <Drawer
+            open
+            onClose={clearForm}
+            title={editing ? "Edit product" : "Add product"}
+            description="Manage product details, classification, and pricing."
+          >
+            <form
+              className="product-editor ui-drawer-form"
+              id="product-editor"
+              onSubmit={save}
+            >
+              <div className="product-form-grid">
+                <label>
+                  Product name
+                  <input
+                    required
+                    minLength={1}
+                    maxLength={180}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </label>
+                <label>
+                  SKU
+                  <input
+                    required
+                    minLength={1}
+                    maxLength={80}
+                    value={sku}
+                    onChange={(e) => setSku(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Barcode (optional)
+                  <input
+                    maxLength={100}
+                    value={barcode}
+                    onChange={(e) => setBarcode(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Category
+                  <select
+                    value={categoryId}
+                    onChange={(e) => setCategoryId(e.target.value)}
+                  >
+                    <option value="">Uncategorized</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Base unit
+                  <select
+                    required
+                    value={baseUnitId}
+                    onChange={(e) => setBaseUnitId(e.target.value)}
+                  >
+                    <option value="">Choose unit</option>
+                    {units.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.code})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Product type
+                  <select
+                    value={type}
+                    onChange={(e) => setType(e.target.value as Product["type"])}
+                  >
+                    <option value="STOCKED">Stocked</option>
+                    <option value="NON_STOCK">Non-stock</option>
+                  </select>
+                </label>
+                <label className="product-checkbox-field">
+                  <span>Track inventory</span>
+                  <input
+                    type="checkbox"
+                    checked={type === "STOCKED" && trackInventory}
+                    disabled={type === "NON_STOCK"}
+                    onChange={(e) => setTrackInventory(e.target.checked)}
+                  />
+                </label>
+                <label>
+                  Default cost
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                    value={defaultCost}
+                    onChange={(e) => setDefaultCost(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Cost currency
+                  <input
+                    required={Boolean(defaultCost)}
+                    minLength={3}
+                    maxLength={3}
+                    pattern="[A-Za-z]{3}"
+                    value={costCurrency}
+                    onChange={(e) =>
+                      setCostCurrency(e.target.value.toUpperCase())
+                    }
+                  />
+                </label>
+                <label>
+                  Default sale price
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                    value={defaultSalePrice}
+                    onChange={(e) => setDefaultSalePrice(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Sale currency
+                  <input
+                    required={Boolean(defaultSalePrice)}
+                    minLength={3}
+                    maxLength={3}
+                    pattern="[A-Za-z]{3}"
+                    value={saleCurrency}
+                    onChange={(e) =>
+                      setSaleCurrency(e.target.value.toUpperCase())
+                    }
+                  />
+                </label>
+                <label className="product-description-field">
+                  Description
+                  <textarea
+                    maxLength={2000}
+                    rows={2}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                  />
+                </label>
+              </div>
+              {units.length === 0 && (
+                <p className="catalog-form-hint">
+                  Create at least one unit in Catalog setup before adding
+                  products.
+                </p>
+              )}
+              <div className="ui-drawer-actions">
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={clearForm}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="button button-primary"
+                  type="submit"
+                  disabled={busy || units.length === 0}
+                >
+                  {busy
+                    ? "Saving…"
+                    : editing
+                      ? "Save changes"
+                      : "Create product"}
+                </button>
+              </div>
+            </form>
+          </Drawer>
+        )}
+        <section className="product-list-panel">
           <div className="catalog-panel-heading">
             <div>
-              <span className="catalog-eyebrow">
-                {editing ? "EDIT PRODUCT" : "NEW PRODUCT"}
-              </span>
-              <h2>{editing ? "Update product" : "Add a product"}</h2>
+              <span className="catalog-eyebrow">WORKSPACE INVENTORY</span>
+              <h2>
+                Product list{" "}
+                <span className="catalog-count">{loading ? "…" : total}</span>
+              </h2>
             </div>
-            {editing && (
-              <button
-                type="button"
-                className="catalog-text-button"
-                onClick={clearForm}
-              >
-                Cancel edit
-              </button>
-            )}
-          </div>
-          <div className="product-form-grid">
-            <label>
-              Product name
+            <div className="product-filters">
               <input
-                required
-                minLength={1}
-                maxLength={180}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                aria-label="Search products"
+                placeholder="Search name, SKU, barcode"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setPage(1);
+                }}
               />
-            </label>
-            <label>
-              SKU
-              <input
-                required
-                minLength={1}
-                maxLength={80}
-                value={sku}
-                onChange={(e) => setSku(e.target.value)}
-              />
-            </label>
-            <label>
-              Barcode (optional)
-              <input
-                maxLength={100}
-                value={barcode}
-                onChange={(e) => setBarcode(e.target.value)}
-              />
-            </label>
-            <label>
-              Category
               <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
+                aria-label="Filter product status"
+                value={status}
+                onChange={(e) => {
+                  setStatus(e.target.value as typeof status);
+                  setPage(1);
+                }}
               >
-                <option value="">Uncategorized</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
+                <option value="ACTIVE">Active</option>
+                <option value="ARCHIVED">Archived</option>
+                <option value="">All statuses</option>
               </select>
-            </label>
-            <label>
-              Base unit
-              <select
-                required
-                value={baseUnitId}
-                onChange={(e) => setBaseUnitId(e.target.value)}
-              >
-                <option value="">Choose unit</option>
-                {units.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} ({u.code})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Product type
-              <select
-                value={type}
-                onChange={(e) => setType(e.target.value as Product["type"])}
-              >
-                <option value="STOCKED">Stocked</option>
-                <option value="NON_STOCK">Non-stock</option>
-              </select>
-            </label>
-            <label className="product-checkbox-field">
-              <span>Track inventory</span>
-              <input
-                type="checkbox"
-                checked={type === "STOCKED" && trackInventory}
-                disabled={type === "NON_STOCK"}
-                onChange={(e) => setTrackInventory(e.target.checked)}
-              />
-            </label>
-            <label>
-              Default cost
-              <input
-                type="number"
-                min="0"
-                step="0.0001"
-                value={defaultCost}
-                onChange={(e) => setDefaultCost(e.target.value)}
-              />
-            </label>
-            <label>
-              Cost currency
-              <input
-                required={Boolean(defaultCost)}
-                minLength={3}
-                maxLength={3}
-                pattern="[A-Za-z]{3}"
-                value={costCurrency}
-                onChange={(e) => setCostCurrency(e.target.value.toUpperCase())}
-              />
-            </label>
-            <label>
-              Default sale price
-              <input
-                type="number"
-                min="0"
-                step="0.0001"
-                value={defaultSalePrice}
-                onChange={(e) => setDefaultSalePrice(e.target.value)}
-              />
-            </label>
-            <label>
-              Sale currency
-              <input
-                required={Boolean(defaultSalePrice)}
-                minLength={3}
-                maxLength={3}
-                pattern="[A-Za-z]{3}"
-                value={saleCurrency}
-                onChange={(e) => setSaleCurrency(e.target.value.toUpperCase())}
-              />
-            </label>
-            <label className="product-description-field">
-              Description
-              <textarea
-                maxLength={2000}
-                rows={2}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </label>
+            </div>
           </div>
-          {units.length === 0 && (
-            <p className="catalog-form-hint">
-              Create at least one unit in Catalog setup before adding products.
-            </p>
-          )}
-          <button
-            className="catalog-primary-button"
-            type="submit"
-            disabled={busy || units.length === 0}
-          >
-            {busy ? "Saving…" : editing ? "Save changes" : "Create product"}
-          </button>
-        </form>
-      )}
-      <section className="product-list-panel">
-        <div className="catalog-panel-heading">
-          <div>
-            <span className="catalog-eyebrow">WORKSPACE INVENTORY</span>
-            <h2>
-              Product list{" "}
-              <span className="catalog-count">{loading ? "…" : total}</span>
-            </h2>
-          </div>
-          <div className="product-filters">
-            <input
-              aria-label="Search products"
-              placeholder="Search name, SKU, barcode"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
-            />
-            <select
-              aria-label="Filter product status"
-              value={status}
-              onChange={(e) => {
-                setStatus(e.target.value as typeof status);
-                setPage(1);
-              }}
-            >
-              <option value="ACTIVE">Active</option>
-              <option value="ARCHIVED">Archived</option>
-              <option value="">All statuses</option>
-            </select>
-          </div>
-        </div>
-        {loading ? (
-          <div className="catalog-loading" role="status">
-            Loading products…
-          </div>
-        ) : products.length === 0 ? (
-          <div className="catalog-empty">
-            <h3>No products found</h3>
-            <p>
-              {query
-                ? "Try another search."
-                : "Create a product to start organizing this catalog."}
-            </p>
-          </div>
-        ) : (
-          <div className="product-table-wrap">
-            <table className="product-table">
-              <thead>
-                <tr>
-                  <th>Product</th>
-                  <th>SKU / barcode</th>
-                  <th>Category</th>
-                  <th>Base unit</th>
-                  {canWrite && <th>Default cost / sale price</th>}
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((p) => (
-                  <tr key={p.id}>
-                    <td>
-                      <Link
-                        href={`/products/${p.id}`}
-                        className="product-name-link"
-                      >
-                        {p.name}
-                      </Link>
-                      <small>
-                        {p.type === "STOCKED" ? "Stocked" : "Non-stock"}
-                      </small>
-                    </td>
-                    <td>
-                      {p.sku}
-                      <small>{p.barcode || "No barcode"}</small>
-                    </td>
-                    <td>{p.category?.name || "—"}</td>
-                    <td>
-                      {p.baseUnit.name} ({p.baseUnit.code})
-                    </td>
-                    {canWrite && (
-                      <td>
-                        <div className="product-price-pair">
-                          <span>
-                            Cost
-                            <strong>
-                              {p.defaultCost === null
-                                ? "—"
-                                : `${p.costCurrency ?? "—"} ${p.defaultCost}`}
-                            </strong>
-                          </span>
-                          <span>
-                            Sale
-                            <strong>
-                              {p.defaultSalePrice === null
-                                ? "—"
-                                : `${p.saleCurrency ?? "—"} ${p.defaultSalePrice}`}
-                            </strong>
-                          </span>
-                        </div>
-                      </td>
-                    )}
-                    <td>
-                      <span className="catalog-status">{p.status}</span>
-                    </td>
-                    <td className="product-row-actions">
-                      {p.status === "ACTIVE" && canWrite && (
-                        <>
-                          <button
-                            type="button"
-                            className="catalog-text-button"
-                            onClick={() => editProduct(p)}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="catalog-text-button danger"
-                            disabled={busy}
-                            onClick={() => void archive(p)}
-                          >
-                            Archive
-                          </button>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {!loading && total > 20 && (
-              <nav
-                aria-label="Product list pages"
-                className="product-pagination"
-              >
-                <span>
-                  Showing {(page - 1) * 20 + 1}–{Math.min(page * 20, total)} of{" "}
-                  {total}
-                </span>
-                <div>
-                  <button
-                    className="catalog-text-button"
-                    type="button"
-                    disabled={page <= 1}
-                    onClick={() => setPage(page - 1)}
-                  >
-                    Previous
-                  </button>
+          {
+            <div className="product-table-wrap">
+              <DataTable
+                columns={columns}
+                rows={products}
+                rowKey={(p) => p.id}
+                loading={loading}
+                emptyTitle="No products found"
+                emptyDescription={
+                  query
+                    ? "Try another search."
+                    : "Create a product to start organizing this catalog."
+                }
+              />
+              {!loading && total > 20 && (
+                <nav
+                  aria-label="Product list pages"
+                  className="product-pagination"
+                >
                   <span>
-                    Page {page} of {Math.ceil(total / 20)}
+                    Showing {(page - 1) * 20 + 1}–{Math.min(page * 20, total)}{" "}
+                    of {total}
                   </span>
-                  <button
-                    className="catalog-text-button"
-                    type="button"
-                    disabled={page >= Math.ceil(total / 20)}
-                    onClick={() => setPage(page + 1)}
-                  >
-                    Next
-                  </button>
-                </div>
-              </nav>
-            )}
-          </div>
-        )}
-      </section>
+                  <div>
+                    <button
+                      className="catalog-text-button"
+                      type="button"
+                      disabled={page <= 1}
+                      onClick={() => setPage(page - 1)}
+                    >
+                      Previous
+                    </button>
+                    <span>
+                      Page {page} of {Math.ceil(total / 20)}
+                    </span>
+                    <button
+                      className="catalog-text-button"
+                      type="button"
+                      disabled={page >= Math.ceil(total / 20)}
+                      onClick={() => setPage(page + 1)}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </nav>
+              )}
+            </div>
+          }
+        </section>
+        <ConfirmDialog
+          open={Boolean(archiveTarget)}
+          title="Archive product?"
+          description={
+            archiveTarget
+              ? `Archive ${archiveTarget.name}? Existing inventory history will remain available.`
+              : ""
+          }
+          confirmLabel="Archive product"
+          busy={busy}
+          onCancel={() => setArchiveTarget(null)}
+          onConfirm={() => void confirmArchive()}
+        />
+      </div>
     </main>
   );
 }
