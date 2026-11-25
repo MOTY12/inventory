@@ -1,5 +1,11 @@
 # Session log
 
+# 2026-11-25 — Financial QA checkpoint verification
+
+- Continued QA scenario work on `develop`; retained document-state, invoice-state, NGN/USD and CSV-export coverage, and added an authorization scenario path for configured disposable roles. The path is unexecuted and does not cover membership/grant or export-download revocation. No scenario was run against authenticated QA accounts because the approved QA organization/user settings are absent; no user, credential or business record was created or changed.
+- Final checks: `npm run qa:test` **18/18**; `npm test` **60 API/shared + 2 web passed, 0 failed, 3 opt-in PostgreSQL suites skipped**; `npm run lint`, `npm run typecheck`, `npm run format:check`, `npm run build` (29 routes), Prisma validation, read-only migration status (**22 migrations, schema up to date**) and `git diff --check` passed. Separately executed existing PostgreSQL suites remain **10/10, 13/13, 3/3** with no skips; they are not end-to-end executions of the new scenarios.
+- API readiness was HTTP 200 and existing web `/login` was HTTP 200. A second Next dev-server attempt exited because the existing process owns the development lock on port 3000; that process was left untouched. No migration, reset, deletion, commit, push or deploy occurred. Roadmap remains **30/47**; SALES-004, REPORT-002 and QUALITY-001 are still in progress. Missing acceptance evidence includes live authorization scenario/revocation checks, authenticated invoice/multi-currency/export runs, browser financial/download checks and report performance measurements.
+
 # 2026-11-25 — QA scenario registry and document-state fixtures
 
 - Resumed on `develop` at `8d3e044`; initial worktree was clean. Added a fail-closed scenario registry for `baseline` and `document-states`, schema-v2 manifests with v1 baseline compatibility, symlink-resolved manifest-directory containment, and resumable fixture operations through the existing authenticated API for PO DRAFT/SUBMITTED/PARTIALLY_RECEIVED/RECEIVED/CANCELLED and SO DRAFT/CONFIRMED/PARTIALLY_FULFILLED/FULFILLED/CANCELLED states. Added live-status/quantity verifier and mock API-shaped duplicate-free resume test. Invoice lifecycle, multi-currency, authorization identities, financial exports and authenticated browser acceptance remain unimplemented/unrun.

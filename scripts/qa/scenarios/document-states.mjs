@@ -52,11 +52,24 @@ async function command(api, manifest, save, path, body, operation) {
 }
 
 async function findPurchaseOrder(api, expected) {
-  const response = await api.get(
-    `${ROOT}/procurement/purchase-orders?page=1&page_size=100&q=${encodeURIComponent(expected.supplier.name)}`,
-  );
+  const summaries = [];
+  for (let page = 1; page <= 1000; page += 1) {
+    const response = await api.get(
+      `${ROOT}/procurement/purchase-orders?page=${page}&page_size=100&q=${encodeURIComponent(expected.supplier.name)}`,
+    );
+    const rows = list(response);
+    summaries.push(...rows);
+    if (
+      rows.length < 100 ||
+      (Number.isFinite(Number(response?.total)) &&
+        summaries.length >= Number(response.total))
+    )
+      break;
+    if (page === 1000)
+      throw new Error("Purchase order recovery exceeded pagination limit");
+  }
   const candidates = [];
-  for (const summary of list(response)) {
+  for (const summary of summaries) {
     const order = await api.get(
       `${ROOT}/procurement/purchase-orders/${summary.id}`,
     );
@@ -67,7 +80,8 @@ async function findPurchaseOrder(api, expected) {
       order.lines?.length === 1 &&
       order.lines[0].productId === expected.product.id &&
       order.lines[0].unitId === expected.unit.id &&
-      String(order.lines[0].orderedQuantity) === expected.quantity &&
+      quantityScaled(order.lines[0].orderedQuantity) ===
+        quantityScaled(expected.quantity) &&
       moneyScaled(order.lines[0].unitCost) === 5000n * 10000n
     )
       candidates.push(order);
@@ -75,6 +89,20 @@ async function findPurchaseOrder(api, expected) {
   if (candidates.length > 1)
     throw new Error("Ambiguous document-state purchase order recovery");
   return candidates[0];
+}
+
+function purchaseOrderMatches(order, expected) {
+  return (
+    order.supplierId === expected.supplier.id &&
+    order.warehouseId === expected.warehouse.id &&
+    order.currency === "NGN" &&
+    order.lines?.length === 1 &&
+    order.lines[0].productId === expected.product.id &&
+    order.lines[0].unitId === expected.unit.id &&
+    quantityScaled(order.lines[0].orderedQuantity) ===
+      quantityScaled(expected.quantity) &&
+    moneyScaled(order.lines[0].unitCost) === 5000n * 10000n
+  );
 }
 
 async function purchase(
@@ -86,6 +114,7 @@ async function purchase(
   const saved = manifest.resources.purchaseOrders.find(
     (item) => item.label === label,
   );
+  const expected = { supplier, warehouse, product, unit, quantity };
   let order = saved
     ? await api.get(`${ROOT}/procurement/purchase-orders/${saved.id}`)
     : await findPurchaseOrder(api, {
@@ -93,8 +122,12 @@ async function purchase(
         warehouse,
         product,
         unit,
-        quantity: `${quantity}.000000`,
+        quantity,
       });
+  if (order && !purchaseOrderMatches(order, expected))
+    throw new Error(
+      `Recorded purchase order ${label} does not match this fixture`,
+    );
   if (!order) {
     manifest.stage = `document-states-${label}-create`;
     await save();
@@ -125,7 +158,14 @@ async function purchase(
       `document-states-${label}-cancel`,
     );
   } else if (state !== "DRAFT" && order.status === "DRAFT") {
-    await api.post(`${ROOT}/procurement/purchase-orders/${order.id}/submit`);
+    await command(
+      api,
+      manifest,
+      save,
+      `${ROOT}/procurement/purchase-orders/${order.id}/submit`,
+      undefined,
+      `document-states-${label}-submit`,
+    );
   }
   order = await api.get(`${ROOT}/procurement/purchase-orders/${order.id}`);
   const line = order.lines[0];
@@ -195,7 +235,20 @@ async function salesOrder(
     });
     await save();
   }
-  const line = order.lines[0];
+  if (
+    order.customerId !== customer.id ||
+    order.warehouseId !== warehouse.id ||
+    order.currency !== "NGN" ||
+    order.notes !== `QA ${manifest.runId} ${label}` ||
+    order.lines?.length !== 1 ||
+    order.lines[0].productId !== product.id ||
+    quantityScaled(order.lines[0].orderedQuantity) !==
+      quantityScaled(quantity) ||
+    moneyScaled(order.lines[0].unitPrice) !== 8000n * 10000n
+  )
+    throw new Error(
+      `Recorded sales order ${label} does not match this fixture`,
+    );
   if (status === "CANCELLED" && order.status === "DRAFT") {
     await command(
       api,
@@ -218,34 +271,14 @@ async function salesOrder(
       `document-states-${label}-confirm`,
     );
   }
-  if (
-    status === "PARTIALLY_FULFILLED" &&
-    quantityScaled(line.pickedQuantity) < 1000000n
-  ) {
-    await command(
-      api,
-      manifest,
-      save,
-      `${ROOT}/sales/orders/${order.id}/picks`,
-      { lines: [{ salesOrderLineId: line.id, quantity: "1" }] },
-      `document-states-${label}-pick`,
-    );
-    await command(
-      api,
-      manifest,
-      save,
-      `${ROOT}/sales/orders/${order.id}/fulfillments`,
-      { lines: [{ salesOrderLineId: line.id, quantity: "1" }] },
-      `document-states-${label}-fulfill`,
-    );
-  }
-  if (
-    status === "FULFILLED" &&
-    quantityScaled(line.fulfilledQuantity) < quantityScaled(quantity)
-  ) {
-    const remaining =
-      quantityScaled(quantity) - quantityScaled(line.pickedQuantity || "0");
-    if (remaining > 0n)
+  if (["PARTIALLY_FULFILLED", "FULFILLED"].includes(status)) {
+    const targetPicked =
+      status === "PARTIALLY_FULFILLED" ? 1000000n : quantityScaled(quantity);
+    const targetFulfilled = targetPicked;
+    order = await api.get(`${ROOT}/sales/orders/${order.id}`);
+    let currentLine = order.lines[0];
+    let picked = quantityScaled(currentLine.pickedQuantity || "0");
+    if (picked < targetPicked) {
       await command(
         api,
         manifest,
@@ -253,29 +286,40 @@ async function salesOrder(
         `${ROOT}/sales/orders/${order.id}/picks`,
         {
           lines: [
-            { salesOrderLineId: line.id, quantity: formatQuantity(remaining) },
+            {
+              salesOrderLineId: currentLine.id,
+              quantity: formatQuantity(targetPicked - picked),
+            },
           ],
         },
-        `document-states-${label}-pick`,
+        `document-states-${label}-pick-${formatQuantity(targetPicked)}`,
       );
-    await command(
-      api,
-      manifest,
-      save,
-      `${ROOT}/sales/orders/${order.id}/fulfillments`,
-      {
-        lines: [
-          {
-            salesOrderLineId: line.id,
-            quantity: formatQuantity(
-              quantityScaled(quantity) -
-                quantityScaled(line.fulfilledQuantity || "0"),
-            ),
-          },
-        ],
-      },
-      `document-states-${label}-fulfill`,
-    );
+      order = await api.get(`${ROOT}/sales/orders/${order.id}`);
+      currentLine = order.lines[0];
+      picked = quantityScaled(currentLine.pickedQuantity || "0");
+    }
+    if (picked < targetFulfilled)
+      throw new Error(
+        `Sales order ${label} is short-picked and cannot fulfill`,
+      );
+    const fulfilled = quantityScaled(currentLine.fulfilledQuantity || "0");
+    if (fulfilled < targetFulfilled)
+      await command(
+        api,
+        manifest,
+        save,
+        `${ROOT}/sales/orders/${order.id}/fulfillments`,
+        {
+          lines: [
+            {
+              salesOrderLineId: currentLine.id,
+              quantity: formatQuantity(targetFulfilled - fulfilled),
+            },
+          ],
+        },
+        `document-states-${label}-fulfill-${formatQuantity(targetFulfilled)}`,
+      );
+    order = await api.get(`${ROOT}/sales/orders/${order.id}`);
   }
   order = await api.get(`${ROOT}/sales/orders/${order.id}`);
   if (order.status !== status)
@@ -347,19 +391,38 @@ export async function seedDocumentStates(api, manifest, save, context) {
   }
   manifest.scenarioResult = {
     scenario: "document-states",
-    purchaseOrders: purchaseOrders.map(({ id, status, lines }) => ({
-      id,
-      status,
-      orderedQuantity: String(lines[0].orderedQuantity),
-      receivedQuantity: String(lines[0].receivedQuantity),
-    })),
-    salesOrders: orders.map(({ id, status, lines }) => ({
-      id,
-      status,
-      orderedQuantity: String(lines[0].orderedQuantity),
-      pickedQuantity: String(lines[0].pickedQuantity),
-      fulfilledQuantity: String(lines[0].fulfilledQuantity),
-    })),
+    purchaseOrders: purchaseOrders.map(
+      ({ id, status, lines, supplierId, warehouseId }, index) => ({
+        id,
+        label: purchases[index][0],
+        status,
+        supplierId,
+        warehouseId,
+        productId: lines[0].productId,
+        unitId: lines[0].unitId,
+        orderedQuantity: String(lines[0].orderedQuantity),
+        receivedQuantity: String(lines[0].receivedQuantity),
+      }),
+    ),
+    salesOrders: orders.map(
+      ({ id, status, lines, customerId, warehouseId }, index) => ({
+        id,
+        label: [
+          "so-draft",
+          "so-confirmed",
+          "so-partial",
+          "so-fulfilled",
+          "so-cancelled",
+        ][index],
+        status,
+        customerId,
+        warehouseId,
+        productId: lines[0].productId,
+        orderedQuantity: String(lines[0].orderedQuantity),
+        pickedQuantity: String(lines[0].pickedQuantity),
+        fulfilledQuantity: String(lines[0].fulfilledQuantity),
+      }),
+    ),
   };
   manifest.stage = "seeded";
   await save();
@@ -367,6 +430,21 @@ export async function seedDocumentStates(api, manifest, save, context) {
 }
 
 export async function verifyDocumentStates(api, manifest) {
+  const expectedPurchaseLabels = [
+    "po-draft",
+    "po-open",
+    "po-partial",
+    "po-received",
+    "po-cancelled",
+    "po-sales-stock",
+  ];
+  const expectedSalesLabels = [
+    "so-draft",
+    "so-confirmed",
+    "so-partial",
+    "so-fulfilled",
+    "so-cancelled",
+  ];
   const expectedPurchase = [
     "DRAFT",
     "SUBMITTED",
@@ -398,13 +476,55 @@ export async function verifyDocumentStates(api, manifest) {
     ["1", "0", "0"],
   ];
   const checks = {};
+  const result = manifest.scenarioResult;
+  if (
+    result?.scenario !== "document-states" ||
+    !Array.isArray(result.purchaseOrders) ||
+    !Array.isArray(result.salesOrders) ||
+    result.purchaseOrders.length !== expectedPurchase.length ||
+    result.salesOrders.length !== expectedSales.length
+  )
+    throw new Error(
+      "Document-state verification requires the complete fixture result",
+    );
+  const allIds = [...result.purchaseOrders, ...result.salesOrders].map(
+    (item) => item?.id,
+  );
+  if (
+    allIds.some((id) => typeof id !== "string" || !id) ||
+    new Set(allIds).size !== allIds.length
+  )
+    throw new Error(
+      "Document-state verification found missing or duplicate resource IDs",
+    );
+  if (
+    result.purchaseOrders.some(
+      (item, index) => item.label !== expectedPurchaseLabels[index],
+    ) ||
+    result.salesOrders.some(
+      (item, index) => item.label !== expectedSalesLabels[index],
+    )
+  )
+    throw new Error(
+      "Document-state verification found missing, duplicated or malformed fixture labels",
+    );
   for (const [i, item] of manifest.scenarioResult.purchaseOrders.entries()) {
     const order = await api.get(
       `${ROOT}/procurement/purchase-orders/${item.id}`,
     );
     checks[`purchase_${i + 1}_${expectedPurchase[i].toLowerCase()}`] =
+      order.organizationId === manifest.organizationId &&
       order.status === expectedPurchase[i] &&
       item.status === expectedPurchase[i] &&
+      order.supplierId === item.supplierId &&
+      order.warehouseId === item.warehouseId &&
+      order.lines.length === 1 &&
+      order.lines[0].productId === item.productId &&
+      order.lines[0].unitId === item.unitId &&
+      quantityScaled(item.orderedQuantity) ===
+        quantityScaled(expectedPurchaseQuantities[i][0]) &&
+      quantityScaled(item.receivedQuantity) ===
+        quantityScaled(expectedPurchaseQuantities[i][1]) &&
       quantityScaled(order.lines[0]?.orderedQuantity) ===
         quantityScaled(expectedPurchaseQuantities[i][0]) &&
       quantityScaled(order.lines[0]?.receivedQuantity) ===
@@ -413,8 +533,19 @@ export async function verifyDocumentStates(api, manifest) {
   for (const [i, item] of manifest.scenarioResult.salesOrders.entries()) {
     const order = await api.get(`${ROOT}/sales/orders/${item.id}`);
     checks[`sales_${i + 1}_${expectedSales[i].toLowerCase()}`] =
+      order.organizationId === manifest.organizationId &&
       order.status === expectedSales[i] &&
       item.status === expectedSales[i] &&
+      order.customerId === item.customerId &&
+      order.warehouseId === item.warehouseId &&
+      order.lines.length === 1 &&
+      order.lines[0].productId === item.productId &&
+      quantityScaled(item.orderedQuantity) ===
+        quantityScaled(expectedSalesQuantities[i][0]) &&
+      quantityScaled(item.pickedQuantity) ===
+        quantityScaled(expectedSalesQuantities[i][1]) &&
+      quantityScaled(item.fulfilledQuantity) ===
+        quantityScaled(expectedSalesQuantities[i][2]) &&
       quantityScaled(order.lines[0]?.orderedQuantity) ===
         quantityScaled(expectedSalesQuantities[i][0]) &&
       quantityScaled(order.lines[0]?.pickedQuantity) ===

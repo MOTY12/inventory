@@ -21,6 +21,22 @@ import {
   seedDocumentStates,
   verifyDocumentStates,
 } from "./scenarios/document-states.mjs";
+import {
+  seedInvoiceStates,
+  verifyInvoiceStates,
+} from "./scenarios/invoice-states.mjs";
+import {
+  seedMultiCurrency,
+  verifyMultiCurrency,
+} from "./scenarios/multi-currency.mjs";
+import {
+  seedFinancialExports,
+  verifyFinancialExports,
+} from "./scenarios/financial-exports.mjs";
+import {
+  runAuthorizationScenario,
+  verifyAuthorizationScenarioResult,
+} from "./scenarios/authorization.mjs";
 
 const ROOT = "/organizations/current";
 const list = (value) =>
@@ -524,6 +540,38 @@ async function seedQaRunLocked(env, { resume, runId, directory }) {
         customer,
         source,
       });
+      await seedInvoiceStates(api, manifest, save, {
+        products,
+        customer,
+        source,
+      });
+      return { manifest, path };
+    }
+    if (
+      scenarioName === "multi-currency" ||
+      scenarioName === "financial-exports"
+    ) {
+      const context = {
+        unit: units[0],
+        category: categories[0],
+        supplier,
+        customer,
+        source,
+      };
+      await seedMultiCurrency(api, manifest, save, context);
+      if (scenarioName === "financial-exports")
+        await seedFinancialExports(api, manifest, save);
+      return { manifest, path };
+    }
+    if (scenarioName === "authorization") {
+      manifest.stage = "authorization-checks";
+      const authorization = await runAuthorizationScenario(api, manifest, env);
+      manifest.resources.scenarioRecords ??= [];
+      const record = manifest.resources.scenarioRecords.find(
+        (item) => item.label === "authorization",
+      );
+      if (record) record.result = authorization;
+      await save();
       return { manifest, path };
     }
 
@@ -982,11 +1030,46 @@ export async function verifyQaRun(env = process.env) {
     if (!manifest.scenarioResult)
       throw new Error("Manifest has no document-state scenario result");
     const documentStateReport = await verifyDocumentStates(api, manifest);
+    const invoiceStateReport = await verifyInvoiceStates(api, manifest);
     return {
       runId,
       organizationId: organization.id,
       stage: manifest.stage,
       checks: documentStateReport.checks,
+      invoiceChecks: invoiceStateReport.invoices,
+    };
+  }
+  if (
+    scenarioName === "multi-currency" ||
+    scenarioName === "financial-exports"
+  ) {
+    const report = await verifyMultiCurrency(api, manifest);
+    const exportReport =
+      scenarioName === "financial-exports"
+        ? await verifyFinancialExports(api, manifest)
+        : undefined;
+    return {
+      runId,
+      organizationId: organization.id,
+      stage: manifest.stage,
+      checks: report.currencies,
+      automaticConversion: report.automaticConversion,
+      exports: exportReport,
+    };
+  }
+  if (scenarioName === "authorization") {
+    const result = manifest.resources.scenarioRecords?.find(
+      (item) => item.label === "authorization",
+    )?.result;
+    const verified = verifyAuthorizationScenarioResult(result);
+    const replay = await runAuthorizationScenario(api, manifest, env);
+    await saveManifest(manifest, path);
+    return {
+      runId,
+      organizationId: organization.id,
+      stage: manifest.stage,
+      checks: verified.checks,
+      replay: verifyAuthorizationScenarioResult(replay),
     };
   }
   const ids = manifest.scenario;

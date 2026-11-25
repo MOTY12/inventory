@@ -27,11 +27,34 @@ export const QA_SCENARIOS = Object.freeze({
       ],
     }),
   }),
+  "multi-currency": Object.freeze({
+    id: "multi-currency",
+    version: 1,
+    seed: true,
+    verify: true,
+    currencies: Object.freeze(["NGN", "USD"]),
+  }),
+  "financial-exports": Object.freeze({
+    id: "financial-exports",
+    version: 1,
+    seed: true,
+    verify: true,
+    requires: Object.freeze(["multi-currency"]),
+  }),
+  authorization: Object.freeze({
+    id: "authorization",
+    version: 1,
+    seed: true,
+    verify: true,
+    requires: Object.freeze(["approved disposable identities"]),
+  }),
 });
 
 export function selectQaScenario(env = process.env) {
   const scenarioName = env.QA_SCENARIO || "baseline";
-  const scenario = QA_SCENARIOS[scenarioName];
+  const scenario = Object.hasOwn(QA_SCENARIOS, scenarioName)
+    ? QA_SCENARIOS[scenarioName]
+    : undefined;
   if (!scenario) {
     throw new Error(
       `Unsupported QA_SCENARIO=${scenarioName}; supported scenarios: ${Object.keys(QA_SCENARIOS).join(", ")}`,

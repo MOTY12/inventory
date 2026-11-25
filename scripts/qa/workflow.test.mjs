@@ -38,6 +38,10 @@ import {
 } from "./workflow.mjs";
 import { verifyDocumentStates } from "./scenarios/document-states.mjs";
 import { seedDocumentStates } from "./scenarios/document-states.mjs";
+import { verifyInvoiceStates } from "./scenarios/invoice-states.mjs";
+import { verifyMultiCurrency } from "./scenarios/multi-currency.mjs";
+import { parseCsv } from "./scenarios/financial-exports.mjs";
+import { verifyAuthorizationScenarioResult } from "./scenarios/authorization.mjs";
 
 const base = () => ({
   NODE_ENV: "development",
@@ -103,14 +107,73 @@ test("scenario registry selects only implemented workflows", () => {
     qaScenarioFromEnvironment({ QA_SCENARIO: "baseline" }),
     "baseline",
   );
-  assert.throws(
-    () => qaScenarioFromEnvironment({ QA_SCENARIO: "multi-currency" }),
-    /supported scenarios: baseline, document-states/,
-  );
   assert.equal(
     qaScenarioFromEnvironment({ QA_SCENARIO: "document-states" }),
     "document-states",
   );
+  assert.equal(
+    qaScenarioFromEnvironment({ QA_SCENARIO: "multi-currency" }),
+    "multi-currency",
+  );
+  assert.equal(
+    qaScenarioFromEnvironment({ QA_SCENARIO: "financial-exports" }),
+    "financial-exports",
+  );
+  assert.equal(
+    qaScenarioFromEnvironment({ QA_SCENARIO: "authorization" }),
+    "authorization",
+  );
+  for (const unsupported of ["constructor", "toString", "__proto__"])
+    assert.throws(
+      () => qaScenarioFromEnvironment({ QA_SCENARIO: unsupported }),
+      /Unsupported QA_SCENARIO=/,
+    );
+});
+
+test("authorization scenario evidence requires every expected denial and grant", () => {
+  const labels = [
+    "finance report allowed",
+    "sales financial report denied",
+    "granted warehouse readable",
+    "ungranted warehouse denied",
+    "branch filter cannot grant warehouse access",
+    "sales export permission denied",
+    "foreign identity reads own tenant product",
+    "cross-tenant product denied",
+    "foreign user cannot select QA organization",
+  ];
+  const result = {
+    checks: labels.map((label, index) => ({
+      label,
+      status: [200, 403, 200, 404, 404, 403, 200, 404, 404][index],
+    })),
+  };
+  assert.deepEqual(verifyAuthorizationScenarioResult(result), {
+    checks: 9,
+    status: "verified",
+  });
+  assert.throws(
+    () =>
+      verifyAuthorizationScenarioResult({
+        ...result,
+        checks: result.checks.slice(0, -1),
+      }),
+    /incomplete or duplicated/,
+  );
+});
+
+test("financial export CSV parser handles quoted commas, quotes, CRLF, and malformed files", () => {
+  assert.deepEqual(
+    parseCsv(
+      '\uFEFFName,Note,Amount\r\n"Acme, Ltd","said ""hello""",100.25\r\n',
+    ),
+    {
+      headers: ["Name", "Note", "Amount"],
+      rows: [["Acme, Ltd", 'said "hello"', "100.25"]],
+    },
+  );
+  assert.throws(() => parseCsv('A,B\n"unterminated,1'), /unterminated/);
+  assert.throws(() => parseCsv("A,B\n1"), /row widths/);
 });
 
 test("only the explicitly authorized organization owner is accepted", () => {
@@ -315,9 +378,14 @@ test("document-state verifier checks live statuses against the manifest", async 
   const resources = [
     ...expectedPurchase.map((status, index) => ({
       id: `po-${index}`,
+      organizationId: base().QA_ORGANIZATION_ID,
+      supplierId: "supplier",
+      warehouseId: "warehouse",
       status,
       lines: [
         {
+          productId: `product-${index}`,
+          unitId: "unit",
           orderedQuantity: `${purchaseQuantities[index][0]}.000000`,
           receivedQuantity: `${purchaseQuantities[index][1]}.000000`,
         },
@@ -325,9 +393,13 @@ test("document-state verifier checks live statuses against the manifest", async 
     })),
     ...expectedSales.map((status, index) => ({
       id: `so-${index}`,
+      organizationId: base().QA_ORGANIZATION_ID,
+      customerId: "customer",
+      warehouseId: "warehouse",
       status,
       lines: [
         {
+          productId: `product-${index + 6}`,
           orderedQuantity: `${salesQuantities[index][0]}.000000`,
           pickedQuantity: `${salesQuantities[index][1]}.000000`,
           fulfilledQuantity: `${salesQuantities[index][2]}.000000`,
@@ -339,16 +411,42 @@ test("document-state verifier checks live statuses against the manifest", async 
     get: async (path) => resources.find((item) => path.endsWith(item.id)),
   };
   const manifest = {
+    organizationId: base().QA_ORGANIZATION_ID,
     scenarioResult: {
-      purchaseOrders: resources.slice(0, 6).map(({ id, status, lines }) => ({
+      scenario: "document-states",
+      purchaseOrders: resources
+        .slice(0, 6)
+        .map(({ id, status, lines }, index) => ({
+          id,
+          label: [
+            "po-draft",
+            "po-open",
+            "po-partial",
+            "po-received",
+            "po-cancelled",
+            "po-sales-stock",
+          ][index],
+          status,
+          supplierId: "supplier",
+          warehouseId: "warehouse",
+          productId: `product-${index}`,
+          unitId: "unit",
+          orderedQuantity: lines[0].orderedQuantity,
+          receivedQuantity: lines[0].receivedQuantity,
+        })),
+      salesOrders: resources.slice(6).map(({ id, status, lines }, index) => ({
         id,
+        label: [
+          "so-draft",
+          "so-confirmed",
+          "so-partial",
+          "so-fulfilled",
+          "so-cancelled",
+        ][index],
         status,
-        orderedQuantity: lines[0].orderedQuantity,
-        receivedQuantity: lines[0].receivedQuantity,
-      })),
-      salesOrders: resources.slice(6).map(({ id, status, lines }) => ({
-        id,
-        status,
+        customerId: "customer",
+        warehouseId: "warehouse",
+        productId: `product-${index + 6}`,
         orderedQuantity: lines[0].orderedQuantity,
         pickedQuantity: lines[0].pickedQuantity,
         fulfilledQuantity: lines[0].fulfilledQuantity,
@@ -365,8 +463,257 @@ test("document-state verifier checks live statuses against the manifest", async 
         salesOrders: [{ id: "so-0", status: "FULFILLED" }],
       },
     }),
-    /Document-state verification failed/,
+    /complete fixture result/,
   );
+});
+
+test("invoice-state verifier reconciles exact payments and reversals by currency", async () => {
+  const labels = [
+    "invoice-draft",
+    "invoice-unpaid",
+    "invoice-partial",
+    "invoice-paid",
+    "invoice-reversed",
+    "invoice-overdue",
+    "invoice-overdue-partial",
+    "invoice-no-due-date",
+    "invoice-void",
+  ];
+  const facts = [
+    ["DRAFT", "DRAFT", "0", "80000", false, []],
+    ["ISSUED", "UNPAID", "0", "80000", false, []],
+    ["ISSUED", "PARTIALLY_PAID", "30000", "50000", false, ["30000"]],
+    ["ISSUED", "PAID", "80000", "0", false, ["30000", "50000"]],
+    ["ISSUED", "PARTIALLY_PAID", "50000", "30000", false, ["30000", "50000"]],
+    ["ISSUED", "UNPAID", "0", "80000", true, []],
+    ["ISSUED", "PARTIALLY_PAID", "30000", "50000", true, ["30000"]],
+    ["ISSUED", "UNPAID", "0", "80000", false, []],
+    ["VOID", "VOID", "0", "0", false, []],
+  ];
+  const invoices = facts.map(
+    (
+      [
+        status,
+        paymentStatus,
+        amountPaid,
+        outstandingAmount,
+        isOverdue,
+        allocations,
+      ],
+      index,
+    ) => ({
+      id: `invoice-${index}`,
+      organizationId: base().QA_ORGANIZATION_ID,
+      currency: "NGN",
+      status,
+      paymentStatus,
+      totalAmount: "80000.0000",
+      amountPaid: `${amountPaid}.0000`,
+      outstandingAmount: `${outstandingAmount}.0000`,
+      isOverdue,
+      allocations: allocations.map((amount, paymentIndex) => ({
+        amount: `${amount}.0000`,
+        payment: {
+          reversal:
+            index === 4 && paymentIndex === 0 ? { id: "reverse-1" } : null,
+        },
+      })),
+    }),
+  );
+  const manifest = {
+    organizationId: base().QA_ORGANIZATION_ID,
+    scenarioResult: {
+      invoiceStates: invoices.map((invoice, index) => ({
+        id: invoice.id,
+        label: labels[index],
+        status: invoice.status,
+        amount: invoice.totalAmount,
+        amountPaid: invoice.amountPaid,
+        outstanding: invoice.outstandingAmount,
+      })),
+    },
+  };
+  const report = await verifyInvoiceStates(
+    {
+      get: async (path) =>
+        invoices.find((invoice) => path.endsWith(invoice.id)),
+    },
+    manifest,
+  );
+  assert.equal(Object.keys(report.invoices).length, 9);
+  assert.ok(Object.values(report.invoices).every(Boolean));
+  await assert.rejects(
+    verifyInvoiceStates({ get: async () => null }, { scenarioResult: {} }),
+    /all nine fixture invoices/,
+  );
+});
+
+test("multi-currency verifier reconciles currency-separated API projections without conversion", async () => {
+  const expected = [
+    {
+      currency: "NGN",
+      purchase: "500000",
+      invoice: "160000",
+      paid: "100000",
+      due: "60000",
+      quantity: "80",
+      stock: "400000",
+      ordered: "100",
+      fulfilled: "20",
+    },
+    {
+      currency: "USD",
+      purchase: "500",
+      invoice: "180",
+      paid: "80",
+      due: "100",
+      quantity: "40",
+      stock: "400",
+      ordered: "50",
+      fulfilled: "10",
+    },
+  ];
+  const fixtures = expected.map((item, index) => ({
+    currency: item.currency,
+    productId: `product-${index}`,
+    purchaseOrderId: `po-${index}`,
+    salesOrderId: `so-${index}`,
+    invoiceId: `invoice-${index}`,
+    customerId: "customer",
+    supplierId: "supplier",
+    purchaseValue: item.purchase,
+    invoiceValue: item.invoice,
+    payments: item.paid,
+    outstanding: item.due,
+    remainingQuantity: item.quantity,
+    inventoryValue: item.stock,
+  }));
+  const api = {
+    async get(path) {
+      const index =
+        path.includes("USD") ||
+        path.includes("product-1") ||
+        path.includes("po-1") ||
+        path.includes("so-1") ||
+        path.includes("invoice-1")
+          ? 1
+          : 0;
+      const fact = expected[index];
+      const fixture = fixtures[index];
+      if (path.includes("/purchase-orders/"))
+        return {
+          id: fixture.purchaseOrderId,
+          warehouseId: "warehouse",
+          currency: fact.currency,
+          subtotal: fact.purchase,
+          lines: [{ receivedQuantity: fact.ordered }],
+        };
+      if (path.includes("/sales/orders/"))
+        return {
+          id: fixture.salesOrderId,
+          currency: fact.currency,
+          total: fact.invoice,
+          lines: [{ fulfilledQuantity: fact.fulfilled }],
+        };
+      if (path.includes("/sales/invoices/"))
+        return {
+          id: fixture.invoiceId,
+          currency: fact.currency,
+          totalAmount: fact.invoice,
+          amountPaid: fact.paid,
+          outstandingAmount: fact.due,
+        };
+      if (path.includes("/reports/sales/summary"))
+        return {
+          order_value: [{ currency: fact.currency, order_value: fact.invoice }],
+          invoice_value: [
+            { currency: fact.currency, invoice_value: fact.invoice },
+          ],
+          collections: [{ currency: fact.currency, collected: fact.paid }],
+          receivables: [{ currency: fact.currency, outstanding: fact.due }],
+        };
+      if (path.includes("/reports/purchases/summary"))
+        return {
+          order_value: [
+            { currency: fact.currency, order_value: fact.purchase },
+          ],
+          received_value: [
+            { currency: fact.currency, received_value: fact.purchase },
+          ],
+        };
+      if (path.includes("/reports/sales/products"))
+        return {
+          data: [
+            {
+              product_id: fixture.productId,
+              currency: fact.currency,
+              invoice_value: fact.invoice,
+            },
+          ],
+        };
+      if (path.includes("/reports/purchases/products"))
+        return {
+          data: [
+            {
+              product_id: fixture.productId,
+              currency: fact.currency,
+              received_value: fact.purchase,
+            },
+          ],
+        };
+      if (path.includes("/reports/sales/customers"))
+        return {
+          data: [
+            {
+              currency: fact.currency,
+              invoiced_value: fact.invoice,
+              outstanding: fact.due,
+            },
+          ],
+        };
+      if (path.includes("/reports/purchases/suppliers"))
+        return {
+          data: [
+            {
+              currency: fact.currency,
+              ordered_value: fact.purchase,
+              received_value: fact.purchase,
+            },
+          ],
+        };
+      if (path.includes("/reports/receivables/aging"))
+        return {
+          data: [
+            {
+              currency: fact.currency,
+              not_yet_due: fact.due,
+              days_1_30: "0",
+              days_31_60: "0",
+              days_61_90: "0",
+              over_90: "0",
+              no_due_date_outstanding: "0",
+            },
+          ],
+        };
+      if (path.includes("/reports/valuation"))
+        return {
+          data: [
+            {
+              product_id: fixture.productId,
+              cost_currency: fact.currency,
+              quantity_on_hand: fact.quantity,
+              inventory_value: fact.stock,
+            },
+          ],
+        };
+      throw new Error(`Unexpected test report route ${path}`);
+    },
+  };
+  const report = await verifyMultiCurrency(api, {
+    scenarioResult: { scenario: "multi-currency", currencies: fixtures },
+  });
+  assert.deepEqual(report.currencies, { NGN: true, USD: true });
+  assert.equal(report.automaticConversion, false);
 });
 
 test("document-state scenario creates and resumes multiple real-shaped documents without duplicates", async () => {
@@ -374,6 +721,7 @@ test("document-state scenario creates and resumes multiple real-shaped documents
   const salesOrders = new Map();
   const replayed = new Map();
   let serial = 0;
+  let interruptAfterFirstPick = true;
   const api = {
     async get(path) {
       const id = path.split("/").at(-1).split("?")[0];
@@ -394,6 +742,7 @@ test("document-state scenario creates and resumes multiple real-shaped documents
         result = {
           id,
           number: id,
+          organizationId: manifest.organizationId,
           status: "DRAFT",
           supplierId: body.supplierId,
           warehouseId: body.warehouseId,
@@ -439,6 +788,7 @@ test("document-state scenario creates and resumes multiple real-shaped documents
         result = {
           id,
           number: id,
+          organizationId: manifest.organizationId,
           status: "DRAFT",
           ...body,
           lines: body.lines.map((line, index) => ({
@@ -447,6 +797,7 @@ test("document-state scenario creates and resumes multiple real-shaped documents
             orderedQuantity: `${line.quantity}.000000`,
             pickedQuantity: "0.000000",
             fulfilledQuantity: "0.000000",
+            unitPrice: line.unitPrice,
           })),
         };
         salesOrders.set(id, result);
@@ -462,6 +813,11 @@ test("document-state scenario creates and resumes multiple real-shaped documents
         const order = salesOrders.get(path.split("/").at(-2));
         order.lines[0].pickedQuantity = `${Number(order.lines[0].pickedQuantity) + Number(body.lines[0].quantity)}.000000`;
         result = { id: `pick-${serial}-${order.lines[0].pickedQuantity}` };
+        if (interruptAfterFirstPick) {
+          interruptAfterFirstPick = false;
+          replayed.set(idempotencyKey, structuredClone(result));
+          throw new Error("simulated stop after successful pick");
+        }
       } else if (
         path.includes("/sales/orders/") &&
         path.endsWith("/fulfillments")
@@ -492,6 +848,15 @@ test("document-state scenario creates and resumes multiple real-shaped documents
     customer: { id: "customer-1" },
     source: { id: "warehouse-1" },
   };
+  await assert.rejects(
+    seedDocumentStates(api, manifest, save, context),
+    /simulated stop after successful pick/,
+  );
+  const partiallyPicked = [...salesOrders.values()].find((order) =>
+    order.notes.endsWith("so-partial"),
+  );
+  assert.equal(partiallyPicked.lines[0].pickedQuantity, "1.000000");
+  assert.equal(partiallyPicked.lines[0].fulfilledQuantity, "0.000000");
   await seedDocumentStates(api, manifest, save, context);
   assert.equal(Object.keys(manifest.scenarioResult).includes("scenario"), true);
   assert.equal(purchaseOrders.size, 6);
@@ -503,6 +868,11 @@ test("document-state scenario creates and resumes multiple real-shaped documents
     (await verifyDocumentStates(api, manifest)).checks.sales_4_fulfilled,
     true,
   );
+  const resumedPartial = [...salesOrders.values()].find((order) =>
+    order.notes.endsWith("so-partial"),
+  );
+  assert.equal(resumedPartial.lines[0].pickedQuantity, "1.000000");
+  assert.equal(resumedPartial.lines[0].fulfilledQuantity, "1.000000");
 });
 
 test("one run cannot execute concurrently and can safely resume after release", async () => {

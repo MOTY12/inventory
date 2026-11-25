@@ -50,6 +50,7 @@ const RESOURCE_COLLECTIONS = [
   "invoices",
   "payments",
   "exports",
+  "scenarioRecords",
 ];
 
 export async function ensureManifestDirectory(
@@ -123,7 +124,7 @@ export function validateManifest(manifest) {
       manifest.scenarioName !== undefined &&
       manifest.scenarioName !== "baseline") ||
     (manifest.schemaVersion === 2 &&
-      !QA_SCENARIOS[manifest.scenarioName || "baseline"]) ||
+      !Object.hasOwn(QA_SCENARIOS, manifest.scenarioName || "baseline")) ||
     typeof manifest.stage !== "string" ||
     !manifest.resources ||
     typeof manifest.resources !== "object" ||
@@ -146,6 +147,11 @@ export function validateManifest(manifest) {
     fail();
   }
   for (const collection of RESOURCE_COLLECTIONS) {
+    if (
+      collection === "scenarioRecords" &&
+      manifest.resources[collection] === undefined
+    )
+      continue;
     if (
       manifest.schemaVersion === 1 &&
       collection === "exports" &&
@@ -204,6 +210,7 @@ export function createManifest({
       invoices: [],
       payments: [],
       exports: [],
+      scenarioRecords: [],
     },
     expected: {
       currency: "NGN",
