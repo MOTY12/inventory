@@ -17,6 +17,7 @@ import {
   subtractQuantity,
 } from "../../../features/procurement/decimal";
 import { useSession } from "../../../features/auth/session-provider";
+import { DocumentHeader } from "../../../components/documents/document-header";
 
 type Order = {
   id: string;
@@ -471,48 +472,52 @@ export default function SalesOrderDetailPage() {
 
   return (
     <main className="page-content">
-      <header className="page-heading">
-        <div>
-          <p className="eyebrow">SALES / ORDER DETAILS</p>
-          <h1>
-            {organization ? (order?.number ?? "Sales order") : "Sales order"}
-          </h1>
-          <p>Review order lines, reservation quantities, and status history.</p>
-        </div>
-        <div className="dashboard-actions">
-          <Link href="/sales-orders" className="button button-secondary">
-            All sales orders
-          </Link>
-          {order?.status === "DRAFT" && canWrite && (
-            <Link
-              href={`/sales-orders/${order.id}/edit`}
-              className="button button-secondary"
-            >
-              Edit draft
+      <DocumentHeader
+        eyebrow="SALES · ORDER DETAILS"
+        title="Sales order"
+        reference={order?.number}
+        description="Review order lines, reservation quantities, and status history."
+        breadcrumbs={[
+          { label: "Sales orders", href: "/sales-orders" },
+          { label: order?.number ?? "Order detail" },
+        ]}
+        status={order?.status}
+        action={
+          <div className="dashboard-actions">
+            <Link href="/sales-orders" className="button button-secondary">
+              All sales orders
             </Link>
-          )}
-          {order?.status === "DRAFT" && canWrite && (
-            <button
-              className="button button-primary"
-              disabled={busy}
-              onClick={() => void transition("confirm")}
-            >
-              Confirm and reserve
-            </button>
-          )}
-          {["DRAFT", "CONFIRMED"].includes(order?.status ?? "") &&
-            canWrite &&
-            !hasOutstandingPick && (
-              <button
+            {order?.status === "DRAFT" && canWrite && (
+              <Link
+                href={`/sales-orders/${order.id}/edit`}
                 className="button button-secondary"
-                disabled={busy}
-                onClick={() => void transition("cancel")}
               >
-                Cancel order
+                Edit draft
+              </Link>
+            )}
+            {order?.status === "DRAFT" && canWrite && (
+              <button
+                className="button button-primary"
+                disabled={busy}
+                onClick={() => void transition("confirm")}
+              >
+                Confirm and reserve
               </button>
             )}
-        </div>
-      </header>
+            {["DRAFT", "CONFIRMED"].includes(order?.status ?? "") &&
+              canWrite &&
+              !hasOutstandingPick && (
+                <button
+                  className="button button-secondary"
+                  disabled={busy}
+                  onClick={() => void transition("cancel")}
+                >
+                  Cancel order
+                </button>
+              )}
+          </div>
+        }
+      />
       {error && (
         <div className="error-banner" role="alert">
           <span>{error}</span>

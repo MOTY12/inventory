@@ -45,3 +45,12 @@ No screenshot files were saved; the browser tool displayed inline observations. 
 - Location API source inspection confirms server-side tenant and warehouse-grant scoping and supports branch/warehouse status, search, paging, and branch filters. The UI loads up to the API maximum of 100 branch choices for selectors. Branch search matches names only. The list endpoint does not return branch warehouse counts, so no count is fabricated.
 
 - Stock Count source uses the existing single-product draft API, exact decimal string variance arithmetic, and the existing explicit `/post` endpoint behind a confirmation dialog. No multi-product count is implied. The list API returns rows and total; count, balance, and movement page sizes are sent to the server. Workflow and inventory reconciliation are not browser-verified.
+
+
+## Phase C source and verification (2026-11-26)
+
+- Source implemented: shared document presentation components; PO/transfer creation moved to dedicated routes; sales draft uses shared layout and line-item pattern; three detail routes use shared document headers. Product catalog search is debounced and paginated. Existing scanner and transaction actions remain.
+- Focused API regression: product-filtered balance read remains scoped by active organization and warehouse; unfiltered listing remains unfiltered. Included in `npm test`.
+- Checks after code changes: full `npm run typecheck` passed after Prisma Client generation; `npm run lint` passed; `npm run format:check` passed; `npm test` passed 62 API/shared + 2 web (3 opt-in PostgreSQL suites skipped); `npm run qa:test` passed 18; `npm run build` passed and generated 31 routes.
+- Browser and operational: not run. Both local ports 3000 and 4000 refused connections. No authenticated session, DB-backed availability, form mutation, lifecycle action, responsive viewport, cross-tenant, warehouse role, or ledger acceptance was observed. No data changed.
+- Acceptance remains source-level only.

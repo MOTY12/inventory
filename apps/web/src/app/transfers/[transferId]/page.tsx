@@ -1,8 +1,8 @@
 "use client";
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useSession } from "../../../features/auth/session-provider";
+import { DocumentHeader } from "../../../components/documents/document-header";
 
 type Transfer = {
   id: string;
@@ -52,9 +52,6 @@ export default function TransferDetailPage() {
   }, [load]);
   return (
     <main className="page-content">
-      <p>
-        <Link href="/transfers">← Transfers</Link>
-      </p>
       {error && (
         <p role="alert" className="error-banner">
           {error}
@@ -64,19 +61,17 @@ export default function TransferDetailPage() {
         <p>Loading transfer…</p>
       ) : (
         <>
-          <header className="page-heading">
-            <div>
-              <p className="eyebrow">INVENTORY TRANSFER</p>
-              <h1>{transfer.number}</h1>
-              <p>
-                {transfer.sourceWarehouse.name} →{" "}
-                {transfer.destinationWarehouse.name}
-              </p>
-            </div>
-            <span className="status-badge">
-              {transfer.status.replaceAll("_", " ")}
-            </span>
-          </header>
+          <DocumentHeader
+            eyebrow="INVENTORY TRANSFER"
+            title="Transfer"
+            reference={transfer.number}
+            description={`${transfer.sourceWarehouse.name} → ${transfer.destinationWarehouse.name}`}
+            breadcrumbs={[
+              { label: "Transfers", href: "/transfers" },
+              { label: transfer.number },
+            ]}
+            status={transfer.status}
+          />
           {transfer.note && <p className="panel">{transfer.note}</p>}
           <section className="panel">
             <h2>Transfer lines</h2>

@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { BarcodeScanner } from "../../../components/barcode/barcode-scanner";
+import { DocumentHeader } from "../../../components/documents/document-header";
 import { useSession } from "../../../features/auth/session-provider";
 import {
   addQuantities,
@@ -327,21 +328,17 @@ export default function PurchaseOrderDetailPage() {
 
   return (
     <main className="products-page">
-      <header className="products-heading">
-        <div>
-          <Link href="/purchase-orders" className="catalog-back">
-            ← Purchase orders
-          </Link>
-          <p className="catalog-eyebrow">PURCHASING · ORDER DETAIL</p>
-          <h1>
-            {loading ? "Loading order…" : (order?.number ?? "Purchase order")}
-          </h1>
-          <p>
-            Review ordered quantities, receive deliveries, and inspect the
-            receipt history.
-          </p>
-        </div>
-      </header>
+      <DocumentHeader
+        eyebrow="PURCHASING · ORDER DETAIL"
+        title="Purchase order"
+        reference={loading ? undefined : order?.number}
+        description="Review ordered quantities, receive deliveries, and inspect the receipt history."
+        breadcrumbs={[
+          { label: "Purchase orders", href: "/purchase-orders" },
+          { label: order?.number ?? "Order detail" },
+        ]}
+        status={order?.status}
+      />
       {notice && (
         <p className="catalog-notice" role="status">
           {notice}

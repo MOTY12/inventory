@@ -23,3 +23,8 @@ The Customer directory remains the approved UI source of truth. The 2026-11-26 B
 ## Browser observation
 
 On 2026-11-25, Chrome displayed a populated `/customers` route and its Add Customer drawer from the existing development session. The user had already opened that drawer; no customer form was submitted. A populated product list and Add Product drawer were also reviewed during the current standardization pass. Browser review is evidence of rendering only, not full interaction or responsive acceptance.
+
+
+## Document workflow extension (2026-11-26)
+
+The customer reference remains unchanged. Transaction pages now use an adjacent shared document presentation layer in `apps/web/src/components/documents/`: `DocumentHeader`, `DocumentLayout`, `DocumentSection`, `DocumentLineItems`, `DocumentSummary`, `DocumentActions`, and `ProductSelector`. Product search is debounced, paginated, keyboard-navigable, and queries the active tenant's catalog. This extension adopts the existing UI component and token system rather than changing the customer reference. Authenticated browser and responsive parity have not been verified in this pass.

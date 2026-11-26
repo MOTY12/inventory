@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   useCallback,
   useEffect,
@@ -17,6 +16,16 @@ import {
   matchesQuantityPrecision,
 } from "../../../features/procurement/decimal";
 import { useSession } from "../../../features/auth/session-provider";
+import { DocumentHeader } from "../../../components/documents/document-header";
+import { DocumentLayout } from "../../../components/documents/document-layout";
+import { DocumentSection } from "../../../components/documents/document-section";
+import { DocumentLineItems } from "../../../components/documents/document-line-items";
+import { DocumentSummary } from "../../../components/documents/document-summary";
+import { DocumentActions } from "../../../components/documents/document-actions";
+import {
+  ProductSelector,
+  type SelectableProduct,
+} from "../../../components/documents/product-selector";
 
 type Option = { id: string; name: string };
 type UnitOption = {
@@ -30,7 +39,7 @@ type ProductConversion = {
   baseQuantity: string;
   unit: UnitOption;
 };
-type Product = {
+type Product = SelectableProduct & {
   id: string;
   name: string;
   sku: string;
@@ -44,6 +53,7 @@ type Product = {
 };
 type Balance = { productId: string; onHand: string; reserved: string };
 type Line = {
+  id: string;
   productId: string;
   unitId: string;
   quantity: string;
@@ -92,8 +102,15 @@ export default function NewSalesOrderPage() {
   const [expectedFulfillmentAt, setExpectedFulfillmentAt] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<Line[]>([
-    { productId: "", unitId: "", quantity: "1", unitPrice: "0" },
+    {
+      id: crypto.randomUUID(),
+      productId: "",
+      unitId: "",
+      quantity: "1",
+      unitPrice: "0",
+    },
   ]);
+  const selectedProductIds = lines.map((line) => line.productId).join(",");
   const linesRef = useRef(lines);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -106,33 +123,30 @@ export default function NewSalesOrderPage() {
     void (async () => {
       setLoading(true);
       try {
-        const [c, w, p] = await Promise.all([
+        const [c, w] = await Promise.all([
           authenticatedRequest<{ data: Option[] }>(
             "/organizations/current/sales/customers?page=1&page_size=100&status=ACTIVE",
           ),
           authenticatedRequest<{ data: Option[] }>(
             "/organizations/current/warehouses?page=1&page_size=100&status=ACTIVE",
           ),
-          authenticatedRequest<{ data: Product[] }>(
-            "/organizations/current/catalog/products?page=1&page_size=100&status=ACTIVE",
-          ),
         ]);
         setCustomers(c.data);
         setWarehouses(w.data);
-        setProducts(p.data);
+        setProducts([]);
         setCustomerId(c.data[0]?.id ?? "");
         setWarehouseId(w.data[0]?.id ?? "");
         const initialLines = [
           {
-            productId: p.data[0]?.id ?? "",
-            unitId: p.data[0]?.baseUnit.id ?? "",
+            id: crypto.randomUUID(),
+            productId: "",
+            unitId: "",
             quantity: "1",
-            unitPrice: p.data[0]?.defaultSalePrice ?? "0",
+            unitPrice: "0",
           },
         ];
         linesRef.current = initialLines;
         setLines(initialLines);
-        if (p.data[0]?.saleCurrency) setCurrency(p.data[0].saleCurrency);
       } catch (cause) {
         setError(
           cause instanceof Error
@@ -149,12 +163,23 @@ export default function NewSalesOrderPage() {
     if (!warehouseId) return;
     setAvailabilityError("");
     try {
-      const result = await authenticatedRequest<{ data: Balance[] }>(
-        `/inventory/warehouses/${warehouseId}/balances?page=1&page_size=100`,
+      const ids = [
+        ...new Set(
+          linesRef.current.map((line) => line.productId).filter(Boolean),
+        ),
+      ];
+      const results = await Promise.all(
+        ids.map((productId) =>
+          authenticatedRequest<{ data: Balance[] }>(
+            `/inventory/warehouses/${warehouseId}/balances?page=1&page_size=1&productId=${productId}`,
+          ),
+        ),
       );
       setBalances(
         Object.fromEntries(
-          result.data.map((balance) => [balance.productId, balance]),
+          results.flatMap((result) =>
+            result.data.map((balance) => [balance.productId, balance]),
+          ),
         ),
       );
     } catch (cause) {
@@ -168,7 +193,7 @@ export default function NewSalesOrderPage() {
   }, [authenticatedRequest, warehouseId]);
   useEffect(() => {
     void Promise.resolve().then(loadBalances);
-  }, [loadBalances]);
+  }, [loadBalances, selectedProductIds]);
 
   const subtotal = useMemo(
     () => lines.reduce((sum, line) => sum + lineTotal(line), BigInt(0)),
@@ -193,6 +218,37 @@ export default function NewSalesOrderPage() {
         return next;
       }),
     );
+  }
+  function selectProduct(index: number, selected: SelectableProduct | null) {
+    const product = selected as Product | null;
+    if (product)
+      setProducts((current) => [
+        ...current.filter((item) => item.id !== product.id),
+        product,
+      ]);
+    updateLine(index, {
+      productId: product?.id ?? "",
+      unitId: product?.baseUnit.id ?? "",
+      unitPrice: product?.defaultSalePrice ?? "0",
+    });
+    if (product?.saleCurrency) setCurrency(product.saleCurrency);
+    if (product && warehouseId)
+      void authenticatedRequest<{ data: Balance[] }>(
+        `/inventory/warehouses/${warehouseId}/balances?page=1&page_size=1&productId=${product.id}`,
+      )
+        .then((result) =>
+          setBalances((current) => ({
+            ...current,
+            ...(result.data[0] ? { [product.id]: result.data[0] } : {}),
+          })),
+        )
+        .catch((cause: unknown) =>
+          setAvailabilityError(
+            cause instanceof Error
+              ? cause.message
+              : "Availability could not be loaded.",
+          ),
+        );
   }
   function availability(line: Line) {
     const balance = balances[line.productId];
@@ -249,6 +305,7 @@ export default function NewSalesOrderPage() {
       updateLines((current) => [
         ...current,
         {
+          id: crypto.randomUUID(),
           productId: product.id,
           unitId: product.baseUnit.id,
           quantity: "1",
@@ -303,16 +360,15 @@ export default function NewSalesOrderPage() {
 
   return (
     <main className="page-content">
-      <header className="page-heading">
-        <div>
-          <p className="eyebrow">SALES / NEW ORDER</p>
-          <h1>Create sales order</h1>
-          <p>Save a draft first. Stock is reserved only when you confirm it.</p>
-        </div>
-        <Link className="button button-secondary" href="/sales-orders">
-          Back to orders
-        </Link>
-      </header>
+      <DocumentHeader
+        eyebrow="SALES"
+        title="New sales order"
+        description="Save a draft first. Stock is reserved only when you confirm it."
+        breadcrumbs={[
+          { label: "Sales orders", href: "/sales-orders" },
+          { label: "New draft" },
+        ]}
+      />
       {error && (
         <p className="error-banner" role="alert">
           {error}
@@ -332,95 +388,108 @@ export default function NewSalesOrderPage() {
           <p>Your role can view sales orders but cannot create them.</p>
         </section>
       ) : (
-        <form className="panel order-editor" onSubmit={saveDraft}>
-          <section>
-            <h2>Customer and order details</h2>
-            <div className="form-grid">
-              <label>
-                Customer
-                <select
-                  required
-                  value={customerId}
-                  onChange={(event) => setCustomerId(event.target.value)}
-                >
-                  {customers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Warehouse
-                <select
-                  required
-                  value={warehouseId}
-                  onChange={(event) => setWarehouseId(event.target.value)}
-                >
-                  {warehouses.map((warehouse) => (
-                    <option key={warehouse.id} value={warehouse.id}>
-                      {warehouse.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Order date
-                <input
-                  required
-                  type="date"
-                  value={orderDate}
-                  onChange={(event) => setOrderDate(event.target.value)}
-                />
-              </label>
-              <label>
-                Expected fulfillment
-                <input
-                  type="date"
-                  value={expectedFulfillmentAt}
-                  onChange={(event) =>
-                    setExpectedFulfillmentAt(event.target.value)
-                  }
-                />
-              </label>
-              <label>
-                Currency
-                <input
-                  required
-                  maxLength={3}
-                  pattern="[A-Z]{3}"
-                  value={currency}
-                  onChange={(event) =>
-                    setCurrency(event.target.value.toUpperCase())
-                  }
-                />
-              </label>
-              <label>
-                Notes
-                <input
-                  maxLength={1000}
-                  value={notes}
-                  onChange={(event) => setNotes(event.target.value)}
-                />
-              </label>
-            </div>
-          </section>
-          <section>
-            <div className="panel-heading">
-              <div>
-                <h2>Products</h2>
-                <p>
-                  Availability is live for the selected warehouse. Confirmation
-                  reserves the base-unit quantity.
-                </p>
+        <form className="order-editor" onSubmit={saveDraft}>
+          <DocumentLayout
+            aside={
+              <DocumentSummary
+                rows={[
+                  { label: "Currency", value: currency },
+                  {
+                    label: "Lines",
+                    value: lines.filter((line) => line.productId).length,
+                  },
+                ]}
+                total={{
+                  label: "Subtotal",
+                  value: `${currency} ${display(subtotal, 4)}`,
+                }}
+              />
+            }
+          >
+            <DocumentSection title="Customer and order details">
+              <div className="form-grid">
+                <label>
+                  Customer
+                  <select
+                    required
+                    value={customerId}
+                    onChange={(event) => setCustomerId(event.target.value)}
+                  >
+                    {customers.map((customer) => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Warehouse
+                  <select
+                    required
+                    value={warehouseId}
+                    onChange={(event) => setWarehouseId(event.target.value)}
+                  >
+                    {warehouses.map((warehouse) => (
+                      <option key={warehouse.id} value={warehouse.id}>
+                        {warehouse.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Order date
+                  <input
+                    required
+                    type="date"
+                    value={orderDate}
+                    onChange={(event) => setOrderDate(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Expected fulfillment
+                  <input
+                    type="date"
+                    value={expectedFulfillmentAt}
+                    onChange={(event) =>
+                      setExpectedFulfillmentAt(event.target.value)
+                    }
+                  />
+                </label>
+                <label>
+                  Currency
+                  <input
+                    required
+                    maxLength={3}
+                    pattern="[A-Z]{3}"
+                    value={currency}
+                    onChange={(event) =>
+                      setCurrency(event.target.value.toUpperCase())
+                    }
+                  />
+                </label>
+                <label>
+                  Notes
+                  <input
+                    maxLength={1000}
+                    value={notes}
+                    onChange={(event) => setNotes(event.target.value)}
+                  />
+                </label>
               </div>
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={() =>
+            </DocumentSection>
+            <DocumentSection
+              title="Products"
+              description="Availability is live for the selected warehouse. Confirmation reserves the base-unit quantity."
+            >
+              <BarcodeScanner onScan={addScannedProduct} />
+              <DocumentLineItems
+                title="Order items"
+                description="Search by product name, SKU, or barcode."
+                onAdd={() =>
                   updateLines((current) => [
                     ...current,
                     {
+                      id: crypto.randomUUID(),
                       productId: "",
                       unitId: "",
                       quantity: "1",
@@ -429,12 +498,6 @@ export default function NewSalesOrderPage() {
                   ])
                 }
               >
-                Add line
-              </button>
-            </div>
-            <BarcodeScanner onScan={addScannedProduct} />
-            <div className="product-table-wrap">
-              <table className="data-table">
                 <thead>
                   <tr>
                     <th>Product</th>
@@ -460,25 +523,14 @@ export default function NewSalesOrderPage() {
                         ]
                       : [];
                     return (
-                      <tr key={index}>
+                      <tr key={line.id}>
                         <td>
-                          <select
-                            required
-                            aria-label="Product"
-                            value={line.productId}
-                            onChange={(event) =>
-                              updateLine(index, {
-                                productId: event.target.value,
-                              })
+                          <ProductSelector
+                            value={product ?? null}
+                            onSelect={(selected) =>
+                              selectProduct(index, selected)
                             }
-                          >
-                            <option value="">Choose product</option>
-                            {products.map((item) => (
-                              <option key={item.id} value={item.id}>
-                                {item.name} · {item.sku}
-                              </option>
-                            ))}
-                          </select>
+                          />
                         </td>
                         <td>
                           <select
@@ -552,43 +604,41 @@ export default function NewSalesOrderPage() {
                     );
                   })}
                 </tbody>
-              </table>
-            </div>
-            {customers.length === 0 && (
+              </DocumentLineItems>
+              {customers.length === 0 && (
+                <p className="panel-message">
+                  Create a customer before starting an order.
+                </p>
+              )}
+              {warehouses.length === 0 && (
+                <p className="panel-message">
+                  Create or grant access to a warehouse before starting an
+                  order.
+                </p>
+              )}
               <p className="panel-message">
-                Create a customer before starting an order.
+                Draft creation does not reserve or deduct inventory.
               </p>
-            )}
-            {warehouses.length === 0 && (
-              <p className="panel-message">
-                Create or grant access to a warehouse before starting an order.
+            </DocumentSection>
+            <DocumentActions cancelHref="/sales-orders" busy={busy}>
+              <p>
+                Drafts do not reserve stock. Confirming this order will reserve
+                all listed quantities atomically.
               </p>
-            )}
-            {products.length === 0 && (
-              <p className="panel-message">
-                Add an active stocked product before starting an order.
-              </p>
-            )}
-            <div className="order-total">
-              <span>Subtotal / total</span>
-              <strong>
-                {currency} {display(subtotal, 4)}
-              </strong>
-            </div>
-          </section>
-          <footer className="order-actions">
-            <p>
-              Drafts do not reserve stock. Confirming this order will reserve
-              all listed quantities atomically.
-            </p>
-            <button
-              className="button button-primary"
-              type="submit"
-              disabled={busy || !customerId || !warehouseId || !products.length}
-            >
-              {busy ? "Saving…" : "Save draft"}
-            </button>
-          </footer>
+              <button
+                className="button button-primary"
+                type="submit"
+                disabled={
+                  busy ||
+                  !customerId ||
+                  !warehouseId ||
+                  !lines.every((line) => line.productId && line.unitId)
+                }
+              >
+                {busy ? "Saving…" : "Save draft"}
+              </button>
+            </DocumentActions>
+          </DocumentLayout>
         </form>
       )}
     </main>

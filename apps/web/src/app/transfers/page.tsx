@@ -8,6 +8,8 @@ import {
 } from "../../components/ui/data-table";
 import { PageHeader } from "../../components/ui/page-header";
 import { StatusBadge } from "../../components/ui/status-badge";
+import { TableToolbar } from "../../components/ui/table-toolbar";
+import { TablePagination } from "../../components/ui/table-pagination";
 
 type Row = {
   id: string;
@@ -18,11 +20,7 @@ type Row = {
   _count: { lines: number };
 };
 type Page<T> = { data: T[]; total: number };
-type Option = {
-  id: string;
-  name: string;
-  baseUnit?: { code: string; name: string };
-};
+type Option = { id: string; name: string };
 const api = "/organizations/current/inventory/transfers";
 const quantityScale = BigInt(1_000_000);
 
@@ -46,25 +44,10 @@ function decimalQuantity(value: bigint): string {
   return fraction ? `${whole}.${fraction}` : String(whole);
 }
 
-function isPositiveQuantity(value: string): boolean {
-  try {
-    return scaledQuantity(value) > BigInt(0);
-  } catch {
-    return false;
-  }
-}
-
 export default function TransfersPage() {
   const { organization, authenticatedRequest } = useSession();
   const [rows, setRows] = useState<Row[]>([]);
   const [warehouses, setWarehouses] = useState<Option[]>([]);
-  const [products, setProducts] = useState<Option[]>([]);
-  const [source, setSource] = useState("");
-  const [destination, setDestination] = useState("");
-  const [lines, setLines] = useState<{ productId: string; quantity: string }[]>(
-    [{ productId: "", quantity: "1" }],
-  );
-  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
@@ -171,38 +154,17 @@ export default function TransfersPage() {
     setLoading(true);
     setError("");
     try {
-      const [r, w, p] = await Promise.all([
+      const [r, w] = await Promise.all([
         authenticatedRequest<Page<Row>>(
           `${api}?page=${page}&page_size=20${query ? `&q=${encodeURIComponent(query)}` : ""}${statusFilter ? `&status=${statusFilter}` : ""}${warehouseFilter ? `&warehouseId=${warehouseFilter}` : ""}`,
         ),
         authenticatedRequest<Page<Option>>(
           "/organizations/current/warehouses?page=1&page_size=100&status=ACTIVE",
         ),
-        authenticatedRequest<Page<Option>>(
-          "/organizations/current/catalog/products?page=1&page_size=100&status=ACTIVE",
-        ),
       ]);
       setRows(r.data);
       setTotal(r.total);
       setWarehouses(w.data);
-      setProducts(p.data);
-      const nextSource = w.data.some((warehouse) => warehouse.id === source)
-        ? source
-        : w.data[0]?.id || "";
-      const nextDestination =
-        w.data.some((warehouse) => warehouse.id === destination) &&
-        destination !== nextSource
-          ? destination
-          : w.data.find((warehouse) => warehouse.id !== nextSource)?.id || "";
-      setSource(nextSource);
-      setDestination(nextDestination);
-      setLines((current) =>
-        current.map((line, index) =>
-          p.data.some((product) => product.id === line.productId)
-            ? line
-            : { ...line, productId: index === 0 ? p.data[0]?.id || "" : "" },
-        ),
-      );
       setWarehouseFilter((current) =>
         !current || w.data.some((warehouse) => warehouse.id === current)
           ? current
@@ -215,12 +177,10 @@ export default function TransfersPage() {
     }
   }, [
     authenticatedRequest,
-    destination,
     organization,
     page,
     query,
     statusFilter,
-    source,
     warehouseFilter,
   ]);
   useEffect(() => {
@@ -240,21 +200,6 @@ export default function TransfersPage() {
     } finally {
       setBusy(false);
     }
-  }
-  async function create() {
-    await run(async () => {
-      await authenticatedRequest(
-        api,
-        {
-          sourceWarehouseId: source,
-          destinationWarehouseId: destination,
-          note: "",
-          lines,
-        },
-        "POST",
-      );
-      setOpen(false);
-    });
   }
   async function command(id: string, kind: "submit" | "cancel" | "dispatch") {
     if (
@@ -363,14 +308,9 @@ export default function TransfersPage() {
         description="Move and track inventory between warehouses."
         action={
           canWrite && (
-            <button
-              className="button button-primary"
-              onClick={() => setOpen((x) => !x)}
-              disabled={!warehouses.length || !products.length || busy}
-              type="button"
-            >
-              New transfer
-            </button>
+            <Link className="button button-primary" href="/transfers/new">
+              ＋ New transfer
+            </Link>
           )
         }
       />
@@ -391,150 +331,16 @@ export default function TransfersPage() {
           {status}
         </p>
       )}
-      {open && (
-        <section className="panel">
-          <h2>Transfer draft</h2>
-          <div className="form-grid">
-            <label>
-              From
-              <select
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-              >
-                {warehouses.map((w) => (
-                  <option key={w.id} value={w.id}>
-                    {w.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              To
-              <select
-                value={destination}
-                onChange={(e) => setDestination(e.target.value)}
-              >
-                {warehouses
-                  .filter((w) => w.id !== source)
-                  .map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            {lines.map((line, index) => (
-              <div className="form-grid" key={index}>
-                <label>
-                  Product
-                  <select
-                    value={line.productId}
-                    onChange={(event) =>
-                      setLines((current) =>
-                        current.map((item, i) =>
-                          i === index
-                            ? { ...item, productId: event.target.value }
-                            : item,
-                        ),
-                      )
-                    }
-                  >
-                    {products.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                        {item.baseUnit ? ` · ${item.baseUnit.code}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Quantity
-                  <input
-                    type="number"
-                    min="0.000001"
-                    step="0.000001"
-                    value={line.quantity}
-                    onChange={(event) =>
-                      setLines((current) =>
-                        current.map((item, i) =>
-                          i === index
-                            ? { ...item, quantity: event.target.value }
-                            : item,
-                        ),
-                      )
-                    }
-                  />
-                </label>
-                {lines.length > 1 && (
-                  <button
-                    type="button"
-                    className="button button-secondary"
-                    onClick={() =>
-                      setLines((current) =>
-                        current.filter((_, i) => i !== index),
-                      )
-                    }
-                  >
-                    Remove line
-                  </button>
-                )}
-              </div>
-            ))}
-            <button
-              type="button"
-              className="button button-secondary"
-              onClick={() =>
-                setLines((current) => [
-                  ...current,
-                  { productId: products[0]?.id || "", quantity: "1" },
-                ])
-              }
-            >
-              Add product line
-            </button>
-          </div>
-          <div className="action-row">
-            <button
-              className="button button-primary"
-              disabled={
-                busy ||
-                !source ||
-                !destination ||
-                source === destination ||
-                !lines.length ||
-                lines.some(
-                  (line) =>
-                    !line.productId || !isPositiveQuantity(line.quantity),
-                ) ||
-                new Set(lines.map((line) => line.productId)).size !==
-                  lines.length
-              }
-              onClick={() => void create()}
-            >
-              Create draft
-            </button>
-            <button
-              className="button button-secondary"
-              onClick={() => setOpen(false)}
-            >
-              Close
-            </button>
-          </div>
-        </section>
-      )}
       <section className="panel">
-        <div className="form-grid">
-          <label>
-            Search transfer
-            <input
-              value={query}
-              onChange={(event) => {
-                setPage(1);
-                setQuery(event.target.value);
-              }}
-              placeholder="Transfer number"
-            />
-          </label>
+        <TableToolbar
+          query={query}
+          queryLabel="Search transfers"
+          queryPlaceholder="Transfer number"
+          onQueryChange={(value) => {
+            setPage(1);
+            setQuery(value);
+          }}
+        >
           <label>
             Status
             <select
@@ -576,7 +382,7 @@ export default function TransfersPage() {
               ))}
             </select>
           </label>
-        </div>
+        </TableToolbar>
       </section>
       <section className="panel">
         <DataTable
@@ -591,26 +397,14 @@ export default function TransfersPage() {
           }
           emptyDescription="Create a draft to move inventory between warehouses."
         />
-        <nav className="action-row" aria-label="Transfer pages">
-          <button
-            className="button button-secondary"
-            disabled={page <= 1 || loading || busy}
-            onClick={() => setPage((x) => x - 1)}
-          >
-            Previous
-          </button>
-          <span>
-            {total} transfers · Page {page} of{" "}
-            {Math.max(1, Math.ceil(total / 20))}
-          </span>
-          <button
-            className="button button-secondary"
-            disabled={page >= Math.ceil(total / 20) || loading || busy}
-            onClick={() => setPage((x) => x + 1)}
-          >
-            Next
-          </button>
-        </nav>
+        <TablePagination
+          page={page}
+          pageSize={20}
+          total={total}
+          loading={loading || busy}
+          onPageChange={setPage}
+          onPageSizeChange={() => setPage(1)}
+        />
       </section>
     </main>
   );

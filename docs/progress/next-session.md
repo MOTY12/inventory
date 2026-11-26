@@ -4,43 +4,49 @@
 
 ## Repository state
 
-- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD `ca13680` (`update inventory ui`).
-- Worktree started clean. Current UI changes are uncommitted and must be preserved. Do not commit, push, or deploy.
-- Backend roadmap remains **30/47**. UI redesign does not increase the completed backend task count.
-- No database, migration, API contract, permission, credential, or business-record changes were made.
+- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD `787c020` (`update the table tool bar`).
+- Phase C source changes are uncommitted. Preserve them; do not commit, push, or deploy without authorization. No pre-existing edits were present at start.
+- Backend roadmap remains **30/47**. No task count changed; UI work does not complete backend roadmap tasks.
+- No database reset, migration, business-record mutation, or credential change occurred. Added API query support is additive and requires no migration.
 
-## Completed implementation in this session
+## Implemented in this session
 
-- Added `apps/web/src/components/ui/table-toolbar.tsx`: reusable search input, filter slot, clear action. Search debounce is provided by the consumer so the toolbar stays reusable.
-- Added `apps/web/src/components/ui/table-pagination.tsx`: current page/page size/total, rows-per-page options, accessible labels, loading and disabled states.
-- Rebuilt `apps/web/src/app/locations/page.tsx` with separate Branches and Warehouses tabs. Both use shared `PageHeader`, `DataTable`, status badges, toolbar and server pagination. Create/edit forms now use shared drawers; archive/reactivate uses shared confirmation. Warehouse filtering supports branch and status. The branch selector is searchable and only submits a selected branch ID. Existing OWNER/ADMIN/MANAGER gate and authenticated API calls are preserved.
-- Updated shared tab/form styles in `apps/web/src/app/globals.css`.
-- Redesigned `/inventory` as a Stock Counts listing-first view with shared `DataTable`, `StatusBadge`, `TablePagination`, a draft-create drawer and count-details drawer. Warehouse balances and immutable movement history are separate tabs, each with server pagination. Posting is guarded by the existing count-post endpoint and explicit `ConfirmDialog`. Quantity variance uses existing exact string/BigInt logic.
-- Updated design reference, matrix, acceptance, current-state, next-session and session-log documentation.
+- Added shared components in `apps/web/src/components/documents/`: `DocumentHeader`, `DocumentLayout`, `DocumentSection`, `DocumentLineItems`, `DocumentSummary`, `DocumentActions`, and `ProductSelector`.
+- PO list is listing-first; dedicated `/purchase-orders/new` submits the existing draft endpoint, supports active supplier/warehouse selection and catalog search, uses exact decimal helpers for subtotal, and routes to the created PO detail.
+- Transfer list is listing-first; dedicated `/transfers/new` validates distinct warehouses, creates a draft only, searches catalog, and requests source-warehouse availability by selected product. Optional `productId` balance filtering was added to the existing tenant/warehouse-guarded API and service; regression tests cover both filtered and unfiltered query scope.
+- Sales new-order page uses shared document layout/sections/line-item editor, paginated catalog search and selected-product balance lookups. Existing barcode scanner, exact arithmetic, draft endpoint, idempotency key, stock reservation timing and other transaction rules remain.
+- PO, transfer, and sales detail pages use the shared document header/status/breadcrumb pattern. Their existing workflow bodies and API actions remain largely intact.
+- Progress/design/acceptance/blocker docs record implementation vs verification separately.
 
-## Implementation gaps and acceptance limits
+## Verification
 
-- The new location source compiled and its checks passed, but Chrome redirected `/locations` to `/login`. Authenticated visual review, populated table behavior, drawer usability, responsive breakpoints, keyboard behavior, warehouse grants, and create/edit/archive workflows remain unverified. No records were mutated.
-- Warehouse branch choices load at most 100 rows because the endpoint caps `page_size` at 100. Branch list endpoint does not supply warehouse counts; no count is fabricated. Warehouse-to-inventory navigation is omitted because the current inventory page has no warehouse query-string context.
-- No UI component tests were added. `npm test` does not cover the new toolbar, pagination, or location interactions. Three opt-in PostgreSQL suites were skipped in the default test command.
-- Purchase-order creation/details, transfer creation/details, and sales-order creation/details remain for later phases. The previously observed reorder-rule request error remains unexplained.
-
-## Checks run sequentially
-
-- `npm run typecheck`: passed.
+- `npm run typecheck`: passed after build-generated Prisma Client generation.
 - `npm run lint`: passed.
-- `npm run format:check`: passed.
-- `npm test`: API/shared 60 passed, 0 failed, 3 opt-in PostgreSQL suites skipped; web 2 passed, 0 failed.
-- `npm run build`: passed; Next.js generated 29 routes.
-- Browser: opened `http://localhost:3000/locations`; it redirected to `http://localhost:3000/login`. This is only evidence of the auth redirect, not location UI acceptance.
-- `git diff --check`: passed after this checkpoint update.
+- `npm run format:check`: passed after formatting source and docs.
+- `npm test`: 62 API/shared and 2 web passed, 0 failed; 3 opt-in PostgreSQL suites skipped. Includes 2 new balance-filter service tests.
+- `npm run qa:test`: 18 passed, 0 failed, 0 skipped.
+- `npm run build`: passed; Next.js generated 31 routes, including `/purchase-orders/new` and `/transfers/new`.
+- `git diff --check`: passed after final code and documentation edits.
+- Browser: not run. `localhost:3000/purchase-orders/new` and `localhost:4000/api/v1/health/ready` both refused connections. No authenticated browser session, DB-backed request, workflow mutation, or responsive sweep was verified.
+
+## Gaps and blockers
+
+- Authenticated UI and operational workflow acceptance remains blocked by local services being down and the absence of approved QA account/org values in this session.
+- No component interaction tests or responsive 360/390/768/1024/1440/1920 sweep exist for Phase C.
+- Supplier/customer/warehouse option selectors remain native selects loading up to 100 records; the product selector is server-searchable and paginated.
+- The current PO/transfer/SO detail bodies were not fully rebuilt; only shared headers/status/breadcrumbs were added. Existing receive, dispatch, picking, fulfillment and barcode behaviors remain in the original forms/actions.
+- Availability was not checked against a live API. Transfer source switching refreshes selected product balances in source but has not been exercised under rapid warehouse changes.
 
 ## Exact next steps
 
-1. Inspect `git status` and diffs; preserve all uncommitted work. Check latest HEAD and reconcile this checkpoint if it changed.
-2. Obtain/use an approved active development browser session, then validate `/locations` at desktop and 360/390/768/1024 widths. Test only read-only filters first; do not mutate existing business records. Use approved disposable QA records and identities for branch/warehouse create/edit/archive and warehouse grant acceptance.
-3. Validate Phase A and B in an authenticated browser at 360, 390, 768, 1024, 1440 and 1920px. Test filters and pagination read-only first. Use approved disposable QA records for location/count mutations; verify no movement before count post, one movement on post, and balance reconciliation.
-4. Add focused UI component coverage only where the existing web test setup can test actual components; otherwise document why those checks remain manual.
-5. Implement shared document presentation, then dedicated PO and transfer creation/detail flows; continue with sales orders using supported endpoint fields and states. Preserve stock and money logic.
-6. Investigate the reorder-rule generic request failure using an authenticated session and concrete request/response evidence.
-7. Update design docs, current state, next-session and session log. Run typecheck, lint, format, tests, build, then `git diff --check` sequentially. Do not change backend roadmap counts based on UI-only work.
+1. Inspect `git status`, `git diff --check`, and changed-file diffs; preserve all uncommitted edits. Current code additions are in the inventory balance service/controller/DTO tests and web `components/documents`, PO, transfer and sales-order routes/styles.
+2. Start the documented development services only if the approved local Docker/database setup is available; verify readiness and confirm an approved disposable QA organization/session before any business-data mutation. Do not reset the database or invent credentials.
+3. Exercise read-only authenticated browser views first. Check the new routes at 360, 390, 768, 1024, 1440, and 1920px; verify keyboard product search, empty/error states, permission gates, no unintended page overflow, and source-warehouse availability refresh.
+4. With approved disposable QA data, verify draft creation, PO partial/full receiving, transfer submit/dispatch/partial/full receipt, and sales confirm/pick/partial/full fulfillment. Reconcile movement ledger and balances; replay eligible idempotent commands to ensure no duplicate movements.
+5. Add meaningful component interaction tests if the repository gains/has an appropriate DOM test setup; do not substitute source-string tests. Keep browser acceptance separate from test results.
+6. Complete the PO/transfer/SO detail and receiving/picking/fulfillment visual consistency work; update design acceptance docs with actual evidence. Keep backend count at 30/47 unless individual roadmap acceptance criteria are independently satisfied.
+7. Run `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run qa:test`, `npm run build`, and `git diff --check` sequentially after edits. Do not claim skipped PostgreSQL tests passed.
+
+## Outstanding decisions
+
+No new business policy decision was introduced. Existing approved policies, tenant isolation, warehouse scope, stock reservation, ledger, costing and idempotency semantics were preserved.

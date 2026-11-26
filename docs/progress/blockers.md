@@ -44,3 +44,10 @@
 ## Barcode capability constraints
 
 Camera scanning remains deferred. Barcode Detection API support is limited/experimental, requires HTTPS and feature detection, and is not dependable on iOS Safari. Manual input or a USB/Bluetooth keyboard-emulating scanner remains the fallback. Sources: [MDN](https://developer.mozilla.org/en-US/docs/Web/API/Barcode_Detection_API), [Chrome Developers](https://developer.chrome.com/docs/capabilities/shape-detection), [WebKit](https://bugs.webkit.org/show_bug.cgi?id=198174).
+
+
+## Phase C UI acceptance blocker (2026-11-26)
+
+- Local API and web were not listening: `curl http://localhost:3000/purchase-orders/new` and `curl http://localhost:4000/api/v1/health/ready` both returned connection refused. Authenticated browser and live transaction acceptance could not run. No services were started because this pass focused on source work and no approved credentials were available in session context.
+- UI regressions: no React component interaction test infrastructure is currently used by the web suite; responsive sweep, live warehouse-specific availability, role/tenant denial, transaction movements and retries remain unverified.
+- The optional `productId` query filter was covered by service-level tests; controller validation via `InventoryBalanceQueryDto` compiles, but no live endpoint request was exercised.

@@ -1,10 +1,10 @@
 # Current state
 
-**Updated:** 2026-11-25 (Africa/Lagos)
+**Updated:** 2026-11-26 (Africa/Lagos)
 
 ## Repository and roadmap
 
-- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; current HEAD `ca13680` (`update inventory ui`). The worktree was clean at start of the 2026-11-26 continuation. Current changes are uncommitted UI work; no pre-existing changes were overwritten.
+- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; current HEAD `787c020` (`update the table tool bar`). The worktree was clean at start of the Phase C continuation. Phase C source changes are uncommitted; build-generated Next metadata was restored from HEAD. No pre-existing changes were overwritten.
 - Roadmap remains **30/47**. SALES-004, REPORT-002 and QUALITY-001 remain IN_PROGRESS. No task became complete; fixture code and mocked verification do not meet operational acceptance.
 - No commit, push, deployment, migration application, database reset, deletion, or credential change occurred.
 
@@ -79,3 +79,15 @@ Changed source files: `scripts/qa/manifest.mjs`, `scripts/qa/workflow.mjs`, `scr
 - No stock count was created or posted. Chrome was at the sign-in redirect; visual, responsive, RBAC, ledger reconciliation, and retry acceptance remain pending.
 - Sequential typecheck, lint, formatting, tests (60 API/shared + 2 web passed; 3 opt-in PostgreSQL skipped), and build (29 routes) passed; no UI-specific regression tests exist.
 - Phase B implementation is complete in source, acceptance is not complete. Backend roadmap remains 30/47. Next is authenticated verification, then shared document forms and PO/transfer/SO creation/detail work.
+
+
+## Phase C document workflow redesign (2026-11-26)
+
+- Added shared document header/layout/section/line-item/summary/action components and an accessible debounced, paginated product selector (`name`, SKU, barcode).
+- Purchase-order listing now links to `/purchase-orders/new`; the inline form is removed. The new route creates only a draft through the existing API, uses the exact decimal amount helper, and navigates to existing order detail.
+- Transfer listing now links to `/transfers/new`; the inline form is removed. The new route creates only a draft, uses accessible warehouses, rejects same source/destination, and displays source availability. Added optional UUID `productId` filtering to the existing warehouse-balance read endpoint; organization and warehouse guards remain. A focused service regression checks filtered and unfiltered scope.
+- Sales-order draft form now shares the document layout and line-item component, uses the server-searched catalog selector and product-specific warehouse-balance reads, keeps the barcode scanner, exact BigInt arithmetic and existing idempotency key. PO, transfer and SO detail pages now use the shared document header/status/breadcrumbs; lifecycle actions and posting APIs were retained.
+- Implementation only: backend roadmap remains **30/47**. No migration or database mutation, commits, push, or deployment.
+- Checks after implementation: web and full typecheck passed after sequential Prisma Client generation; lint and format check passed; `npm test` 62 API/shared and 2 web passed, 0 failed, 3 opt-in PostgreSQL suites skipped; `npm run qa:test` 18 passed; production build passed with 31 Next routes; final `git diff --check` passed after documentation and source changes.
+- Browser/operational acceptance is blocked: `localhost:3000` and `localhost:4000/api/v1/health/ready` both refused connections. No authenticated workflow, responsive viewport sweep, DB-backed product availability, or transaction scenario was run. No UI component interaction test infrastructure was added.
+- Remaining source gaps: supplier/customer pickers are native selects bounded to the first 100 options; details pages retain their existing content layout beyond shared headers; no shared timeline or full interaction regression tests. Exact next steps are in `docs/progress/next-session.md`.

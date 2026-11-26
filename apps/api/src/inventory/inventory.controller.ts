@@ -21,6 +21,7 @@ import {
   OrganizationRequest,
 } from "../organizations/organization-context.guard";
 import { PaginationQueryDto } from "../common/pagination-query.dto";
+import { InventoryBalanceQueryDto } from "./dto/inventory-balance-query.dto";
 import { InventoryReadService } from "./inventory-read.service";
 import { StockAdjustmentsService } from "./adjustments.service";
 import { CreateStockAdjustmentDto } from "./adjustments.dto";
@@ -94,7 +95,7 @@ export class InventoryController {
   @ApiOperation({ summary: "List balances for a warehouse" })
   balances(
     @Param("warehouseId", new ParseUUIDPipe()) warehouseId: string,
-    @Query() query: PaginationQueryDto,
+    @Query() query: InventoryBalanceQueryDto,
     @Req() request: OrganizationRequest,
   ) {
     return this.inventory.listBalances(

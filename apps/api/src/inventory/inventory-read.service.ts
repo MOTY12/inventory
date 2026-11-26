@@ -4,6 +4,8 @@ import { PrismaService } from "../database/prisma.service";
 import type { OrganizationContext } from "../organizations/organization-context.guard";
 import type { PaginationQueryDto } from "../common/pagination-query.dto";
 
+export type BalanceQuery = PaginationQueryDto & { productId?: string };
+
 @Injectable()
 export class InventoryReadService {
   constructor(private readonly prisma: PrismaService) {}
@@ -11,9 +13,13 @@ export class InventoryReadService {
   async listBalances(
     context: OrganizationContext,
     warehouseId: string,
-    query: PaginationQueryDto,
+    query: BalanceQuery,
   ) {
-    const where = { organizationId: context.organizationId, warehouseId };
+    const where = {
+      organizationId: context.organizationId,
+      warehouseId,
+      ...(query.productId ? { productId: query.productId } : {}),
+    };
     const [data, total] = await this.prisma.$transaction([
       this.prisma.inventoryBalance.findMany({
         where,
