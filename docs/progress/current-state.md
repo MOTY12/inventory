@@ -4,7 +4,7 @@
 
 ## Repository and roadmap
 
-- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD at this UI pass start `237107a` (`update customer design`). Worktree was clean at pass start. This pass has uncommitted frontend and UI documentation edits; no pre-existing changes were overwritten.
+- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; current HEAD `ca13680` (`update inventory ui`). The worktree was clean at start of the 2026-11-26 continuation. Current changes are uncommitted UI work; no pre-existing changes were overwritten.
 - Roadmap remains **30/47**. SALES-004, REPORT-002 and QUALITY-001 remain IN_PROGRESS. No task became complete; fixture code and mocked verification do not meet operational acceptance.
 - No commit, push, deployment, migration application, database reset, deletion, or credential change occurred.
 
@@ -63,3 +63,19 @@ Changed source files: `scripts/qa/manifest.mjs`, `scripts/qa/workflow.mjs`, `scr
 5. Run `QA_SCENARIO=multi-currency` and `QA_SCENARIO=financial-exports`; save run IDs, expected/actual report totals, job IDs/status, CSV rows and resume counts. Do not claim results from fake tests.
 6. Complete authenticated browser SALES-004/REPORT-002 acceptance, verified CSV downloads, role/tenant denial checks and representative disposable-schema EXPLAIN. Then run `COMPLETE_INVENTORY_BUSINESS_LIFECYCLE` for QUALITY-001.
 7. Recalculate roadmap count from individual task entries. Keep **30/47** until mandatory acceptance passes. Do not commit or push.
+
+## Latest UI continuation (2026-11-26)
+
+- Added shared `TableToolbar` and `TablePagination` components and redesigned `/locations` as Branches and Warehouses tabs using `PageHeader`, `DataTable`, `StatusBadge`, `Drawer`, and `ConfirmDialog`. Search, status, branch filter, server-side pagination/page size, create/edit drawers, and status confirmation use existing API endpoints and manager role gate. Branch search is name-only per the service contract; branch warehouse counts are omitted because the list API does not provide them.
+- Existing tenant and warehouse grant authorization remains server-side. The warehouse branch picker is searchable via a datalist and accepts only a selected branch in the current organization; options are bounded to the first 100 returned branches. No backend/API/schema/permission changes.
+- Chrome at `/locations` redirected to `/login`; authenticated rendering and mobile/browser acceptance are blocked by the missing active browser session. No forms were submitted and no business data changed.
+- Sequential final application checks: typecheck, lint, format, `npm test` (60 API/shared pass, 0 fail, 3 opt-in PostgreSQL skipped; 2 web pass), and production build (29 routes) passed. No UI-specific tests were added.
+- Backend roadmap remains **30/47**. Phase A is implemented in source, but its browser/responsive/role/workflow acceptance is incomplete. Stock Counts are the next implementation phase.
+- No commit, push, deployment, migrations, or database mutations.
+
+## Phase B UI continuation (2026-11-26)
+
+- Redesigned `/inventory` as listing-first Stock Counts with the shared table/status/pagination components. Added separate Stock overview and Movement history tabs, server pagination for counts/balances/movements, a draft-create drawer, count detail drawer, and explicit post confirmation. Existing endpoints and base-unit quantity fields remain; variance uses exact scaled BigInt display arithmetic, and posting retains the backend's immutable movement behavior.
+- No stock count was created or posted. Chrome was at the sign-in redirect; visual, responsive, RBAC, ledger reconciliation, and retry acceptance remain pending.
+- Sequential typecheck, lint, formatting, tests (60 API/shared + 2 web passed; 3 opt-in PostgreSQL skipped), and build (29 routes) passed; no UI-specific regression tests exist.
+- Phase B implementation is complete in source, acceptance is not complete. Backend roadmap remains 30/47. Next is authenticated verification, then shared document forms and PO/transfer/SO creation/detail work.

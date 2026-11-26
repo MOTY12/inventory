@@ -6,6 +6,15 @@ import {
   ProtectedContent,
   useSession,
 } from "../../features/auth/session-provider";
+import {
+  DataTable,
+  type DataTableColumn,
+} from "../../components/ui/data-table";
+import { PageHeader } from "../../components/ui/page-header";
+import { StatusBadge } from "../../components/ui/status-badge";
+import { Drawer } from "../../components/ui/drawer";
+import { ConfirmDialog } from "../../components/ui/confirm-dialog";
+import { TablePagination } from "../../components/ui/table-pagination";
 
 type Warehouse = { id: string; name: string; code: string };
 type Product = {
@@ -44,6 +53,7 @@ type Balance = {
   };
 };
 type Page<T> = { data: T[]; total: number };
+type InventoryView = "counts" | "balances" | "movements";
 
 function subtractQuantities(left: string, right: string): string {
   const scale = BigInt(1_000_000);
@@ -66,6 +76,18 @@ function InventoryManager() {
   const [balances, setBalances] = useState<Balance[]>([]);
   const [balanceTotal, setBalanceTotal] = useState(0);
   const [balancePage, setBalancePage] = useState(1);
+  const [balancePageSize, setBalancePageSize] = useState(100);
+  const [movementPage, setMovementPage] = useState(1);
+  const [movementPageSize, setMovementPageSize] = useState(50);
+  const [movementTotal, setMovementTotal] = useState(0);
+  const [countPage, setCountPage] = useState(1);
+  const [countPageSize, setCountPageSize] = useState(20);
+  const [countTotal, setCountTotal] = useState(0);
+  const [view, setView] = useState<InventoryView>("counts");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [selectedAdjustment, setSelectedAdjustment] =
+    useState<Adjustment | null>(null);
+  const [postTarget, setPostTarget] = useState<Adjustment | null>(null);
   const [warehouseId, setWarehouseId] = useState("");
   const [productId, setProductId] = useState("");
   const [countedQuantity, setCountedQuantity] = useState("");
@@ -91,6 +113,8 @@ function InventoryManager() {
       setMovements([]);
       setBalances([]);
       setBalanceTotal(0);
+      setCountTotal(0);
+      setMovementTotal(0);
       setWarehouseId("");
       setProductId("");
       setLoading(false);
@@ -121,22 +145,26 @@ function InventoryManager() {
       if (selected) {
         const [counts, movementResult, balanceResult] = await Promise.all([
           authenticatedRequest<Page<Adjustment>>(
-            `/inventory/warehouses/${selected}/adjustments?page=1&page_size=100`,
+            `/inventory/warehouses/${selected}/adjustments?page=${countPage}&page_size=${countPageSize}`,
           ),
           authenticatedRequest<Page<Movement>>(
-            `/inventory/warehouses/${selected}/movements?page=1&page_size=50`,
+            `/inventory/warehouses/${selected}/movements?page=${movementPage}&page_size=${movementPageSize}`,
           ),
           authenticatedRequest<Page<Balance>>(
-            `/inventory/warehouses/${selected}/balances?page=${balancePage}&page_size=100`,
+            `/inventory/warehouses/${selected}/balances?page=${balancePage}&page_size=${balancePageSize}`,
           ),
         ]);
         setAdjustments(counts.data);
+        setCountTotal(counts.total);
         setMovements(movementResult.data);
+        setMovementTotal(movementResult.total);
         setBalances(balanceResult.data);
         setBalanceTotal(balanceResult.total);
       } else {
         setAdjustments([]);
+        setCountTotal(0);
         setMovements([]);
+        setMovementTotal(0);
         setBalances([]);
         setBalanceTotal(0);
       }
@@ -147,7 +175,17 @@ function InventoryManager() {
     } finally {
       setLoading(false);
     }
-  }, [authenticatedRequest, balancePage, organization, warehouseId]);
+  }, [
+    authenticatedRequest,
+    balancePage,
+    balancePageSize,
+    countPage,
+    countPageSize,
+    movementPage,
+    movementPageSize,
+    organization,
+    warehouseId,
+  ]);
 
   useEffect(() => {
     void Promise.resolve().then(reload);
@@ -170,6 +208,7 @@ function InventoryManager() {
       );
       setCountedQuantity("");
       setReason("");
+      setCreateOpen(false);
       await reload();
     } catch (cause) {
       setError(
@@ -181,13 +220,6 @@ function InventoryManager() {
   }
 
   async function postCount(id: string) {
-    if (
-      !window.confirm(
-        "Post this count variance to on-hand stock? This creates an immutable inventory movement.",
-      )
-    ) {
-      return;
-    }
     setBusy(true);
     setError("");
     setNotice("");
@@ -198,6 +230,8 @@ function InventoryManager() {
         "POST",
       );
       setNotice("Count variance posted to the stock ledger.");
+      setPostTarget(null);
+      setSelectedAdjustment(null);
       await reload();
     } catch (cause) {
       setError(
@@ -208,30 +242,190 @@ function InventoryManager() {
     }
   }
 
-  return (
-    <main className="inventory-page">
-      <header className="products-heading">
-        <div>
-          <Link href="/products" className="catalog-back">
-            ← Products
-          </Link>
-          <p className="catalog-eyebrow">STOCK CONTROL</p>
-          <h1>Inventory counts</h1>
-          <p>
-            Record physical counts, review variances, and post authorized
-            changes.
-          </p>
-        </div>
-        <Link className="catalog-secondary-link" href="/">
-          Dashboard
+  const adjustmentColumns: DataTableColumn<Adjustment>[] = [
+    {
+      key: "id",
+      header: "Count ID",
+      render: (row) => (
+        <button
+          className="ui-primary-cell ui-cell-button"
+          type="button"
+          onClick={() => setSelectedAdjustment(row)}
+        >
+          #{row.id.slice(0, 8)}
+        </button>
+      ),
+    },
+    {
+      key: "product",
+      header: "Product",
+      render: (row) => {
+        const product = products.find(
+          (candidate) => candidate.id === row.productId,
+        );
+        return product ? (
+          <>
+            <strong>{product.name}</strong>
+            <br />
+            <span className="ui-muted-cell">{product.sku}</span>
+          </>
+        ) : (
+          row.productId
+        );
+      },
+    },
+    {
+      key: "expected",
+      header: "Expected",
+      align: "right",
+      render: (row) => row.systemQuantity,
+    },
+    {
+      key: "counted",
+      header: "Counted",
+      align: "right",
+      render: (row) => row.countedQuantity,
+    },
+    {
+      key: "variance",
+      header: "Variance",
+      align: "right",
+      render: (row) => {
+        const variance = subtractQuantities(
+          row.countedQuantity,
+          row.systemQuantity,
+        );
+        return <strong>{variance}</strong>;
+      },
+    },
+    {
+      key: "date",
+      header: "Date",
+      render: (row) => new Date(row.createdAt).toLocaleString(),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (row) => <StatusBadge status={row.status} />,
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      align: "right",
+      render: (row) => (
+        <span className="ui-row-actions">
+          <button
+            className="ui-quiet-button"
+            type="button"
+            onClick={() => setSelectedAdjustment(row)}
+          >
+            Details
+          </button>
+          {row.status === "DRAFT" && canWrite ? (
+            <button
+              className="ui-quiet-button"
+              type="button"
+              disabled={busy}
+              onClick={() => setPostTarget(row)}
+            >
+              Post variance
+            </button>
+          ) : null}
+        </span>
+      ),
+    },
+  ];
+  const balanceColumns: DataTableColumn<Balance>[] = [
+    {
+      key: "product",
+      header: "Product",
+      render: (row) => (
+        <Link className="ui-primary-cell" href={`/products/${row.product.id}`}>
+          {row.product.name}
         </Link>
-      </header>
-      {notice && (
-        <p className="catalog-notice" role="status">
+      ),
+    },
+    { key: "sku", header: "SKU", render: (row) => row.product.sku },
+    {
+      key: "onHand",
+      header: "On hand",
+      align: "right",
+      render: (row) => row.onHand,
+    },
+    {
+      key: "reserved",
+      header: "Reserved",
+      align: "right",
+      render: (row) => row.reserved,
+    },
+    {
+      key: "available",
+      header: "Available",
+      align: "right",
+      render: (row) => subtractQuantities(row.onHand, row.reserved),
+    },
+    {
+      key: "transit",
+      header: "In transit",
+      align: "right",
+      render: (row) => row.inTransit,
+    },
+  ];
+  const movementColumns: DataTableColumn<Movement>[] = [
+    {
+      key: "product",
+      header: "Product",
+      render: (row) => (
+        <>
+          <strong>{row.product.name}</strong>
+          <br />
+          <span className="ui-muted-cell">{row.product.sku}</span>
+        </>
+      ),
+    },
+    { key: "type", header: "Movement", render: (row) => row.movementType },
+    { key: "document", header: "Source", render: (row) => row.documentType },
+    {
+      key: "quantity",
+      header: "Quantity change",
+      align: "right",
+      render: (row) => row.quantityDelta,
+    },
+    {
+      key: "date",
+      header: "Date",
+      render: (row) => new Date(row.occurredAt).toLocaleString(),
+    },
+  ];
+
+  return (
+    <main className="ui-page">
+      <Link href="/" className="text-button">
+        ← Dashboard
+      </Link>
+      <PageHeader
+        eyebrow="STOCK CONTROL"
+        title="Inventory"
+        description="Review physical counts, warehouse balances, and immutable stock movements."
+        action={
+          view === "counts" && canWrite ? (
+            <button
+              className="button button-primary"
+              type="button"
+              disabled={!warehouseId || !products.length}
+              onClick={() => setCreateOpen(true)}
+            >
+              New stock count
+            </button>
+          ) : undefined
+        }
+      />
+      {notice ? (
+        <p className="ui-success-banner" role="status">
           {notice}
         </p>
-      )}
-      {error && (
+      ) : null}
+      {error ? (
         <div className="catalog-error" role="alert">
           <span>{error}</span>
           <button
@@ -242,31 +436,26 @@ function InventoryManager() {
             Try again
           </button>
         </div>
-      )}
-      <section className="product-editor">
-        {loading ? (
-          <p className="catalog-loading" role="status">
-            Loading warehouse inventory…
-          </p>
-        ) : warehouses.length === 0 ? (
-          <div className="catalog-empty">
-            <h2>Add a warehouse to begin counting stock</h2>
-            <p>Inventory counts and balances are recorded by warehouse.</p>
-            <Link className="catalog-secondary-link" href="/locations">
-              Set up a warehouse
-            </Link>
-          </div>
-        ) : (
-          <>
+      ) : null}
+      {!organization ? (
+        <section className="ui-panel">
+          <p>Select a business to view inventory.</p>
+        </section>
+      ) : (
+        <section className="ui-panel">
+          <div className="ui-filter-toolbar">
             <label>
               Warehouse
               <select
                 value={warehouseId}
                 onChange={(event) => {
                   setBalancePage(1);
+                  setCountPage(1);
+                  setMovementPage(1);
                   setWarehouseId(event.target.value);
                 }}
               >
+                <option value="">Choose warehouse</option>
                 {warehouses.map((warehouse) => (
                   <option key={warehouse.id} value={warehouse.id}>
                     {warehouse.name} ({warehouse.code})
@@ -274,239 +463,284 @@ function InventoryManager() {
                 ))}
               </select>
             </label>
-            {canWrite ? (
-              <form
-                onSubmit={createCount}
-                className="inventory-count-form"
-                aria-labelledby="count-form-title"
-              >
-                <h2 id="count-form-title">Record a physical count</h2>
-                <p className="catalog-form-hint">
-                  A draft captures the current system quantity. Posting writes
-                  only the variance to the stock ledger.
-                </p>
-                <label>
-                  Product
-                  <select
-                    required
-                    value={productId}
-                    onChange={(event) => setProductId(event.target.value)}
-                  >
-                    <option value="">Choose a product</option>
-                    {products.map((product) => (
-                      <option key={product.id} value={product.id}>
-                        {product.name} · {product.sku} · {product.baseUnit.code}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Counted quantity
-                  <span className="inventory-field-hint">
-                    {selectedProduct
-                      ? `Enter ${selectedProduct.baseUnit.name} (${selectedProduct.baseUnit.code})`
-                      : "Select a product to see its base unit"}
-                  </span>
-                  <input
-                    required
-                    inputMode="decimal"
-                    pattern="(?:0|[1-9][0-9]*)(?:\.[0-9]{1,6})?"
-                    value={countedQuantity}
-                    onChange={(event) => setCountedQuantity(event.target.value)}
-                  />
-                </label>
-                <label>
-                  Reason
-                  <textarea
-                    required
-                    minLength={3}
-                    maxLength={500}
-                    value={reason}
-                    onChange={(event) => setReason(event.target.value)}
-                    placeholder="For example: monthly shelf count"
-                  />
-                </label>
-                <button
-                  className="catalog-primary-button"
-                  disabled={busy || !warehouseId || !products.length}
-                  type="submit"
-                >
-                  {busy ? "Saving…" : "Save count draft"}
-                </button>
-              </form>
-            ) : (
-              <p className="catalog-readonly">
-                You have view-only inventory access. Contact an organization
-                administrator if you need to record counts.
-              </p>
-            )}
-          </>
-        )}
-      </section>
-      {warehouseId && (
-        <section
-          className="inventory-count-list"
-          aria-labelledby="balance-title"
-        >
-          <div className="inventory-section-heading">
-            <div>
-              <h2 id="balance-title">Warehouse stock overview</h2>
-              <p>
-                On hand includes reserved stock. Available is on hand minus
-                reservations; in-transit stock is separate.
-              </p>
-            </div>
-            <span>{balanceTotal} product balances</span>
           </div>
-          {loading ? (
-            <p role="status">Loading balances…</p>
-          ) : balances.length === 0 ? (
-            <div className="empty-state">
-              <strong>No stock balances in this warehouse</strong>
-              <p>Receive stock or post an opening count to create balances.</p>
+          <div className="ui-tabs" role="tablist" aria-label="Inventory views">
+            <button
+              role="tab"
+              aria-selected={view === "counts"}
+              className={view === "counts" ? "is-active" : ""}
+              type="button"
+              onClick={() => setView("counts")}
+            >
+              Stock counts <span>{countTotal}</span>
+            </button>
+            <button
+              role="tab"
+              aria-selected={view === "balances"}
+              className={view === "balances" ? "is-active" : ""}
+              type="button"
+              onClick={() => setView("balances")}
+            >
+              Stock overview <span>{balanceTotal}</span>
+            </button>
+            <button
+              role="tab"
+              aria-selected={view === "movements"}
+              className={view === "movements" ? "is-active" : ""}
+              type="button"
+              onClick={() => setView("movements")}
+            >
+              Movement history <span>{movementTotal}</span>
+            </button>
+          </div>
+          {!warehouseId ? (
+            <div className="ui-table-message">
+              <strong>Select a warehouse</strong>
+              <span>Inventory is managed and counted by warehouse.</span>
             </div>
+          ) : view === "counts" ? (
+            <>
+              <DataTable
+                columns={adjustmentColumns}
+                rows={adjustments}
+                rowKey={(row) => row.id}
+                loading={loading}
+                emptyTitle="No stock counts yet"
+                emptyDescription="Start a physical count to compare the shelf quantity with the current system balance."
+              />
+              <TablePagination
+                page={countPage}
+                pageSize={countPageSize}
+                total={countTotal}
+                loading={loading}
+                onPageChange={setCountPage}
+                onPageSizeChange={(size) => {
+                  setCountPageSize(size);
+                  setCountPage(1);
+                }}
+              />
+            </>
+          ) : view === "balances" ? (
+            <>
+              <p className="ui-inline-help">
+                On hand includes reserved stock. Available is on hand minus
+                reservations; in-transit stock is shown separately.
+              </p>
+              <DataTable
+                columns={balanceColumns}
+                rows={balances}
+                rowKey={(row) => row.productId}
+                loading={loading}
+                emptyTitle="No stock balances"
+                emptyDescription="Receive stock or post an opening count to create balances."
+              />
+              <TablePagination
+                page={balancePage}
+                pageSize={balancePageSize}
+                total={balanceTotal}
+                loading={loading}
+                onPageChange={setBalancePage}
+                onPageSizeChange={(size) => {
+                  setBalancePageSize(size);
+                  setBalancePage(1);
+                }}
+              />
+            </>
           ) : (
             <>
-              <div className="table-scroll">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Product</th>
-                      <th>SKU</th>
-                      <th>On hand</th>
-                      <th>Reserved</th>
-                      <th>Available</th>
-                      <th>In transit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {balances.map((balance) => (
-                      <tr key={balance.productId}>
-                        <td>
-                          <Link href={`/products/${balance.product.id}`}>
-                            {balance.product.name}
-                          </Link>
-                          <small>{balance.product.baseUnit.code}</small>
-                        </td>
-                        <td>{balance.product.sku}</td>
-                        <td>{balance.onHand}</td>
-                        <td>{balance.reserved}</td>
-                        <td>
-                          {subtractQuantities(balance.onHand, balance.reserved)}
-                        </td>
-                        <td>{balance.inTransit}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {balanceTotal > 100 && (
-                <nav
-                  aria-label="Warehouse balance pages"
-                  className="product-pagination"
-                >
-                  <span>
-                    Showing {(balancePage - 1) * 100 + 1}–
-                    {Math.min(balancePage * 100, balanceTotal)} of{" "}
-                    {balanceTotal}
-                  </span>
-                  <div>
-                    <button
-                      className="catalog-text-button"
-                      disabled={balancePage <= 1}
-                      onClick={() => setBalancePage((page) => page - 1)}
-                      type="button"
-                    >
-                      Previous
-                    </button>
-                    <span>
-                      Page {balancePage} of {Math.ceil(balanceTotal / 100)}
-                    </span>
-                    <button
-                      className="catalog-text-button"
-                      disabled={balancePage >= Math.ceil(balanceTotal / 100)}
-                      onClick={() => setBalancePage((page) => page + 1)}
-                      type="button"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </nav>
-              )}
+              <DataTable
+                columns={movementColumns}
+                rows={movements}
+                rowKey={(row) => row.id}
+                loading={loading}
+                emptyTitle="No stock movements"
+                emptyDescription="Posted inventory operations will appear here."
+              />
+              <TablePagination
+                page={movementPage}
+                pageSize={movementPageSize}
+                total={movementTotal}
+                loading={loading}
+                onPageChange={setMovementPage}
+                onPageSizeChange={(size) => {
+                  setMovementPageSize(size);
+                  setMovementPage(1);
+                }}
+              />
             </>
           )}
+          {loading ? (
+            <span className="sr-only" role="status">
+              Loading inventory data…
+            </span>
+          ) : null}
+          {warehouses.length === 0 && !loading ? (
+            <div className="ui-table-message">
+              <strong>Add a warehouse to begin</strong>
+              <span>
+                Inventory counts and balances are recorded by warehouse.{" "}
+                <Link href="/locations">Set up a warehouse</Link>.
+              </span>
+            </div>
+          ) : null}
+          {!canWrite ? (
+            <p className="ui-inline-help">
+              You have view-only inventory access. Contact an organization
+              administrator if you need to record counts.
+            </p>
+          ) : null}
         </section>
       )}
-      <section className="inventory-count-list">
-        <h2>Count history</h2>
-        {loading ? (
-          <p role="status">Loading counts…</p>
-        ) : adjustments.length === 0 ? (
-          <p>No counts recorded for this warehouse.</p>
-        ) : (
-          adjustments.map((a) => {
-            const product = products.find((p) => p.id === a.productId);
-            const variance = subtractQuantities(
-              a.countedQuantity,
-              a.systemQuantity,
-            );
-            return (
-              <article className="inventory-count-row" key={a.id}>
-                <div>
-                  <strong>{product?.name ?? a.productId}</strong>
-                  <span>
-                    {product?.sku ?? ""} · {a.reason}
-                  </span>
-                  <small>
-                    System {a.systemQuantity} · Counted {a.countedQuantity} ·
-                    Variance {variance}
-                    {product ? ` ${product.baseUnit.code}` : ""}
-                  </small>
-                </div>
-                <div>
-                  <span
-                    className={`inventory-status inventory-status-${a.status.toLowerCase()}`}
-                  >
-                    {a.status}
-                  </span>
-                  {a.status === "DRAFT" && canWrite && (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void postCount(a.id)}
-                    >
-                      Post variance
-                    </button>
-                  )}
-                </div>
-              </article>
-            );
-          })
-        )}
-      </section>
-      <section className="inventory-count-list">
-        <h2>Stock movement history</h2>
-        {loading ? (
-          <p role="status">Loading movements…</p>
-        ) : movements.length === 0 ? (
-          <p>No stock movements recorded for this warehouse.</p>
-        ) : (
-          movements.map((movement) => (
-            <article className="inventory-count-row" key={movement.id}>
-              <div>
-                <strong>
-                  {movement.product.name} · {movement.product.sku}
-                </strong>
-                <span>
-                  {movement.movementType} · {movement.documentType}
-                </span>
-                <small>{new Date(movement.occurredAt).toLocaleString()}</small>
-              </div>
-              <strong>{movement.quantityDelta}</strong>
-            </article>
-          ))
-        )}
-      </section>
+      <Drawer
+        open={createOpen}
+        title="New stock count"
+        description="Saving creates a draft only; inventory changes only after you explicitly post the variance."
+        onClose={() => !busy && setCreateOpen(false)}
+      >
+        <form onSubmit={createCount} className="ui-drawer-form">
+          <label htmlFor="stock-count-warehouse">Warehouse</label>
+          <select
+            id="stock-count-warehouse"
+            required
+            value={warehouseId}
+            onChange={(event) => {
+              setCountPage(1);
+              setBalancePage(1);
+              setMovementPage(1);
+              setWarehouseId(event.target.value);
+            }}
+          >
+            {warehouses.map((warehouse) => (
+              <option key={warehouse.id} value={warehouse.id}>
+                {warehouse.name} ({warehouse.code})
+              </option>
+            ))}
+          </select>
+          <label htmlFor="stock-count-product">Product</label>
+          <select
+            id="stock-count-product"
+            required
+            value={productId}
+            onChange={(event) => setProductId(event.target.value)}
+          >
+            <option value="">Choose a product</option>
+            {products.map((product) => (
+              <option key={product.id} value={product.id}>
+                {product.name} · {product.sku} · {product.baseUnit.code}
+              </option>
+            ))}
+          </select>
+          <label htmlFor="stock-count-quantity">
+            Counted quantity{" "}
+            {selectedProduct
+              ? `(${selectedProduct.baseUnit.name}, ${selectedProduct.baseUnit.code})`
+              : ""}
+          </label>
+          <input
+            id="stock-count-quantity"
+            required
+            inputMode="decimal"
+            pattern="(?:0|[1-9][0-9]*)(?:\.[0-9]{1,6})?"
+            value={countedQuantity}
+            onChange={(event) => setCountedQuantity(event.target.value)}
+          />
+          <label htmlFor="stock-count-reason">Reason</label>
+          <textarea
+            id="stock-count-reason"
+            required
+            minLength={3}
+            maxLength={500}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="For example: monthly shelf count"
+          />
+          {selectedProduct && countedQuantity ? (
+            <p className="ui-inline-help">
+              The current system quantity is captured when you save. The
+              variance will be shown in the count list.
+            </p>
+          ) : null}
+          <div className="ui-drawer-actions">
+            <button
+              className="button button-secondary"
+              type="button"
+              disabled={busy}
+              onClick={() => setCreateOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className="button button-primary"
+              type="submit"
+              disabled={busy || !warehouseId || !products.length}
+            >
+              {busy ? "Saving…" : "Save count draft"}
+            </button>
+          </div>
+        </form>
+      </Drawer>
+      <Drawer
+        open={selectedAdjustment !== null}
+        title="Stock count details"
+        description="Count quantities are retained as an auditable record."
+        onClose={() => setSelectedAdjustment(null)}
+      >
+        {selectedAdjustment ? (
+          <div className="ui-document-summary">
+            <dl>
+              <dt>Count ID</dt>
+              <dd>{selectedAdjustment.id}</dd>
+              <dt>Product</dt>
+              <dd>
+                {products.find(
+                  (product) => product.id === selectedAdjustment.productId,
+                )?.name ?? selectedAdjustment.productId}
+              </dd>
+              <dt>Expected quantity</dt>
+              <dd>{selectedAdjustment.systemQuantity}</dd>
+              <dt>Counted quantity</dt>
+              <dd>{selectedAdjustment.countedQuantity}</dd>
+              <dt>Variance</dt>
+              <dd>
+                {subtractQuantities(
+                  selectedAdjustment.countedQuantity,
+                  selectedAdjustment.systemQuantity,
+                )}
+              </dd>
+              <dt>Reason</dt>
+              <dd>{selectedAdjustment.reason}</dd>
+              <dt>Status</dt>
+              <dd>
+                <StatusBadge status={selectedAdjustment.status} />
+              </dd>
+              <dt>Recorded</dt>
+              <dd>{new Date(selectedAdjustment.createdAt).toLocaleString()}</dd>
+            </dl>
+            <p className="ui-inline-help">
+              Posting creates an immutable movement for the variance.
+            </p>
+            {selectedAdjustment.status === "DRAFT" && canWrite ? (
+              <button
+                className="button button-primary"
+                type="button"
+                disabled={busy}
+                onClick={() => setPostTarget(selectedAdjustment)}
+              >
+                Post variance
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </Drawer>
+      <ConfirmDialog
+        open={postTarget !== null}
+        title="Post this count variance?"
+        description="This updates on-hand stock by the recorded variance and creates an immutable inventory movement. The draft cannot be posted twice."
+        confirmLabel="Post variance"
+        busy={busy}
+        onConfirm={() => postTarget && void postCount(postTarget.id)}
+        onCancel={() => setPostTarget(null)}
+      />
     </main>
   );
 }

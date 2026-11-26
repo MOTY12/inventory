@@ -1,55 +1,46 @@
 # Next session checkpoint
 
-**Updated:** 2026-11-25 (Africa/Lagos)
+**Updated:** 2026-11-26 (Africa/Lagos)
 
 ## Repository state
 
-- Path: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; starting HEAD for this session was `237107a update customer design`.
-- Do not commit, push, or deploy. The current redesign edits are uncommitted and must be preserved.
-- Backend roadmap remains **30/47**. This UI work does not complete backend roadmap tasks.
-- No database, migration, business records, API contract, permissions, or credentials were changed.
+- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD `ca13680` (`update inventory ui`).
+- Worktree started clean. Current UI changes are uncommitted and must be preserved. Do not commit, push, or deploy.
+- Backend roadmap remains **30/47**. UI redesign does not increase the completed backend task count.
+- No database, migration, API contract, permission, credential, or business-record changes were made.
 
-## Completed in this session (UI implementation only)
+## Completed implementation in this session
 
-- Adopted shared `PageHeader`, `DataTable`, and `StatusBadge` in Products, Reorder Rules, Low Stock, Transfers, and the Sales Orders listing.
-- Adopted shared `PageHeader`, `DataTable`, and `StatusBadge` on the Purchase Orders listing; its complex draft editor remains inline.
-- Moved product create/edit and reorder-rule create/edit forms into the shared Drawer. Product archive now uses shared `ConfirmDialog`.
-- Preserved current authenticated endpoints, query parameters, business data, and role checks in these pages.
-- Added `docs/design/customer-module-reference.md` and `docs/design/ui-consistency-matrix.md`; updated `docs/design/ui-redesign-progress.md`.
-- Browser observations: authenticated Chrome showed one existing product in `/products`, the Add Product drawer and its available category/unit options, and `/inventory/reorder-rules` with zero current rules and its shared empty table. No form submitted or business data changed. The reference customer drawer was already open in a separate user tab and was only observed.
+- Added `apps/web/src/components/ui/table-toolbar.tsx`: reusable search input, filter slot, clear action. Search debounce is provided by the consumer so the toolbar stays reusable.
+- Added `apps/web/src/components/ui/table-pagination.tsx`: current page/page size/total, rows-per-page options, accessible labels, loading and disabled states.
+- Rebuilt `apps/web/src/app/locations/page.tsx` with separate Branches and Warehouses tabs. Both use shared `PageHeader`, `DataTable`, status badges, toolbar and server pagination. Create/edit forms now use shared drawers; archive/reactivate uses shared confirmation. Warehouse filtering supports branch and status. The branch selector is searchable and only submits a selected branch ID. Existing OWNER/ADMIN/MANAGER gate and authenticated API calls are preserved.
+- Updated shared tab/form styles in `apps/web/src/app/globals.css`.
+- Redesigned `/inventory` as a Stock Counts listing-first view with shared `DataTable`, `StatusBadge`, `TablePagination`, a draft-create drawer and count-details drawer. Warehouse balances and immutable movement history are separate tabs, each with server pagination. Posting is guarded by the existing count-post endpoint and explicit `ConfirmDialog`. Quantity variance uses existing exact string/BigInt logic.
+- Updated design reference, matrix, acceptance, current-state, next-session and session-log documentation.
 
-## Current task status
+## Implementation gaps and acceptance limits
 
-The requested nine-module redesign is **not complete**. Branches and Warehouses and Stock Counts remain unstandardized. Transfer creation remains inline; PO draft creation and document detail pages remain unchanged. The sales order creation/detail pages remain unchanged. Search, filters, status, row actions and pagination were not comprehensively validated. No responsive breakpoint sweep, keyboard/screen-reader testing, role/tenant checks, creation/edit/archiving mutation tests, or transaction workflows were run.
+- The new location source compiled and its checks passed, but Chrome redirected `/locations` to `/login`. Authenticated visual review, populated table behavior, drawer usability, responsive breakpoints, keyboard behavior, warehouse grants, and create/edit/archive workflows remain unverified. No records were mutated.
+- Warehouse branch choices load at most 100 rows because the endpoint caps `page_size` at 100. Branch list endpoint does not supply warehouse counts; no count is fabricated. Warehouse-to-inventory navigation is omitted because the current inventory page has no warehouse query-string context.
+- No UI component tests were added. `npm test` does not cover the new toolbar, pagination, or location interactions. Three opt-in PostgreSQL suites were skipped in the default test command.
+- Purchase-order creation/details, transfer creation/details, and sales-order creation/details remain for later phases. The previously observed reorder-rule request error remains unexplained.
 
-## Files modified
+## Checks run sequentially
 
-- `apps/web/src/app/products/page.tsx`
-- `apps/web/src/app/sales-orders/page.tsx`
-- `apps/web/src/app/transfers/page.tsx`
-- `apps/web/src/app/purchase-orders/page.tsx`
-- `apps/web/src/features/inventory/reordering/reordering-page.tsx`
-- `apps/web/src/app/globals.css`
-- `docs/design/customer-module-reference.md` (new)
-- `docs/design/ui-consistency-matrix.md` (new)
-- `docs/design/ui-redesign-progress.md`
-- `docs/design/ui-acceptance-results.md`
-- `docs/progress/current-state.md`
-- `docs/progress/next-session.md`
-- `docs/progress/session-log.md`
-
-## Verification and evidence
-
-Final sequential checks passed: `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test` (60 API/shared + 2 web passed, 0 failed, 3 opt-in PostgreSQL skipped), `npm run build` (29 Next routes) and `git diff --check`. A first parallel test/build attempt conflicted during Prisma Client generation and is excluded from results. See `docs/design/ui-acceptance-results.md` for module-level browser limitations.
-
-Browser review is rendering evidence only. No screenshot file was saved. Chrome showed the existing populated product data, product drawer, reorder empty state and reorder drawer. The corrected desktop filter spacing and two-column drawer/footer were rechecked. A generic request-failure alert was visible behind the reorder drawer during hot reload; cause unknown. No workflow mutations occurred. No viewports other than the browser's current desktop viewport were validated.
+- `npm run typecheck`: passed.
+- `npm run lint`: passed.
+- `npm run format:check`: passed.
+- `npm test`: API/shared 60 passed, 0 failed, 3 opt-in PostgreSQL suites skipped; web 2 passed, 0 failed.
+- `npm run build`: passed; Next.js generated 29 routes.
+- Browser: opened `http://localhost:3000/locations`; it redirected to `http://localhost:3000/login`. This is only evidence of the auth redirect, not location UI acceptance.
+- `git diff --check`: passed after this checkpoint update.
 
 ## Exact next steps
 
-1. Finish the current sequential test run; then run `npm run lint`, `npm run format:check`, `npm run build`, and `git diff --check` sequentially (do not run Prisma generation/build/test concurrently).
-2. If a generated `apps/web/tsconfig.tsbuildinfo` is modified, restore only that generated file to its pre-task state after checks.
-3. Review `/locations`, then split Branches and Warehouses into separate shared DataTable lists and put existing create/edit forms into shared drawers; preserve existing permissions and APIs.
-4. Move Purchase Orders draft creation off the listing into a dedicated document page, standardize its detail page, then standardize Stock Counts and transfer document flows using one reusable line-item presentation component where feasible.
-5. Finish Sales Orders list/create/detail alignment and contextual actions.
-6. Browser-test the Customer reference and every changed route, including 360/390/768/1024/1440/1920 widths. Avoid mutations to existing business records; use explicitly approved disposable QA records for workflow tests.
-7. Update module matrix and acceptance records from actual results. Keep redesign in progress until all requested modules and responsive/functional acceptance pass.
+1. Inspect `git status` and diffs; preserve all uncommitted work. Check latest HEAD and reconcile this checkpoint if it changed.
+2. Obtain/use an approved active development browser session, then validate `/locations` at desktop and 360/390/768/1024 widths. Test only read-only filters first; do not mutate existing business records. Use approved disposable QA records and identities for branch/warehouse create/edit/archive and warehouse grant acceptance.
+3. Validate Phase A and B in an authenticated browser at 360, 390, 768, 1024, 1440 and 1920px. Test filters and pagination read-only first. Use approved disposable QA records for location/count mutations; verify no movement before count post, one movement on post, and balance reconciliation.
+4. Add focused UI component coverage only where the existing web test setup can test actual components; otherwise document why those checks remain manual.
+5. Implement shared document presentation, then dedicated PO and transfer creation/detail flows; continue with sales orders using supported endpoint fields and states. Preserve stock and money logic.
+6. Investigate the reorder-rule generic request failure using an authenticated session and concrete request/response evidence.
+7. Update design docs, current state, next-session and session log. Run typecheck, lint, format, tests, build, then `git diff --check` sequentially. Do not change backend roadmap counts based on UI-only work.

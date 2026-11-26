@@ -1,6 +1,6 @@
 # UI redesign acceptance results
 
-**Updated:** 2026-11-25 (Africa/Lagos)  
+**Updated:** 2026-11-26 (Africa/Lagos)
 **Scope:** Customer reference and selected list/drawer standardization pass. Nine-module definition of done is **not met**.
 
 ## Browser evidence
@@ -11,10 +11,12 @@
 | Products list                                                  | Rendering observed | Chrome displayed one existing product with SKU, category, unit, price, active status and actions.                                                                                                                                                                      |
 | Product create drawer                                          | Rendering observed | Drawer displayed the existing API-backed category and unit choices and supported product fields. No creation or validation submission was attempted. Screenshot showed the standard two-column desktop layout.                                                         |
 | Reorder rules list                                             | Rendering observed | Chrome showed the shared header, filters, shared table headers and 0-record empty state. The corrected toolbar spacing was rechecked. No rule created.                                                                                                                 |
+| Stock Counts source                                           | Code implemented    | `/inventory` now defaults to a paginated count table, with separate balance/movement tabs, a draft drawer, count details, and explicit posting confirmation. No authenticated rendering or workflow mutation was performed. |
+| Branches / Warehouses source                                   | Code implemented    | `/locations` now separates lists into tabs and uses shared table, search/filter toolbar, pagination, drawers, status badges and archive confirmation. Chrome redirected a fresh tab to `/login`, so authenticated rendering was not verified. |
 | Reorder rule drawer                                            | Rendering observed | Final browser view showed the two-column desktop form and Cancel/Create footer. No rule created. A generic request-failure banner was visible behind the drawer during hot reload; cause is unknown.                                                                   |
 | Low stock                                                      | Source-level only  | Uses shared header/table/status in source; populated browser state not reviewed.                                                                                                                                                                                       |
 | Purchase Orders list                                           | Source-level only  | Shared header, table and status badge adopted after the browser review. The draft editor remains inline; latest changes not browser-checked.                                                                                                                           |
-| Transfers, Sales Orders, Stock Counts, Branches and Warehouses | Not accepted       | These workflows were not comprehensively reviewed after changes. Branches/Warehouses and Stock Counts remain unstandardized.                                                                                                                                           |
+| Transfers, Sales Orders and Stock Counts                       | Not accepted       | These workflows were not comprehensively reviewed after changes.                                                                                                                                                                    |
 | Responsive breakpoints                                         | Not run            | No 360/390/768/1024/1440/1920 viewport sweep this pass. Prior 390px customer list measurement remains partial historical evidence only.                                                                                                                                |
 | Create/edit/archive/transaction actions                        | Not run            | No business records changed. No form mutation, archive, transfer lifecycle, count posting, PO workflow or sales workflow was exercised.                                                                                                                                |
 | Accessibility, RBAC, tenant isolation                          | Not run            | No keyboard/screen-reader audit, role-switch test or cross-tenant denial test was performed.                                                                                                                                                                           |
@@ -32,3 +34,14 @@
 | Responsive browser check | Not run.                                                                                                                                                                                          |
 
 No screenshot files were saved; the browser tool displayed inline observations. No migrations, backend behavior, credentials, permissions, or business data were changed. PostgreSQL integration tests, UI-specific regression tests, full workflow tests and the requested responsive sweep remain open.
+
+## Location-slice checks (2026-11-26)
+
+- `npm run typecheck`, `npm run lint`, and `npm run format:check`: passed after both UI slices.
+- `npm test`: 60 API/shared passed, 0 failed; 3 opt-in PostgreSQL suites skipped; 2 web tests passed, 0 failed. No UI component test covers the new toolbar, pagination, or locations page.
+- `npm run build`: passed; 29 routes generated.
+- `git diff --check`: passed after documentation edits.
+- Browser: `/locations` redirected to `/login` in a new Chrome tab. No authenticated location or inventory UI, responsive dimensions, drawer, RBAC behavior, or mutation workflow was verified. No data was changed.
+- Location API source inspection confirms server-side tenant and warehouse-grant scoping and supports branch/warehouse status, search, paging, and branch filters. The UI loads up to the API maximum of 100 branch choices for selectors. Branch search matches names only. The list endpoint does not return branch warehouse counts, so no count is fabricated.
+
+- Stock Count source uses the existing single-product draft API, exact decimal string variance arithmetic, and the existing explicit `/post` endpoint behind a confirmation dialog. No multi-product count is implied. The list API returns rows and total; count, balance, and movement page sizes are sent to the server. Workflow and inventory reconciliation are not browser-verified.

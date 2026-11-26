@@ -2,6 +2,8 @@
 
 **Updated:** 2026-11-25 (Africa/Lagos)
 
+The Customer directory remains the approved UI source of truth. The 2026-11-26 Branches/Warehouses implementation reuses its PageHeader, data-table, status, toolbar, pagination, right-side drawer, and confirmation patterns; it does not change the Customer module itself. Authenticated visual parity and mobile layout still require browser review.
+
 `/customers` is the reference directory. Its presentation is implemented in `apps/web/src/app/customers/page.tsx` and the shared UI components in `apps/web/src/components/ui/`.
 
 ## Reference patterns

@@ -1735,6 +1735,116 @@ p {
   min-height: 34px;
   padding-inline: 11px;
 }
+.ui-pagination label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.ui-pagination select {
+  min-height: 34px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: #fff;
+  padding: 0 8px;
+  color: var(--ui-text);
+}
+.ui-tabs {
+  display: flex;
+  gap: 5px;
+  border-bottom: 1px solid #e8ede9;
+  padding: 0 22px;
+}
+.ui-tabs button {
+  display: inline-flex;
+  min-height: 52px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  padding: 0 12px;
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.ui-tabs button.is-active {
+  border-bottom-color: var(--ui-brand);
+  color: var(--ui-brand);
+}
+.ui-tabs button span {
+  border-radius: 999px;
+  background: #f0f4f1;
+  padding: 2px 7px;
+  color: #56665b;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.ui-drawer-form {
+  display: grid;
+  gap: 10px;
+}
+.ui-drawer-form label {
+  margin-top: 5px;
+  color: #33443a;
+  font-size: 12px;
+  font-weight: 650;
+}
+.ui-drawer-form input,
+.ui-drawer-form select {
+  width: 100%;
+  min-height: var(--ui-control-height);
+  border: 1px solid #d7e0da;
+  border-radius: var(--ui-radius-sm);
+  background: #fff;
+  padding: 0 12px;
+  color: var(--ui-text);
+  font-size: 14px;
+}
+.ui-success-banner {
+  border: 1px solid #cce8d4;
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-positive-bg);
+  padding: 11px 14px;
+  color: var(--ui-positive);
+}
+.ui-inline-help {
+  margin: 0;
+  padding: 14px 20px;
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.ui-document-summary {
+  display: grid;
+  gap: 16px;
+}
+.ui-document-summary dl {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.7fr) minmax(0, 1.3fr);
+  gap: 11px 16px;
+  margin: 0;
+}
+.ui-document-summary dt {
+  color: var(--ui-text-muted);
+  font-size: 12px;
+}
+.ui-document-summary dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: var(--ui-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
 .ui-page .product-editor {
   border-color: var(--ui-border);
   border-radius: var(--ui-radius-lg);

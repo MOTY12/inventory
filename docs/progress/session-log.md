@@ -504,3 +504,19 @@
 - Added `customer-module-reference.md` and `ui-consistency-matrix.md`; updated `ui-redesign-progress.md`, `ui-acceptance-results.md`, current state and next-session checkpoint. The nine-module task remains incomplete; Branches/Warehouses, Stock Counts and Purchase Orders remain largely untouched; responsive and functional acceptance remain open.
 - Final sequential checks: `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test` (60 API/shared and 2 web passed; 0 failed; 3 opt-in PostgreSQL tests skipped), `npm run build` (29 Next routes) and `git diff --check` passed. No UI-specific tests were added. A parallel test/build attempt failed during simultaneous Prisma Client regeneration and is not counted.
 - Generated `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo` were restored from HEAD. No commit/push/deploy, migration, database/data, backend, credential or permission changes.
+
+
+# 2026-11-26 — Branches and Warehouses UI standardization
+
+- Started from `develop` HEAD `ca13680` with a clean worktree; corrected the stale previous checkpoint SHA. Added shared `TableToolbar` and `TablePagination`; rebuilt `/locations` into separate branch/warehouse tabs with existing authenticated endpoints, role-gated management, tables, filters, pagination, create/edit drawers and archive confirmations. No backend/API/schema/auth changes.
+- Inspected `LocationsService`: lists are tenant-scoped and warehouse rows are scoped by membership grants. Branch search only matches name; the list does not include warehouse counts. Selector options are capped to the endpoint's 100-row maximum.
+- Chrome opened `/locations` but redirected to `/login`; browser had no active app session. Authenticated layout, responsive sweep, role/tenant tests and workflow mutations were not run; existing records were not changed.
+- Sequential `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test` (60 API/shared passed; 0 failed; 3 opt-in PostgreSQL suites skipped; 2 web passed), and `npm run build` (29 routes) passed. No UI-specific tests added.
+- Phase A implementation is in source but acceptance is incomplete. Roadmap remains **30/47**. No commit, push, deployment, migration, or database mutation. Next implementation phase: Stock Counts listing-first redesign and overview/movement separation, as recorded in `docs/progress/next-session.md`.
+
+
+# 2026-11-26 — Stock Counts UI standardization
+
+- Continued Phase B by redesigning `/inventory` into a default Stock Counts table plus separate Warehouse Stock Overview and Movement History tabs. Shared `DataTable`, `StatusBadge`, `TablePagination`, `Drawer`, and `ConfirmDialog` are used. Draft create and count detail are drawers; posting remains a separate explicitly confirmed command. Existing endpoints, exact quantity strings, role gate, ledger posting, and balance logic are retained. No record was created or posted.
+- Sequential typecheck, lint, format, default test suite (60 API/shared + 2 web pass, 0 fail, 3 opt-in PostgreSQL skipped), and production build (29 routes) passed. No UI-specific tests exist.
+- Authenticated browser acceptance remains blocked because `/locations` redirected Chrome to sign-in. No responsive, role, tenant, count mutation, idempotency, or balance reconciliation evidence was produced. Roadmap remains 30/47. No commit, push, deployment, schema/database mutation. Next: authenticated acceptance for Phase A/B, then shared PO/transfer/SO document workflows.
