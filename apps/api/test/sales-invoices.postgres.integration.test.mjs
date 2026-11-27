@@ -1079,6 +1079,265 @@ test(
         "10000.0000",
       );
       await t.test(
+        "controlled 80,000 invoice, partial payment, reversal and tax snapshot reconciliation",
+        async () => {
+          const controlledCustomer = await customers.create(
+            owner.context,
+            owner.userId,
+            { name: "Controlled SALES-004 fixture" },
+          );
+          const controlledOrder = await salesOrders.create(
+            owner.context,
+            owner.userId,
+            {
+              customerId: controlledCustomer.id,
+              warehouseId: warehouse.id,
+              currency: "NGN",
+              lines: [
+                { productId: product.id, quantity: "10", unitPrice: "8000" },
+              ],
+            },
+            `controlled-invoice-order-${randomUUID()}`,
+          );
+          await salesOrders.confirm(
+            owner.context,
+            owner.userId,
+            controlledOrder.id,
+            `controlled-invoice-confirm-${randomUUID()}`,
+          );
+          const inventoryBefore = await prisma.inventoryBalance.findUnique({
+            where: {
+              organizationId_warehouseId_productId: {
+                organizationId: owner.context.organizationId,
+                warehouseId: warehouse.id,
+                productId: product.id,
+              },
+            },
+          });
+          const movementsBefore = await prisma.stockMovement.count({
+            where: { organizationId: owner.context.organizationId },
+          });
+          const controlledDraft = await invoices.create(
+            owner.context,
+            owner.userId,
+            {
+              salesOrderId: controlledOrder.id,
+              lines: [{ salesOrderLineId: controlledOrder.lines[0].id }],
+            },
+            `controlled-invoice-create-${randomUUID()}`,
+          );
+          assert.equal(controlledDraft.subtotal.toString(), "80000");
+          assert.equal(controlledDraft.totalAmount.toString(), "80000");
+          const issuedControlled = await invoices.issue(
+            owner.context,
+            owner.userId,
+            controlledDraft.id,
+            `controlled-invoice-issue-${randomUUID()}`,
+          );
+          assert.match(issuedControlled.invoiceNumber, /^INV-\d{6}$/);
+
+          const firstPayment = await invoices.recordPayment(
+            owner.context,
+            owner.userId,
+            {
+              invoiceId: controlledDraft.id,
+              amount: "30000",
+              method: "BANK_TRANSFER",
+              paymentDate: "2026-11-24",
+            },
+            `controlled-invoice-pay-${randomUUID()}`,
+          );
+          let controlled = await invoices.get(
+            owner.context,
+            controlledDraft.id,
+          );
+          assert.equal(controlled.amountPaid.toFixed(4), "30000.0000");
+          assert.equal(controlled.outstandingAmount.toFixed(4), "50000.0000");
+          assert.equal(controlled.paymentStatus, "PARTIALLY_PAID");
+          const secondPayment = await invoices.recordPayment(
+            owner.context,
+            owner.userId,
+            {
+              invoiceId: controlledDraft.id,
+              amount: "50000",
+              method: "BANK_TRANSFER",
+              paymentDate: "2026-11-24",
+            },
+            `controlled-invoice-pay-${randomUUID()}`,
+          );
+          controlled = await invoices.get(owner.context, controlledDraft.id);
+          assert.equal(controlled.amountPaid.toFixed(4), "80000.0000");
+          assert.equal(controlled.outstandingAmount.toFixed(4), "0.0000");
+          assert.equal(controlled.paymentStatus, "PAID");
+          await invoices.reversePayment(
+            owner.context,
+            owner.userId,
+            secondPayment.id,
+            "Controlled fixture bank correction",
+            `controlled-invoice-reversal-${randomUUID()}`,
+          );
+          controlled = await invoices.get(owner.context, controlledDraft.id);
+          assert.equal(controlled.amountPaid.toFixed(4), "30000.0000");
+          assert.equal(controlled.outstandingAmount.toFixed(4), "50000.0000");
+          assert.equal(controlled.paymentStatus, "PARTIALLY_PAID");
+          await invoices.recordPayment(
+            owner.context,
+            owner.userId,
+            {
+              invoiceId: controlledDraft.id,
+              amount: "50000",
+              method: "BANK_TRANSFER",
+              paymentDate: "2026-11-24",
+            },
+            `controlled-invoice-pay-${randomUUID()}`,
+          );
+
+          const controlledPayments = await prisma.customerPayment.findMany({
+            where: {
+              organizationId: owner.context.organizationId,
+              customerId: controlledCustomer.id,
+            },
+            include: { reversal: true },
+          });
+          const minor = (value) => {
+            const [whole, fraction = ""] = value.toString().split(".");
+            return BigInt(whole) * 100n + BigInt((fraction + "00").slice(0, 2));
+          };
+          const grossPayments = controlledPayments.reduce(
+            (total, payment) => total + minor(payment.amount),
+            0n,
+          );
+          const reversedPayments = controlledPayments.reduce(
+            (total, payment) =>
+              total + (payment.reversal ? minor(payment.reversal.amount) : 0n),
+            0n,
+          );
+          assert.equal(grossPayments, 13000000n);
+          assert.equal(reversedPayments, 5000000n);
+          assert.equal(controlledPayments.length, 3);
+          assert.ok(
+            controlledPayments.some(
+              (payment) => payment.id === firstPayment.id,
+            ),
+          );
+          controlled = await invoices.get(owner.context, controlledDraft.id);
+          assert.equal(controlled.amountPaid.toFixed(4), "80000.0000");
+          assert.equal(controlled.outstandingAmount.toFixed(4), "0.0000");
+          assert.equal(controlled.paymentStatus, "PAID");
+          const controlledSummary = await invoices.customerSummary(
+            owner.context,
+            controlledCustomer.id,
+          );
+          assert.equal(controlledSummary[0].invoiced, "80000.0000");
+          assert.equal(controlledSummary[0].paid, "80000.0000");
+          assert.equal(controlledSummary[0].outstanding, "0.0000");
+          assert.equal(
+            await prisma.stockMovement.count({
+              where: { organizationId: owner.context.organizationId },
+            }),
+            movementsBefore,
+          );
+          const inventoryAfter = await prisma.inventoryBalance.findUnique({
+            where: {
+              organizationId_warehouseId_productId: {
+                organizationId: owner.context.organizationId,
+                warehouseId: warehouse.id,
+                productId: product.id,
+              },
+            },
+          });
+          assert.equal(
+            inventoryAfter.onHand.toString(),
+            inventoryBefore.onHand.toString(),
+          );
+          assert.equal(
+            inventoryAfter.reserved.toString(),
+            inventoryBefore.reserved.toString(),
+          );
+
+          const taxRate = await invoices.createTaxRate(
+            owner.context,
+            owner.userId,
+            {
+              name: "Controlled QA tax",
+              code: `QA-${randomUUID().slice(0, 8)}`,
+              rate: "10",
+            },
+          );
+          const taxCustomer = await customers.create(
+            owner.context,
+            owner.userId,
+            { name: "Controlled tax snapshot fixture" },
+          );
+          const taxOrder = await salesOrders.create(
+            owner.context,
+            owner.userId,
+            {
+              customerId: taxCustomer.id,
+              warehouseId: warehouse.id,
+              currency: "NGN",
+              lines: [
+                { productId: product.id, quantity: "10", unitPrice: "8000" },
+              ],
+            },
+            `controlled-tax-order-${randomUUID()}`,
+          );
+          await salesOrders.confirm(
+            owner.context,
+            owner.userId,
+            taxOrder.id,
+            `controlled-tax-confirm-${randomUUID()}`,
+          );
+          const taxDraft = await invoices.create(
+            owner.context,
+            owner.userId,
+            {
+              salesOrderId: taxOrder.id,
+              lines: [
+                {
+                  salesOrderLineId: taxOrder.lines[0].id,
+                  discountAmount: "5000",
+                  taxRateId: taxRate.id,
+                },
+              ],
+            },
+            `controlled-tax-invoice-${randomUUID()}`,
+          );
+          assert.equal(taxDraft.subtotal.toString(), "80000");
+          assert.equal(taxDraft.discountAmount.toString(), "5000");
+          assert.equal(taxDraft.taxAmount.toString(), "7500");
+          assert.equal(taxDraft.totalAmount.toString(), "82500");
+          const taxIssued = await invoices.issue(
+            owner.context,
+            owner.userId,
+            taxDraft.id,
+            `controlled-tax-issue-${randomUUID()}`,
+          );
+          const pdf = await invoices.pdf(owner.context, taxDraft.id);
+          const pdfText = pdf.content.toString("ascii");
+          assert.ok(pdfText.includes(taxIssued.invoiceNumber));
+          assert.ok(pdfText.includes("Total: 82500.0000 NGN"));
+          await invoices.updateTaxRate(
+            owner.context,
+            owner.userId,
+            taxRate.id,
+            {
+              isActive: false,
+            },
+          );
+          const taxSnapshotAfterEdit = await invoices.get(
+            owner.context,
+            taxDraft.id,
+          );
+          assert.equal(
+            taxSnapshotAfterEdit.lines[0].taxRateSnapshot.toString(),
+            "10",
+          );
+          assert.equal(taxSnapshotAfterEdit.taxAmount.toString(), "7500");
+          assert.equal(taxSnapshotAfterEdit.totalAmount.toString(), "82500");
+        },
+      );
+      await t.test(
         "invoice changes and payment correction are audited",
         async () => {
           const events = await invoices.invoiceAudit(owner.context, draft.id);

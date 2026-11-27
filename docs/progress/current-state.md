@@ -4,9 +4,17 @@
 
 ## Repository and roadmap
 
-- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; verified base HEAD `9f224ee` (`update the purchase`). The Phase C continuation is committed in that base. Phase D UI changes in this session are uncommitted; no unrelated edits were overwritten.
+- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; verified HEAD `13157b6` (`UPdate the payment redisign`). This session's focused SALES-004 source/test/documentation changes are uncommitted. No unrelated work was overwritten.
 - Roadmap remains **30/47**. SALES-004, REPORT-002 and QUALITY-001 remain IN_PROGRESS. No task became complete; fixture code and mocked verification do not meet operational acceptance.
 - No commit, push, deployment, migration application, database reset, deletion, or credential change occurred.
+
+## SALES-004 acceptance continuation (2026-11-27)
+
+- Added stable invoice-creation idempotency key behavior across retries; a changed payload receives a new key. Added stale-organization/request guards to invoice creation and invoice detail/audit/tax-rate reads.
+- Added an isolated PostgreSQL regression scenario to the SALES-004 suite. It verifies partial then full payment, reversal and replacement payment; reconciled invoice/customer balances; tax rounding and issue-time snapshot stability; PDF number/total content; and unchanged inventory ledger and warehouse balance. Explicit suite result: **4 passed, 0 failed, 0 skipped**.
+- Web idempotency tests: 2 passed. Full `npm run typecheck`, lint, format check, `npm test` (62 API/shared + 4 web; 3 opt-in PostgreSQL suites skipped), `npm run qa:test` (18/18), and production build (31 routes) passed. The SALES-004 opt-in suite was separately run and passed; skipped default-run suites are not claimed as passes.
+- Docker Compose PostgreSQL, Redis and S3Mock are healthy; read-only Prisma status reports 22 migrations and schema up to date. No migration was needed or applied.
+- Authenticated Chrome displayed existing business invoice/order data. The invoice creation page showed no eligible order. QA seed safety check refused because `NODE_ENV`/QA values are missing. No existing record was changed; no invoice/payment browser flow or browser PDF download was completed. SALES-004 remains IN_PROGRESS and total remains **30/47**.
 
 ## Phase D finance UI implementation (2026-11-27)
 

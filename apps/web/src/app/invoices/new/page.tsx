@@ -1,9 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "../../../features/auth/session-provider";
+import {
+  commandKeyFor,
+  type CommandKey,
+} from "../../../features/sales/idempotency";
 
 type OrderLine = {
   id: string;
@@ -71,39 +82,68 @@ export default function NewInvoicePage() {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const requestGeneration = useRef(0);
+  const organizationIdRef = useRef(organization?.id);
+  const createKey = useRef<CommandKey | null>(null);
 
   const load = useCallback(async () => {
-    if (!organization) return;
+    const generation = ++requestGeneration.current;
+    if (!organization) {
+      setOrders([]);
+      setTaxRates([]);
+      setLoading(false);
+      return;
+    }
+    const organizationId = organization.id;
     setLoading(true);
     try {
       const [eligible, rates] = await Promise.all([
         authenticatedRequest<Order[]>(`${root}/invoices/eligible-orders`),
         authenticatedRequest<TaxRate[]>(`${root}/tax-rates`),
       ]);
-      setOrders(eligible);
       const requestedOrderId = new URLSearchParams(window.location.search).get(
         "salesOrderId",
       );
       if (
-        requestedOrderId &&
-        eligible.some((item) => item.id === requestedOrderId)
+        generation !== requestGeneration.current ||
+        organizationIdRef.current !== organizationId
       )
-        setOrderId(requestedOrderId);
+        return;
+      setOrderId(
+        requestedOrderId &&
+          eligible.some((item) => item.id === requestedOrderId)
+          ? requestedOrderId
+          : "",
+      );
+      setOrders(eligible);
       setTaxRates(rates.filter((rate) => rate.isActive));
       setError("");
     } catch (cause) {
+      if (
+        generation !== requestGeneration.current ||
+        organizationIdRef.current !== organizationId
+      )
+        return;
       setError(
         cause instanceof Error
           ? cause.message
           : "Invoice setup could not be loaded.",
       );
     } finally {
-      setLoading(false);
+      if (
+        generation === requestGeneration.current &&
+        organizationIdRef.current === organizationId
+      )
+        setLoading(false);
     }
   }, [authenticatedRequest, organization]);
   useEffect(() => {
+    organizationIdRef.current = organization?.id;
     void Promise.resolve().then(load);
-  }, [load]);
+    return () => {
+      requestGeneration.current += 1;
+    };
+  }, [load, organization?.id]);
 
   const order = orders.find((item) => item.id === orderId);
   const preview = useMemo(() => {
@@ -141,24 +181,31 @@ export default function NewInvoicePage() {
   async function create(event: FormEvent) {
     event.preventDefault();
     if (!order) return;
+    if (busy) return;
     setBusy(true);
     setError("");
     try {
+      const payload = {
+        salesOrderId: order.id,
+        dueDate: dueDate || undefined,
+        notes: notes.trim() || undefined,
+        lines: order.lines.map((line) => ({
+          salesOrderLineId: line.id,
+          discountAmount: discounts[line.id] || "0",
+          taxRateId: rateIds[line.id] || undefined,
+        })),
+      };
+      const command = commandKeyFor(createKey.current, payload, () =>
+        crypto.randomUUID(),
+      );
+      createKey.current = command;
       const invoice = await authenticatedRequest<{ id: string }>(
         `${root}/invoices`,
-        {
-          salesOrderId: order.id,
-          dueDate: dueDate || undefined,
-          notes: notes.trim() || undefined,
-          lines: order.lines.map((line) => ({
-            salesOrderLineId: line.id,
-            discountAmount: discounts[line.id] || "0",
-            taxRateId: rateIds[line.id] || undefined,
-          })),
-        },
+        payload,
         "POST",
-        { "Idempotency-Key": crypto.randomUUID() },
+        { "Idempotency-Key": command.key },
       );
+      createKey.current = null;
       router.push(`/invoices/${invoice.id}`);
     } catch (cause) {
       setError(

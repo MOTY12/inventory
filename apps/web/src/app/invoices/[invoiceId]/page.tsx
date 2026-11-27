@@ -91,12 +91,22 @@ export default function InvoiceDetailPage() {
   const [paymentDate, setPaymentDate] = useState(today);
   const [paymentNotes, setPaymentNotes] = useState("");
   const paymentKey = useRef("");
+  const requestGeneration = useRef(0);
+  const organizationIdRef = useRef(organization?.id);
   const canManage = ["OWNER", "ADMIN", "FINANCE"].includes(
     organization?.role ?? "",
   );
 
   const load = useCallback(async () => {
-    if (!organization || !params.invoiceId) return;
+    const generation = ++requestGeneration.current;
+    if (!organization?.id || !params.invoiceId) {
+      setInvoice(null);
+      setAudit([]);
+      setTaxRates([]);
+      setLoading(false);
+      return;
+    }
+    const organizationId = organization.id;
     setLoading(true);
     try {
       const [result, events] = await Promise.all([
@@ -105,6 +115,15 @@ export default function InvoiceDetailPage() {
           `${root}/invoices/${params.invoiceId}/audit`,
         ),
       ]);
+      const rates =
+        result.status === "DRAFT"
+          ? await authenticatedRequest<TaxRate[]>(`${root}/tax-rates`)
+          : [];
+      if (
+        generation !== requestGeneration.current ||
+        organizationIdRef.current !== organizationId
+      )
+        return;
       setInvoice(result);
       setAudit(events);
       setDraftDueDate(result.dueDate?.slice(0, 10) ?? "");
@@ -125,24 +144,32 @@ export default function InvoiceDetailPage() {
           ]),
         ),
       );
-      if (result.status === "DRAFT") {
-        const rates = await authenticatedRequest<TaxRate[]>(
-          `${root}/tax-rates`,
-        );
-        setTaxRates(rates.filter((rate) => rate.isActive));
-      }
+      setTaxRates(rates.filter((rate) => rate.isActive));
       setError("");
     } catch (cause) {
+      if (
+        generation !== requestGeneration.current ||
+        organizationIdRef.current !== organizationId
+      )
+        return;
       setError(
         cause instanceof Error ? cause.message : "Invoice could not be loaded.",
       );
     } finally {
-      setLoading(false);
+      if (
+        generation === requestGeneration.current &&
+        organizationIdRef.current === organizationId
+      )
+        setLoading(false);
     }
   }, [authenticatedRequest, organization, params.invoiceId]);
   useEffect(() => {
+    organizationIdRef.current = organization?.id;
     void Promise.resolve().then(load);
-  }, [load]);
+    return () => {
+      requestGeneration.current += 1;
+    };
+  }, [load, organization?.id]);
 
   async function issue() {
     if (

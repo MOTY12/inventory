@@ -81,3 +81,9 @@ No screenshot files were saved; the browser tool displayed inline observations. 
 - Payment listing and new payment detail/reversal source were checked against the existing controller contract. No receipt/reversal was created, and no authenticated detail or reversal behavior was exercised.
 - Tax-rate source uses shared listing/drawer/confirmation components. No tax record was created/changed; issued invoice snapshot preservation was not operationally tested.
 - Typecheck, lint, format check, default tests (62 API/shared + 2 web pass; 3 opt-in PostgreSQL suites skipped), QA tests (18/18), production build (31 routes), and diff check passed. Browser/responsive acceptance, live DB and role/tenant denial remain pending.
+
+# 2026-11-27 — SALES-004 browser attempt
+
+- Authenticated Chrome opened `/sales-orders`, `/invoices`, an existing invoice detail, and `/invoices/new`. Existing business data loaded from the API; the existing invoice showed paid status, an 8,000 NGN total, payment and audit history. Invoice creation showed **No eligible sales orders** because the only visible confirmed order was already invoiced.
+- No persistent record was created or changed. No payment/reversal was submitted, and no PDF from existing business records was downloaded. Browser invoice/payment lifecycle, retry, PDF file capture, responsive behavior and denial cases remain unverified.
+- QA seed was attempted only after checking config and safely refused before mutation because `NODE_ENV` was absent (QA org and account values are also missing). SALES-004 remains IN_PROGRESS; roadmap count stays 30/47.
