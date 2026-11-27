@@ -81,6 +81,14 @@ export default function NewInvoicePage() {
         authenticatedRequest<TaxRate[]>(`${root}/tax-rates`),
       ]);
       setOrders(eligible);
+      const requestedOrderId = new URLSearchParams(window.location.search).get(
+        "salesOrderId",
+      );
+      if (
+        requestedOrderId &&
+        eligible.some((item) => item.id === requestedOrderId)
+      )
+        setOrderId(requestedOrderId);
       setTaxRates(rates.filter((rate) => rate.isActive));
       setError("");
     } catch (cause) {

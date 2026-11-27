@@ -28,3 +28,7 @@ On 2026-11-25, Chrome displayed a populated `/customers` route and its Add Custo
 ## Document workflow extension (2026-11-26)
 
 The customer reference remains unchanged. Transaction pages now use an adjacent shared document presentation layer in `apps/web/src/components/documents/`: `DocumentHeader`, `DocumentLayout`, `DocumentSection`, `DocumentLineItems`, `DocumentSummary`, `DocumentActions`, and `ProductSelector`. Product search is debounced, paginated, keyboard-navigable, and queries the active tenant's catalog. This extension adopts the existing UI component and token system rather than changing the customer reference. Authenticated browser and responsive parity have not been verified in this pass.
+
+## Transaction-detail extension (2026-11-26)
+
+Phase C adds `DocumentInformation`, `DocumentDetailTable`, `DocumentActionPanel`, `DocumentActivity`, and `EntitySelector` to the existing document layer. PO, transfer and SO details now use shared metadata, summary/table or activity patterns. Entity searches are debounced, paginated, keyboard-navigable and use the existing tenant-scoped APIs; warehouse results remain subject to membership grants. PO receipt, transfer dispatch/receipt, and SO pick/fulfillment controls now use explanatory action panels. This records implementation only. The browser is unavailable, so responsive, keyboard, focus, permission and operational parity are not accepted yet.

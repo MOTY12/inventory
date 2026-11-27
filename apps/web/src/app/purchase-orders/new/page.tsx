@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "../../../features/auth/session-provider";
 import {
@@ -18,8 +18,11 @@ import {
   ProductSelector,
   type SelectableProduct,
 } from "../../../components/documents/product-selector";
+import {
+  EntitySelector,
+  type SelectableEntity,
+} from "../../../components/documents/entity-selector";
 
-type Option = { id: string; name: string };
 type Product = SelectableProduct & {
   unitConversions: NonNullable<SelectableProduct["unitConversions"]>;
 };
@@ -30,15 +33,11 @@ type Line = {
   quantity: string;
   unitCost: string;
 };
-type Page<T> = { data: T[] };
-
 export default function NewPurchaseOrderPage() {
   const router = useRouter();
   const { organization, authenticatedRequest } = useSession();
-  const [suppliers, setSuppliers] = useState<Option[]>([]);
-  const [warehouses, setWarehouses] = useState<Option[]>([]);
-  const [supplierId, setSupplierId] = useState("");
-  const [warehouseId, setWarehouseId] = useState("");
+  const [supplier, setSupplier] = useState<SelectableEntity | null>(null);
+  const [warehouse, setWarehouse] = useState<SelectableEntity | null>(null);
   const [currency, setCurrency] = useState("NGN");
   const [expectedDeliveryAt, setExpectedDeliveryAt] = useState("");
   const [lines, setLines] = useState<Line[]>([
@@ -50,38 +49,8 @@ export default function NewPurchaseOrderPage() {
       unitCost: "0",
     },
   ]);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!organization) return;
-    void (async () => {
-      setLoading(true);
-      try {
-        const [s, w] = await Promise.all([
-          authenticatedRequest<Page<Option>>(
-            "/organizations/current/procurement/suppliers?page=1&page_size=100&status=ACTIVE",
-          ),
-          authenticatedRequest<Page<Option>>(
-            "/organizations/current/warehouses?page=1&page_size=100&status=ACTIVE",
-          ),
-        ]);
-        setSuppliers(s.data);
-        setWarehouses(w.data);
-        setSupplierId(s.data[0]?.id ?? "");
-        setWarehouseId(w.data[0]?.id ?? "");
-      } catch (cause) {
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : "Order options could not be loaded.",
-        );
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [authenticatedRequest, organization]);
 
   const amount = useMemo(
     () =>
@@ -99,14 +68,22 @@ export default function NewPurchaseOrderPage() {
   }
   async function save(event: React.FormEvent) {
     event.preventDefault();
+    if (!supplier || !warehouse) {
+      setError("Select a supplier and receiving warehouse before saving.");
+      return;
+    }
+    if (!lines.length || lines.some((line) => !line.product || !line.unitId)) {
+      setError("Add at least one product and unit before saving.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
       const created = await authenticatedRequest<{ id: string }>(
         "/organizations/current/procurement/purchase-orders",
         {
-          supplierId,
-          warehouseId,
+          supplierId: supplier!.id,
+          warehouseId: warehouse!.id,
           currency,
           expectedDeliveryAt: expectedDeliveryAt || undefined,
           lines: lines.map((line) => ({
@@ -131,8 +108,8 @@ export default function NewPurchaseOrderPage() {
     organization?.role ?? "",
   );
   const valid =
-    supplierId &&
-    warehouseId &&
+    supplier &&
+    warehouse &&
     /^[A-Z]{3}$/.test(currency) &&
     lines.length > 0 &&
     lines.every(
@@ -160,11 +137,7 @@ export default function NewPurchaseOrderPage() {
           {error}
         </p>
       ) : null}
-      {loading ? (
-        <section className="document-section">
-          <p>Loading suppliers and warehouses…</p>
-        </section>
-      ) : !canWrite ? (
+      {!canWrite ? (
         <section className="document-section">
           <p>Your role cannot create purchase orders.</p>
         </section>
@@ -189,48 +162,23 @@ export default function NewPurchaseOrderPage() {
               description="Choose the supplier and receiving warehouse."
             >
               <div className="document-fields">
-                <label>
-                  Supplier
-                  <select
-                    required
-                    value={supplierId}
-                    onChange={(event) => setSupplierId(event.target.value)}
-                  >
-                    <option value="">Select supplier</option>
-                    {suppliers.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Receiving warehouse
-                  <select
-                    required
-                    value={warehouseId}
-                    onChange={(event) => setWarehouseId(event.target.value)}
-                  >
-                    <option value="">Select warehouse</option>
-                    {warehouses.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <EntitySelector
+                  endpoint="/organizations/current/procurement/suppliers"
+                  label="Supplier"
+                  value={supplier}
+                  onSelect={setSupplier}
+                  required
+                  searchHint="Search suppliers by name, contact or email"
+                />
+                <EntitySelector
+                  endpoint="/organizations/current/warehouses"
+                  label="Receiving warehouse"
+                  value={warehouse}
+                  onSelect={setWarehouse}
+                  required
+                  searchHint="Search accessible warehouses"
+                />
               </div>
-              {!suppliers.length ? (
-                <p className="panel-message">
-                  Create an active supplier before starting an order.
-                </p>
-              ) : null}
-              {!warehouses.length ? (
-                <p className="panel-message">
-                  Create or grant access to a warehouse before starting an
-                  order.
-                </p>
-              ) : null}
             </DocumentSection>
             <DocumentSection title="Order information">
               <div className="document-fields">
@@ -383,7 +331,7 @@ export default function NewPurchaseOrderPage() {
               <button
                 className="button button-primary"
                 type="submit"
-                disabled={busy || loading || !valid}
+                disabled={busy || !valid}
               >
                 {busy ? "Saving…" : "Save draft"}
               </button>

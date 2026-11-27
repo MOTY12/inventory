@@ -448,7 +448,8 @@ export class ReportingService {
         quantityOut: movement.quantityDelta.isNegative()
           ? movement.quantityDelta.abs()
           : new Prisma.Decimal(0),
-        actor: movement.actorMembership.user.email,
+        // The required membership/user relation is inferred as `never` by Prisma's generated types here.
+        actor: (movement.actorMembership.user as { email: string }).email,
         relatedTransaction: {
           documentType: movement.documentType,
           documentId: movement.documentId,

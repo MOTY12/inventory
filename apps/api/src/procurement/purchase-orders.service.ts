@@ -280,8 +280,10 @@ export class PurchaseOrdersService {
                 unit: { select: { code: true } },
               },
             },
+            stockMovement: { select: { id: true } },
           },
         },
+        receivedBy: { include: { user: { select: { email: true } } } },
       },
     });
   }

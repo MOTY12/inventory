@@ -18,6 +18,11 @@ import {
 } from "../../../features/procurement/decimal";
 import { useSession } from "../../../features/auth/session-provider";
 import { DocumentHeader } from "../../../components/documents/document-header";
+import { DocumentInformation } from "../../../components/documents/document-information";
+import { DocumentActionPanel } from "../../../components/documents/document-action-panel";
+import { DocumentActivity } from "../../../components/documents/document-activity";
+import { DocumentSummary } from "../../../components/documents/document-summary";
+import { DocumentLayout } from "../../../components/documents/document-layout";
 
 type Order = {
   id: string;
@@ -133,6 +138,9 @@ export default function SalesOrderDetailPage() {
   const canWrite = ["OWNER", "ADMIN", "MANAGER", "SALES"].includes(
     organization?.role ?? "",
   );
+  const canCreateInvoice = ["OWNER", "ADMIN", "FINANCE"].includes(
+    organization?.role ?? "",
+  );
   const hasOutstandingPick =
     order?.lines.some(
       (line) =>
@@ -156,6 +164,7 @@ export default function SalesOrderDetailPage() {
     setOrder(null);
     pickQuantitiesRef.current = {};
     setPickQuantities({});
+    const requestedOrganizationId = organization.id;
     try {
       const [result, events, posted, confirmedPicks] = await Promise.all([
         authenticatedRequest<Order>(`${endpoint}/${id}`),
@@ -163,21 +172,33 @@ export default function SalesOrderDetailPage() {
         authenticatedRequest<Fulfillment[]>(`${endpoint}/${id}/fulfillments`),
         authenticatedRequest<Pick[]>(`${endpoint}/${id}/picks`),
       ]);
-      if (version !== requestVersion.current) return;
+      if (
+        version !== requestVersion.current ||
+        organizationIdRef.current !== requestedOrganizationId
+      )
+        return;
       setOrder(result);
       setAudit(events);
       setFulfillments(posted);
       setPicks(confirmedPicks);
       setError("");
     } catch (cause) {
-      if (version !== requestVersion.current) return;
+      if (
+        version !== requestVersion.current ||
+        organizationIdRef.current !== requestedOrganizationId
+      )
+        return;
       setError(
         cause instanceof Error
           ? cause.message
           : "Sales order could not be loaded.",
       );
     } finally {
-      if (version === requestVersion.current) setLoading(false);
+      if (
+        version === requestVersion.current &&
+        organizationIdRef.current === requestedOrganizationId
+      )
+        setLoading(false);
     }
   }, [authenticatedRequest, id, organization]);
   useEffect(() => {
@@ -350,6 +371,12 @@ export default function SalesOrderDetailPage() {
       salesOrderLineId,
       quantity,
     }));
+    if (
+      !window.confirm(
+        `Confirm picking ${lines.length} order line${lines.length === 1 ? "" : "s"}? Picking records handled quantities without changing on-hand stock.`,
+      )
+    )
+      return;
     setBusy(true);
     setError("");
     setNotice("");
@@ -495,6 +522,18 @@ export default function SalesOrderDetailPage() {
                 Edit draft
               </Link>
             )}
+            {order &&
+              canCreateInvoice &&
+              ["CONFIRMED", "PARTIALLY_FULFILLED", "FULFILLED"].includes(
+                order.status,
+              ) && (
+                <Link
+                  className="button button-secondary"
+                  href={`/invoices/new?salesOrderId=${encodeURIComponent(order.id)}`}
+                >
+                  Create invoice
+                </Link>
+              )}
             {order?.status === "DRAFT" && canWrite && (
               <button
                 className="button button-primary"
@@ -559,34 +598,44 @@ export default function SalesOrderDetailPage() {
         </section>
       ) : (
         <>
-          <section className="metric-grid order-summary">
-            <article className="metric-card">
-              <span>Status</span>
-              <strong>{order.status.replaceAll("_", " ")}</strong>
-            </article>
-            <article className="metric-card">
-              <span>Customer</span>
-              <strong>{order.customer.name}</strong>
-              <small>
-                {order.customer.email ??
-                  order.customer.phone ??
-                  "No contact details"}
-              </small>
-            </article>
-            <article className="metric-card">
-              <span>Warehouse</span>
-              <strong>{order.warehouse.name}</strong>
-            </article>
-            <article className="metric-card">
-              <span>Order total</span>
-              <strong>
-                {order.currency} {order.total}
-              </strong>
-              <small>
-                Order date {new Date(order.orderDate).toLocaleDateString()}
-              </small>
-            </article>
-          </section>
+          <DocumentLayout
+            aside={
+              <DocumentSummary
+                rows={[
+                  { label: "Currency", value: order.currency },
+                  {
+                    label: "Order date",
+                    value: new Date(order.orderDate).toLocaleDateString(),
+                  },
+                  { label: "Lines", value: order.lines.length },
+                ]}
+                total={{
+                  label: "Order total",
+                  value: `${order.currency} ${order.total}`,
+                }}
+              />
+            }
+          >
+            <DocumentInformation
+              title="Customer and fulfillment"
+              fields={[
+                { label: "Customer", value: order.customer.name },
+                {
+                  label: "Customer contact",
+                  value: order.customer.email ?? order.customer.phone,
+                },
+                { label: "Fulfillment warehouse", value: order.warehouse.name },
+                {
+                  label: "Expected fulfillment",
+                  value: order.expectedFulfillmentAt
+                    ? new Date(order.expectedFulfillmentAt).toLocaleDateString()
+                    : "Not specified",
+                },
+                { label: "Status", value: order.status.replaceAll("_", " ") },
+                { label: "Notes", value: order.notes },
+              ]}
+            />
+          </DocumentLayout>
           {order.status === "DRAFT" && (
             <p className="info-banner">
               This is a draft. Stock is not reserved until the order is
@@ -616,7 +665,7 @@ export default function SalesOrderDetailPage() {
               </div>
             </div>
             <div className="product-table-wrap">
-              <table className="data-table">
+              <table className="ui-data-table">
                 <thead>
                   <tr>
                     <th>Product</th>
@@ -767,7 +816,11 @@ export default function SalesOrderDetailPage() {
           </section>
           {canWrite &&
             ["CONFIRMED", "PARTIALLY_FULFILLED"].includes(order.status) && (
-              <div className="order-actions">
+              <DocumentActionPanel
+                title="Picking and fulfillment"
+                description="Confirm what was picked from reserved stock, then post only the picked quantities to fulfill the order."
+                busy={busy}
+              >
                 <BarcodeScanner
                   onScan={addScannedPick}
                   label="Scan products to add to this pick"
@@ -794,43 +847,41 @@ export default function SalesOrderDetailPage() {
                 >
                   Post selected fulfillment
                 </button>
-              </div>
+              </DocumentActionPanel>
             )}
-          <div className="dashboard-columns order-history-columns">
-            <section className="panel">
-              <h2>Status history</h2>
-              <ol className="timeline">
-                {order.statusHistory.map((item, index) => (
-                  <li key={`${item.toStatus}-${index}`}>
-                    <strong>{item.toStatus.replaceAll("_", " ")}</strong>
-                    <small>
-                      {item.fromStatus
-                        ? `From ${item.fromStatus.replaceAll("_", " ")} · `
-                        : "Created · "}
-                      {new Date(item.occurredAt).toLocaleString()}
-                    </small>
-                  </li>
-                ))}
-              </ol>
-            </section>
-            <section className="panel">
-              <h2>Audit activity</h2>
-              {audit.length ? (
-                <ol className="timeline">
-                  {audit.map((event, index) => (
-                    <li key={`${event.action}-${index}`}>
-                      <strong>{event.action.replaceAll("_", " ")}</strong>
-                      <small>
-                        {new Date(event.occurredAt).toLocaleString()}
-                      </small>
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="panel-message">No audit events recorded.</p>
-              )}
-            </section>
-          </div>
+          <DocumentActivity
+            title="Order activity"
+            entries={[
+              ...order.statusHistory.map((item, index) => ({
+                id: `status-${index}`,
+                title: `${item.fromStatus ? `${item.fromStatus.replaceAll("_", " ")} → ` : "Created · "}${item.toStatus.replaceAll("_", " ")}`,
+                occurredAt: item.occurredAt,
+              })),
+              ...audit.map((event, index) => ({
+                id: `audit-${index}`,
+                title: event.action.replaceAll("_", " "),
+                occurredAt: event.occurredAt,
+              })),
+              ...picks.map((pick) => ({
+                id: `pick-${pick.id}`,
+                title: `Picked by ${pick.pickedBy.user.email}`,
+                occurredAt: pick.pickedAt,
+                description: pick.lines
+                  .map(
+                    (line) =>
+                      `${line.salesOrderLine.productName} ${line.quantity} ${line.salesOrderLine.unitCode}`,
+                  )
+                  .join(" · "),
+              })),
+              ...fulfillments.map((fulfillment) => ({
+                id: `fulfillment-${fulfillment.id}`,
+                title: `Fulfilled by ${fulfillment.postedBy.user.email}`,
+                occurredAt: fulfillment.postedAt,
+                description: `${fulfillment.lines.map((line) => `${line.salesOrderLine.productName} ${line.quantity} ${line.salesOrderLine.unitCode}`).join(" · ")}${fulfillment.note ? ` · ${fulfillment.note}` : ""}`,
+              })),
+            ].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))}
+            emptyMessage="No order activity has been recorded."
+          />
           <section className="panel">
             <h2>Picking history</h2>
             {picks.length ? (

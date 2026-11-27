@@ -98,7 +98,10 @@ export class AuthService {
       if (current.revokedAt) {
         return { kind: "reuse" as const, familyId: current.familyId };
       }
-      if (current.expiresAt <= now || current.user.status !== "ACTIVE") {
+      // Prisma 7 currently infers this included relation as `never` in noEmit typechecks.
+      // The schema relation is non-null and this query includes its `status` scalar.
+      const currentUser = current.user as { status: string };
+      if (current.expiresAt <= now || currentUser.status !== "ACTIVE") {
         return { kind: "invalid" as const };
       }
 

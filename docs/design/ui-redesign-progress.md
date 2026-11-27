@@ -53,3 +53,16 @@
 - Added optional product-specific filtering on warehouse balances with tenant/warehouse scoping and two service regression tests. No schema or migration change.
 - Source implementation complete for the C1 base and C2/C3 draft-route slice. C2/C3 detail/receiving/dispatch experiences and C4 sales detail/picking/fulfillment consistency are partial. C5 is blocked on authenticated browser/services; no route was browser validated. No 360–1920px sweep and no authenticated operational transaction was performed. Backend roadmap remains 30/47.
 - `npm test`: 62 API/shared + 2 web pass, 3 opt-in PostgreSQL tests skipped; `npm run qa:test`: 18 pass; full typecheck, lint, format check, and build pass. No focused React interaction tests exist.
+
+## Phase C detail and selector implementation update (2026-11-26)
+
+This entry supersedes the Phase C open-source gaps above; it does not supersede their browser/operational acceptance limitations.
+
+- **Purchase orders:** detail now uses shared information, summary, table, and activity components; receipt endpoint data renders actual receipt quantities, actors and movement presence. Receiving supports partial/full posting, receive-all outstanding, barcode scans, confirmation, refresh and recoverable errors.
+- **Transfers:** detail now uses shared information/table/action/activity patterns; exact decimal sums show requested, dispatched, received and outstanding values. Submit, dispatch, partial receipt and cancel actions are state/role gated and confirmed; dispatch uses a stable key and receive retains a retry key for the same payload.
+- **Sales orders:** detail uses shared information/summary/activity. Existing ordered/reserved/picked/fulfilled details, barcode picking, partial fulfillment and transaction APIs remain. Pick/fulfillment confirmation panels explain stock effects. Finance-capable roles see the existing eligible invoice workflow with order preselection.
+- **Search selectors:** `EntitySelector` now replaces the bounded customer/supplier/warehouse lists on transaction create/edit forms; the existing product selector remains in use. Server filtering/pagination, keyboard selection, loading/empty/error states, clearing, tenant endpoints and warehouse grants are retained.
+- **Async consistency:** detail loads guard request generation and organization identity; selector searches use generation cancellation; transfer source switches keep existing availability generation guards. Browser race tests remain pending.
+- **Verification:** full typecheck, lint and formatting passed; default suite passed 62 API/shared + 2 web, with 3 opt-in PostgreSQL suites skipped; QA tests 18/18; production build passed with 31 routes; Prisma schema validation and `git diff --check` passed. Three generated Prisma relation inference errors were resolved with schema-matching type annotations in auth/reporting; review those on Prisma upgrades.
+- **Acceptance:** Docker app not found, local PostgreSQL not responding, and ports 3000/4000 refused connections. No authenticated browser, responsive sweep, migration check, live API/DB operation, ledger reconciliation or retry scenario was performed. No component-interaction harness was present.
+- Source implementation is substantially complete; Phase C is not fully accepted. Roadmap remains 30/47.

@@ -26,8 +26,11 @@ import {
   ProductSelector,
   type SelectableProduct,
 } from "../../../components/documents/product-selector";
+import {
+  EntitySelector,
+  type SelectableEntity,
+} from "../../../components/documents/entity-selector";
 
-type Option = { id: string; name: string };
 type UnitOption = {
   id: string;
   code: string;
@@ -89,12 +92,10 @@ export default function NewSalesOrderPage() {
   useLayoutEffect(() => {
     organizationIdRef.current = organization?.id ?? "";
   }, [organization?.id]);
-  const [customers, setCustomers] = useState<Option[]>([]);
-  const [warehouses, setWarehouses] = useState<Option[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [balances, setBalances] = useState<Record<string, Balance>>({});
-  const [customerId, setCustomerId] = useState("");
-  const [warehouseId, setWarehouseId] = useState("");
+  const [customer, setCustomer] = useState<SelectableEntity | null>(null);
+  const [warehouse, setWarehouse] = useState<SelectableEntity | null>(null);
   const [currency, setCurrency] = useState("NGN");
   const [orderDate, setOrderDate] = useState(
     new Date().toISOString().slice(0, 10),
@@ -112,55 +113,19 @@ export default function NewSalesOrderPage() {
   ]);
   const selectedProductIds = lines.map((line) => line.productId).join(",");
   const linesRef = useRef(lines);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [availabilityError, setAvailabilityError] = useState("");
   const key = useRef(`sales-order-create-${crypto.randomUUID()}`);
-
-  useEffect(() => {
-    if (!organization) return;
-    void (async () => {
-      setLoading(true);
-      try {
-        const [c, w] = await Promise.all([
-          authenticatedRequest<{ data: Option[] }>(
-            "/organizations/current/sales/customers?page=1&page_size=100&status=ACTIVE",
-          ),
-          authenticatedRequest<{ data: Option[] }>(
-            "/organizations/current/warehouses?page=1&page_size=100&status=ACTIVE",
-          ),
-        ]);
-        setCustomers(c.data);
-        setWarehouses(w.data);
-        setProducts([]);
-        setCustomerId(c.data[0]?.id ?? "");
-        setWarehouseId(w.data[0]?.id ?? "");
-        const initialLines = [
-          {
-            id: crypto.randomUUID(),
-            productId: "",
-            unitId: "",
-            quantity: "1",
-            unitPrice: "0",
-          },
-        ];
-        linesRef.current = initialLines;
-        setLines(initialLines);
-      } catch (cause) {
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : "Order options could not be loaded.",
-        );
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [authenticatedRequest, organization]);
+  const balanceGeneration = useRef(0);
 
   const loadBalances = useCallback(async () => {
-    if (!warehouseId) return;
+    const generation = ++balanceGeneration.current;
+    const warehouseId = warehouse?.id;
+    if (!warehouseId) {
+      setBalances({});
+      return;
+    }
     setAvailabilityError("");
     try {
       const ids = [
@@ -175,6 +140,12 @@ export default function NewSalesOrderPage() {
           ),
         ),
       );
+      if (
+        generation !== balanceGeneration.current ||
+        organizationIdRef.current !== (organization?.id ?? "") ||
+        warehouseId !== warehouse?.id
+      )
+        return;
       setBalances(
         Object.fromEntries(
           results.flatMap((result) =>
@@ -183,6 +154,7 @@ export default function NewSalesOrderPage() {
         ),
       );
     } catch (cause) {
+      if (generation !== balanceGeneration.current) return;
       setBalances({});
       setAvailabilityError(
         cause instanceof Error
@@ -190,7 +162,7 @@ export default function NewSalesOrderPage() {
           : "Availability could not be loaded.",
       );
     }
-  }, [authenticatedRequest, warehouseId]);
+  }, [authenticatedRequest, organization, warehouse]);
   useEffect(() => {
     void Promise.resolve().then(loadBalances);
   }, [loadBalances, selectedProductIds]);
@@ -232,23 +204,6 @@ export default function NewSalesOrderPage() {
       unitPrice: product?.defaultSalePrice ?? "0",
     });
     if (product?.saleCurrency) setCurrency(product.saleCurrency);
-    if (product && warehouseId)
-      void authenticatedRequest<{ data: Balance[] }>(
-        `/inventory/warehouses/${warehouseId}/balances?page=1&page_size=1&productId=${product.id}`,
-      )
-        .then((result) =>
-          setBalances((current) => ({
-            ...current,
-            ...(result.data[0] ? { [product.id]: result.data[0] } : {}),
-          })),
-        )
-        .catch((cause: unknown) =>
-          setAvailabilityError(
-            cause instanceof Error
-              ? cause.message
-              : "Availability could not be loaded.",
-          ),
-        );
   }
   function availability(line: Line) {
     const balance = balances[line.productId];
@@ -323,14 +278,25 @@ export default function NewSalesOrderPage() {
   }
   async function saveDraft(event: React.FormEvent) {
     event.preventDefault();
+    if (!customer || !warehouse) {
+      setError("Select a customer and fulfillment warehouse before saving.");
+      return;
+    }
+    if (
+      !lines.length ||
+      lines.some((line) => !line.productId || !line.unitId)
+    ) {
+      setError("Add at least one complete product line before saving.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
       const created = await authenticatedRequest<{ id: string }>(
         salesApi,
         {
-          customerId,
-          warehouseId,
+          customerId: customer!.id,
+          warehouseId: warehouse!.id,
           currency,
           orderDate,
           expectedFulfillmentAt: expectedFulfillmentAt || undefined,
@@ -379,11 +345,7 @@ export default function NewSalesOrderPage() {
           {availabilityError}
         </p>
       )}
-      {loading ? (
-        <section className="panel">
-          <p>Loading customers, warehouses and products…</p>
-        </section>
-      ) : !canWrite ? (
+      {!canWrite ? (
         <section className="panel">
           <p>Your role can view sales orders but cannot create them.</p>
         </section>
@@ -408,34 +370,26 @@ export default function NewSalesOrderPage() {
           >
             <DocumentSection title="Customer and order details">
               <div className="form-grid">
-                <label>
-                  Customer
-                  <select
-                    required
-                    value={customerId}
-                    onChange={(event) => setCustomerId(event.target.value)}
-                  >
-                    {customers.map((customer) => (
-                      <option key={customer.id} value={customer.id}>
-                        {customer.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Warehouse
-                  <select
-                    required
-                    value={warehouseId}
-                    onChange={(event) => setWarehouseId(event.target.value)}
-                  >
-                    {warehouses.map((warehouse) => (
-                      <option key={warehouse.id} value={warehouse.id}>
-                        {warehouse.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <EntitySelector
+                  endpoint="/organizations/current/sales/customers"
+                  label="Customer"
+                  value={customer}
+                  onSelect={setCustomer}
+                  required
+                  searchHint="Search customers by name, contact or email"
+                />
+                <EntitySelector
+                  endpoint="/organizations/current/warehouses"
+                  label="Fulfillment warehouse"
+                  value={warehouse}
+                  onSelect={(selected) => {
+                    setWarehouse(selected);
+                    setBalances({});
+                    setAvailabilityError("");
+                  }}
+                  required
+                  searchHint="Search accessible warehouses"
+                />
                 <label>
                   Order date
                   <input
@@ -605,17 +559,6 @@ export default function NewSalesOrderPage() {
                   })}
                 </tbody>
               </DocumentLineItems>
-              {customers.length === 0 && (
-                <p className="panel-message">
-                  Create a customer before starting an order.
-                </p>
-              )}
-              {warehouses.length === 0 && (
-                <p className="panel-message">
-                  Create or grant access to a warehouse before starting an
-                  order.
-                </p>
-              )}
               <p className="panel-message">
                 Draft creation does not reserve or deduct inventory.
               </p>
@@ -630,8 +573,8 @@ export default function NewSalesOrderPage() {
                 type="submit"
                 disabled={
                   busy ||
-                  !customerId ||
-                  !warehouseId ||
+                  !customer ||
+                  !warehouse ||
                   !lines.every((line) => line.productId && line.unitId)
                 }
               >

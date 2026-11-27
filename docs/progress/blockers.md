@@ -51,3 +51,10 @@ Camera scanning remains deferred. Barcode Detection API support is limited/exper
 - Local API and web were not listening: `curl http://localhost:3000/purchase-orders/new` and `curl http://localhost:4000/api/v1/health/ready` both returned connection refused. Authenticated browser and live transaction acceptance could not run. No services were started because this pass focused on source work and no approved credentials were available in session context.
 - UI regressions: no React component interaction test infrastructure is currently used by the web suite; responsive sweep, live warehouse-specific availability, role/tenant denial, transaction movements and retries remain unverified.
 - The optional `productId` query filter was covered by service-level tests; controller validation via `InventoryBalanceQueryDto` compiles, but no live endpoint request was exercised.
+
+## Phase C environment update (2026-11-26)
+
+- The source implementation has since advanced to shared PO/transfer/SO detail bodies, operational panels and searchable transaction entity selectors. Do not use older statements that details remain header-only; see current-state and next-session.
+- Docker Desktop app is not installed in this environment; daemon access fails. Local `pg_isready` reports no response at `/tmp:5432`. Ports 3000 and 4000 refuse connections.
+- Consequently no browser, responsive, migration, database, live transaction, retry, ledger reconciliation or role/tenant acceptance ran. No QA credentials/data were invented or changed; no records were touched.
+- The three standalone typecheck errors were resolved with explicit types matching non-null user relations in the Prisma schema; full typecheck now passes. The production build also passes. Review those annotations on Prisma upgrades.

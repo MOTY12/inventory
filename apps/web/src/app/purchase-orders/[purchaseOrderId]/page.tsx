@@ -11,6 +11,11 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { BarcodeScanner } from "../../../components/barcode/barcode-scanner";
 import { DocumentHeader } from "../../../components/documents/document-header";
+import { DocumentInformation } from "../../../components/documents/document-information";
+import { DocumentActionPanel } from "../../../components/documents/document-action-panel";
+import { DocumentActivity } from "../../../components/documents/document-activity";
+import { DocumentSummary } from "../../../components/documents/document-summary";
+import { DocumentLayout } from "../../../components/documents/document-layout";
 import { useSession } from "../../../features/auth/session-provider";
 import {
   addQuantities,
@@ -39,6 +44,7 @@ type Receipt = {
   id: string;
   receivedAt: string;
   note: string | null;
+  receivedBy: { user: { email: string } };
   lines: {
     id: string;
     quantity: string;
@@ -46,6 +52,7 @@ type Receipt = {
       product: { name: string; sku: string };
       unit: { code: string };
     };
+    stockMovement: { id: string } | null;
   }[];
 };
 type Order = {
@@ -104,19 +111,35 @@ export default function PurchaseOrderDetailPage() {
     setOrder(null);
     quantitiesRef.current = {};
     setQuantities({});
+    const requestedOrganizationId = organization.id;
     try {
-      const result = await authenticatedRequest<Order>(`${base}/${id}`);
-      if (version !== requestVersion.current) return;
-      setOrder(result);
+      const [result, receipts] = await Promise.all([
+        authenticatedRequest<Order>(`${base}/${id}`),
+        authenticatedRequest<Receipt[]>(`${base}/${id}/receipts`),
+      ]);
+      if (
+        version !== requestVersion.current ||
+        organizationIdRef.current !== requestedOrganizationId
+      )
+        return;
+      setOrder({ ...result, receipts });
     } catch (cause) {
-      if (version !== requestVersion.current) return;
+      if (
+        version !== requestVersion.current ||
+        organizationIdRef.current !== requestedOrganizationId
+      )
+        return;
       setError(
         cause instanceof Error
           ? cause.message
           : "Could not load the purchase order.",
       );
     } finally {
-      if (version === requestVersion.current) setLoading(false);
+      if (
+        version === requestVersion.current &&
+        organizationIdRef.current === requestedOrganizationId
+      )
+        setLoading(false);
     }
   }, [authenticatedRequest, id, organization]);
   useEffect(() => {
@@ -124,7 +147,13 @@ export default function PurchaseOrderDetailPage() {
   }, [reload]);
 
   async function action(path: string, success: string) {
-    if (path === "cancel" && !window.confirm("Cancel this purchase order?")) {
+    const confirmation =
+      path === "cancel"
+        ? "Cancel this purchase order? Goods cannot be received after cancellation."
+        : path === "submit"
+          ? "Submit this order so goods can be received against it?"
+          : null;
+    if (confirmation && !window.confirm(confirmation)) {
       return;
     }
     setBusy(true);
@@ -181,6 +210,12 @@ export default function PurchaseOrderDetailPage() {
       );
       return;
     }
+    if (
+      !window.confirm(
+        "Post this goods receipt? Received quantities update warehouse inventory and weighted average cost.",
+      )
+    )
+      return;
     setBusy(true);
     setError("");
     setNotice("");
@@ -377,28 +412,39 @@ export default function PurchaseOrderDetailPage() {
         </section>
       ) : (
         <>
-          <section className="catalog-panel po-summary">
-            <div>
-              <span className="catalog-eyebrow">SUPPLIER</span>
-              <strong>{order.supplier.name}</strong>
-            </div>
-            <div>
-              <span className="catalog-eyebrow">DESTINATION</span>
-              <strong>{order.warehouse.name}</strong>
-            </div>
-            <div>
-              <span className="catalog-eyebrow">STATUS</span>
-              <span className="status-pill">
-                {order.status.replaceAll("_", " ")}
-              </span>
-            </div>
-            <div>
-              <span className="catalog-eyebrow">ORDER TOTAL</span>
-              <strong>
-                {order.currency} {formatDecimal(order.subtotal)}
-              </strong>
-            </div>
-          </section>
+          <DocumentLayout
+            aside={
+              <DocumentSummary
+                rows={[
+                  { label: "Currency", value: order.currency },
+                  {
+                    label: "Order date",
+                    value: new Date(order.orderDate).toLocaleDateString(),
+                  },
+                  { label: "Items", value: order.lines.length },
+                ]}
+                total={{
+                  label: "Order value",
+                  value: `${order.currency} ${formatDecimal(order.subtotal)}`,
+                }}
+              />
+            }
+          >
+            <DocumentInformation
+              title="Supplier and destination"
+              fields={[
+                { label: "Supplier", value: order.supplier.name },
+                { label: "Receiving warehouse", value: order.warehouse.name },
+                {
+                  label: "Expected delivery",
+                  value: order.expectedDeliveryAt
+                    ? new Date(order.expectedDeliveryAt).toLocaleDateString()
+                    : "Not specified",
+                },
+                { label: "Status", value: order.status.replaceAll("_", " ") },
+              ]}
+            />
+          </DocumentLayout>
           {canWrite && (
             <div className="po-actions">
               {order.status === "DRAFT" && !editingDraft && (
@@ -465,22 +511,25 @@ export default function PurchaseOrderDetailPage() {
               )}
             </div>
           )}
-          <section className="catalog-panel">
+          <section className="document-section">
             <div className="catalog-panel-heading">
               <div>
                 <span className="catalog-eyebrow">ORDER LINES</span>
                 <h2>Outstanding quantities</h2>
               </div>
             </div>
-            <div className="catalog-table-wrap">
-              <table className="catalog-table">
+            <div className="ui-table-scroll document-line-table">
+              <table className="ui-data-table">
                 <thead>
                   <tr>
                     <th>Product</th>
+                    <th>SKU</th>
+                    <th>Unit</th>
                     <th>Ordered</th>
                     <th>Received</th>
                     <th>Remaining</th>
                     <th>Unit cost</th>
+                    <th>Line total</th>
                     <th>Receive now</th>
                   </tr>
                 </thead>
@@ -492,10 +541,9 @@ export default function PurchaseOrderDetailPage() {
                     );
                     return (
                       <tr key={line.id}>
-                        <td>
-                          <strong>{line.product.name}</strong>
-                          <small>{line.product.sku}</small>
-                        </td>
+                        <td>{line.product.name}</td>
+                        <td>{line.product.sku}</td>
+                        <td>{line.unit.code}</td>
                         <td>
                           {editingDraft ? (
                             <input
@@ -523,6 +571,9 @@ export default function PurchaseOrderDetailPage() {
                               {line.orderedQuantity} {line.unit.code}
                             </>
                           )}
+                        </td>
+                        <td>
+                          {order.currency} {formatDecimal(line.lineTotal)}
                         </td>
                         <td>
                           {line.receivedQuantity} {line.unit.code}
@@ -590,7 +641,40 @@ export default function PurchaseOrderDetailPage() {
             </div>
             {canWrite &&
               ["SUBMITTED", "PARTIALLY_RECEIVED"].includes(order.status) && (
-                <div className="po-receive-action">
+                <DocumentActionPanel
+                  title="Receive goods"
+                  description="Post a partial or full receipt to update warehouse stock and weighted average cost."
+                  busy={busy}
+                >
+                  <button
+                    className="catalog-secondary-link"
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      updateReceiveQuantities(() =>
+                        Object.fromEntries(
+                          order.lines
+                            .filter((line) =>
+                              isPositiveDecimal(
+                                subtractQuantity(
+                                  line.orderedQuantity,
+                                  line.receivedQuantity,
+                                ),
+                              ),
+                            )
+                            .map((line) => [
+                              line.id,
+                              subtractQuantity(
+                                line.orderedQuantity,
+                                line.receivedQuantity,
+                              ),
+                            ]),
+                        ),
+                      )
+                    }
+                  >
+                    Fill all outstanding quantities
+                  </button>
                   <BarcodeScanner
                     label="Scan items on this purchase order"
                     buttonLabel="Add received item"
@@ -598,53 +682,27 @@ export default function PurchaseOrderDetailPage() {
                   />
                   <button
                     className="primary-button"
-                    disabled={busy}
+                    type="button"
+                    disabled={
+                      busy || !Object.values(quantities).some(isPositiveDecimal)
+                    }
                     onClick={() => void receive()}
                   >
                     {busy ? "Posting…" : "Post goods receipt"}
                   </button>
-                  <p>
-                    Receipt posting updates stock balances and weighted average
-                    cost.
-                  </p>
-                </div>
+                </DocumentActionPanel>
               )}
           </section>
-          <section className="catalog-panel">
-            <div className="catalog-panel-heading">
-              <div>
-                <span className="catalog-eyebrow">RECEIVING HISTORY</span>
-                <h2>Posted receipts</h2>
-              </div>
-            </div>
-            {order.receipts.length ? (
-              <div className="receipt-list">
-                {order.receipts.map((receipt) => (
-                  <article className="receipt-card" key={receipt.id}>
-                    <div>
-                      <strong>
-                        {new Date(receipt.receivedAt).toLocaleString()}
-                      </strong>
-                      <span>{receipt.note || "Posted receipt"}</span>
-                    </div>
-                    <ul>
-                      {receipt.lines.map((line) => (
-                        <li key={line.id}>
-                          {line.purchaseOrderLine.product.name} ·{" "}
-                          {line.quantity} {line.purchaseOrderLine.unit.code}
-                        </li>
-                      ))}
-                    </ul>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div className="catalog-empty">
-                <h3>No goods received yet</h3>
-                <p>Receipts will be recorded here when posted.</p>
-              </div>
-            )}
-          </section>
+          <DocumentActivity
+            title="Receiving history"
+            entries={order.receipts.map((receipt) => ({
+              id: receipt.id,
+              title: `Goods received by ${receipt.receivedBy.user.email}`,
+              occurredAt: receipt.receivedAt,
+              description: `${receipt.lines.map((line) => `${line.purchaseOrderLine.product.name} ${line.quantity} ${line.purchaseOrderLine.unit.code}`).join(" · ")}${receipt.note ? ` · ${receipt.note}` : ""}${receipt.lines.some((line) => line.stockMovement) ? " · Stock movements posted" : ""}`,
+            }))}
+            emptyMessage="No goods have been received against this order."
+          />
         </>
       )}
     </main>

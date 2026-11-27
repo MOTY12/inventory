@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "../../../features/auth/session-provider";
 import { DocumentHeader } from "../../../components/documents/document-header";
@@ -13,12 +13,15 @@ import {
   type SelectableProduct,
 } from "../../../components/documents/product-selector";
 import {
+  EntitySelector,
+  type SelectableEntity,
+} from "../../../components/documents/entity-selector";
+import {
   isAtMostQuantity,
   isPositiveDecimal,
   subtractQuantity,
 } from "../../../features/procurement/decimal";
 
-type Warehouse = { id: string; name: string };
 type Product = SelectableProduct;
 type Line = {
   key: string;
@@ -31,9 +34,8 @@ type Line = {
 export default function NewTransferPage() {
   const router = useRouter();
   const { organization, authenticatedRequest } = useSession();
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [source, setSource] = useState("");
-  const [destination, setDestination] = useState("");
+  const [source, setSource] = useState<SelectableEntity | null>(null);
+  const [destination, setDestination] = useState<SelectableEntity | null>(null);
   const [note, setNote] = useState("");
   const [lines, setLines] = useState<Line[]>([
     {
@@ -44,28 +46,9 @@ export default function NewTransferPage() {
       unit: "",
     },
   ]);
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  useEffect(() => {
-    if (!organization) return;
-    void authenticatedRequest<{ data: Warehouse[] }>(
-      "/organizations/current/warehouses?page=1&page_size=100&status=ACTIVE",
-    )
-      .then((result) => {
-        setWarehouses(result.data);
-        setSource(result.data[0]?.id ?? "");
-        setDestination(result.data[1]?.id ?? "");
-      })
-      .catch((cause: unknown) =>
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : "Warehouses could not be loaded.",
-        ),
-      )
-      .finally(() => setLoading(false));
-  }, [authenticatedRequest, organization]);
+  const warehouseGeneration = useRef(0);
 
   async function chooseProduct(index: number, product: Product | null) {
     setLines((current) =>
@@ -80,13 +63,16 @@ export default function NewTransferPage() {
           : line,
       ),
     );
-    if (!product || !source) return;
+    const warehouseId = source?.id;
+    const generation = warehouseGeneration.current;
+    if (!product || !warehouseId) return;
     try {
       const balance = await authenticatedRequest<{
         data: { onHand: string; reserved: string }[];
       }>(
-        `/inventory/warehouses/${source}/balances?page=1&page_size=1&productId=${product.id}`,
+        `/inventory/warehouses/${warehouseId}/balances?page=1&page_size=1&productId=${product.id}`,
       );
+      if (generation !== warehouseGeneration.current) return;
       const row = balance.data[0];
       setLines((current) =>
         current.map((line, i) =>
@@ -108,23 +94,27 @@ export default function NewTransferPage() {
       );
     }
   }
-  async function changeSource(warehouseId: string) {
-    setSource(warehouseId);
+  async function changeSource(selectedWarehouse: SelectableEntity | null) {
+    const generation = ++warehouseGeneration.current;
+    setSource(selectedWarehouse);
+    if (destination?.id === selectedWarehouse?.id) setDestination(null);
     setLines((current) => current.map((line) => ({ ...line, available: "" })));
-    const selected = lines
+    const productsToRefresh = lines
       .map((line, index) => ({ product: line.product, index }))
       .filter((item) => item.product);
     try {
+      if (!selectedWarehouse) return;
       const results = await Promise.all(
-        selected.map(async ({ product, index }) => {
+        productsToRefresh.map(async ({ product, index }) => {
           const result = await authenticatedRequest<{
             data: { onHand: string; reserved: string }[];
           }>(
-            `/inventory/warehouses/${warehouseId}/balances?page=1&page_size=1&productId=${product!.id}`,
+            `/inventory/warehouses/${selectedWarehouse.id}/balances?page=1&page_size=1&productId=${product!.id}`,
           );
           return { index, id: product!.id, row: result.data[0] };
         }),
       );
+      if (generation !== warehouseGeneration.current) return;
       setLines((current) =>
         current.map((line, index) => {
           const result = results.find(
@@ -150,14 +140,22 @@ export default function NewTransferPage() {
   }
   async function save(event: React.FormEvent) {
     event.preventDefault();
+    if (!source || !destination || source.id === destination.id) {
+      setError("Select different source and destination warehouses.");
+      return;
+    }
+    if (!lines.length || lines.some((line) => !line.product)) {
+      setError("Add at least one product before saving the transfer.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
       const created = await authenticatedRequest<{ id: string }>(
         "/organizations/current/inventory/transfers",
         {
-          sourceWarehouseId: source,
-          destinationWarehouseId: destination,
+          sourceWarehouseId: source!.id,
+          destinationWarehouseId: destination!.id,
           note: note || undefined,
           lines: lines.map((line) => ({
             productId: line.product!.id,
@@ -187,7 +185,7 @@ export default function NewTransferPage() {
   const valid =
     source &&
     destination &&
-    source !== destination &&
+    source.id !== destination.id &&
     lines.length > 0 &&
     new Set(lines.map((line) => line.product?.id).filter(Boolean)).size ===
       lines.length &&
@@ -214,11 +212,7 @@ export default function NewTransferPage() {
           {error}
         </p>
       ) : null}
-      {loading ? (
-        <section className="document-section">
-          <p>Loading warehouse access…</p>
-        </section>
-      ) : !canWrite ? (
+      {!canWrite ? (
         <section className="document-section">
           <p>Your role cannot create transfers.</p>
         </section>
@@ -230,38 +224,23 @@ export default function NewTransferPage() {
               description="Only warehouses available to your organization can be selected."
             >
               <div className="document-fields">
-                <label>
-                  Source warehouse
-                  <select
-                    required
-                    value={source}
-                    onChange={(event) => void changeSource(event.target.value)}
-                  >
-                    <option value="">Choose source</option>
-                    {warehouses.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Destination warehouse
-                  <select
-                    required
-                    value={destination}
-                    onChange={(event) => setDestination(event.target.value)}
-                  >
-                    <option value="">Choose destination</option>
-                    {warehouses
-                      .filter((item) => item.id !== source)
-                      .map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
+                <EntitySelector
+                  endpoint="/organizations/current/warehouses"
+                  label="Source warehouse"
+                  value={source}
+                  onSelect={(selected) => void changeSource(selected)}
+                  required
+                  searchHint="Search accessible source warehouses"
+                />
+                <EntitySelector
+                  endpoint="/organizations/current/warehouses"
+                  label="Destination warehouse"
+                  value={destination}
+                  onSelect={setDestination}
+                  required
+                  excludeIds={source ? [source.id] : []}
+                  searchHint="Search accessible destination warehouses"
+                />
                 <label className="document-field-wide">
                   Notes
                   <input
@@ -353,21 +332,16 @@ export default function NewTransferPage() {
                 ))}
               </tbody>
             </DocumentLineItems>
-            {source === destination ? (
+            {source && destination && source.id === destination.id ? (
               <p role="alert" className="error-banner">
                 Choose different source and destination warehouses.
-              </p>
-            ) : null}
-            {warehouses.length < 2 ? (
-              <p className="panel-message">
-                At least two accessible active warehouses are required.
               </p>
             ) : null}
             <DocumentActions cancelHref="/transfers" busy={busy}>
               <button
                 className="button button-primary"
                 type="submit"
-                disabled={busy || loading || !valid}
+                disabled={busy || !valid}
               >
                 {busy ? "Saving…" : "Create draft"}
               </button>

@@ -46,6 +46,27 @@ No screenshot files were saved; the browser tool displayed inline observations. 
 
 - Stock Count source uses the existing single-product draft API, exact decimal string variance arithmetic, and the existing explicit `/post` endpoint behind a confirmation dialog. No multi-product count is implied. The list API returns rows and total; count, balance, and movement page sizes are sent to the server. Workflow and inventory reconciliation are not browser-verified.
 
+## Phase C transaction details and selectors (2026-11-26)
+
+### Source implementation evidence
+
+- **Purchase orders:** shared information/summary/line table/activity components; actual receipt records loaded with line/product, actor and stock-movement presence; partial/full receiving, receive-all, barcode scanning, validation and confirmation retained.
+- **Transfers:** shared information/table/action/activity components; quantity totals use exact decimal helpers. Submit, dispatch and partial receive are shown according to transfer state and role. Dispatch uses a stable per-transfer key; receipt retry keeps the same key for the same submitted payload.
+- **Sales orders:** shared information/summary/activity; line and reservation detail retained. Existing pick and fulfillment APIs remain, with explicit confirmation and consequence explanations. Existing barcode scan behavior remains. Eligible invoice creation is linked for finance-capable roles and the target order is preselected.
+- **Selectors:** debounced server query and pagination for active suppliers, customers and grant-visible warehouses; keyboard navigation, clear, loading/empty/error states. Used by PO/SO creation, SO edit, and transfer creation. No 100-record cap remains for those selector workflows.
+- **Async checks in source:** request generation and organization guards on selector/detail requests; source warehouse changes keep balance request generation and refresh guards. These are code-level properties only; no race was exercised in a browser.
+
+### Automated checks in this continuation
+
+- Web typecheck passed; lint passed; format check passed.
+- Default test command passed **62 API/shared + 2 web**, 0 failures; **3 opt-in PostgreSQL suites skipped**.
+- QA test command passed **18/18**.
+- Production build passed; Nest build and Next TypeScript validation completed, with **31 routes**.
+- Full standalone `npm run typecheck` passed after the three schema-declared required user relations inferred as `never` were explicitly typed in auth/reporting. Production build passed independently as well.
+- Docker app not found, local PostgreSQL reported no response and ports 3000/4000 refused connections. No browser, migration status, live API/DB workflow, responsive sweep, role/tenant check or inventory reconciliation was performed. No records changed. No component interaction harness was added.
+
+**Disposition:** Phase C source implementation is substantially complete; full Phase C acceptance is **NOT ACCEPTED** pending live browser, responsive, operational, retry and reconciliation evidence. Backend roadmap remains **30/47**.
+
 
 ## Phase C source and verification (2026-11-26)
 

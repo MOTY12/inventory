@@ -4,49 +4,59 @@
 
 ## Repository state
 
-- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD `787c020` (`update the table tool bar`).
-- Phase C source changes are uncommitted. Preserve them; do not commit, push, or deploy without authorization. No pre-existing edits were present at start.
-- Backend roadmap remains **30/47**. No task count changed; UI work does not complete backend roadmap tasks.
-- No database reset, migration, business-record mutation, or credential change occurred. Added API query support is additive and requires no migration.
+- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD `fc4cceb` (`update the sales order`).
+- Phase C continuation source and documentation changes are uncommitted. Do not commit or push; preserve the worktree.
+- Backend roadmap remains **30/47**. No task newly met backend completion criteria.
+- No database mutation, migration application, reset, deletion, credential change, deployment, or production action occurred.
 
-## Implemented in this session
+## Implemented in this continuation
 
-- Added shared components in `apps/web/src/components/documents/`: `DocumentHeader`, `DocumentLayout`, `DocumentSection`, `DocumentLineItems`, `DocumentSummary`, `DocumentActions`, and `ProductSelector`.
-- PO list is listing-first; dedicated `/purchase-orders/new` submits the existing draft endpoint, supports active supplier/warehouse selection and catalog search, uses exact decimal helpers for subtotal, and routes to the created PO detail.
-- Transfer list is listing-first; dedicated `/transfers/new` validates distinct warehouses, creates a draft only, searches catalog, and requests source-warehouse availability by selected product. Optional `productId` balance filtering was added to the existing tenant/warehouse-guarded API and service; regression tests cover both filtered and unfiltered query scope.
-- Sales new-order page uses shared document layout/sections/line-item editor, paginated catalog search and selected-product balance lookups. Existing barcode scanner, exact arithmetic, draft endpoint, idempotency key, stock reservation timing and other transaction rules remain.
-- PO, transfer, and sales detail pages use the shared document header/status/breadcrumb pattern. Their existing workflow bodies and API actions remain largely intact.
-- Progress/design/acceptance/blocker docs record implementation vs verification separately.
+- Shared components: `DocumentInformation`, `DocumentDetailTable`, `DocumentActionPanel`, `DocumentActivity`, and scalable `EntitySelector` alongside existing document components.
+- Entity selectors now replace first-100 native select loads in PO/SO creation, transfer source/destination, and SO draft editing. Existing endpoints provide server-side search/pagination; warehouse choices remain grant-filtered by the API.
+- PO detail now shows supplier/destination/date/financial summary and per-line SKU, unit, order/receipt/outstanding quantities, cost and line totals. It loads the dedicated receipt history API, displays actual actors/lines/movement presence, offers receive-all outstanding and barcode scanning, and confirms inventory/cost consequences before posting.
+- Transfer detail now reconciles each line using exact decimal helpers, and exposes state-appropriate submit, dispatch, partial receive, and cancel operations. Dispatch uses a stable per-transfer idempotency key; a receipt retry retains its key for the same quantity/note payload. Actual dispatch/receipt/status activity is shown.
+- Sales order detail now uses shared information/summary/activity components while retaining its existing line, reservation, pick and fulfillment data. Picking and fulfillment are explicit operations with confirmation and consequence descriptions. A finance-capability-gated invoice link preselects the order in invoice creation; only existing eligible order states are offered by the server.
+- Detail reads and selector searches guard stale organization/request responses. Existing backend APIs, state transitions, warehouse authorization, ledger operations, reservation logic, weighted-average costing, and exact arithmetic were preserved.
 
-## Verification
+## Files changed
 
-- `npm run typecheck`: passed after build-generated Prisma Client generation.
-- `npm run lint`: passed.
-- `npm run format:check`: passed after formatting source and docs.
-- `npm test`: 62 API/shared and 2 web passed, 0 failed; 3 opt-in PostgreSQL suites skipped. Includes 2 new balance-filter service tests.
-- `npm run qa:test`: 18 passed, 0 failed, 0 skipped.
-- `npm run build`: passed; Next.js generated 31 routes, including `/purchase-orders/new` and `/transfers/new`.
-- `git diff --check`: passed after final code and documentation edits.
-- Browser: not run. `localhost:3000/purchase-orders/new` and `localhost:4000/api/v1/health/ready` both refused connections. No authenticated browser session, DB-backed request, workflow mutation, or responsive sweep was verified.
+- API: `apps/api/src/identity/auth.service.ts`, `apps/api/src/inventory/transfers.service.ts`, `apps/api/src/procurement/purchase-orders.service.ts`, `apps/api/src/reporting/report-exports.service.ts`, `apps/api/src/reporting/reporting.service.ts`.
+- Web routes: purchase-order detail/create; sales-order detail/create/edit; invoice creation; transfer detail/create; `apps/web/src/app/globals.css`.
+- Web components: new `document-information.tsx`, `document-detail-table.tsx`, `document-action-panel.tsx`, `document-activity.tsx`, `entity-selector.tsx`; updated `product-selector.tsx`.
+- Progress/design documentation listed in this checkpoint and current-state.
+- Build-generated `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo` were restored from HEAD after production build; they are not part of the implementation changes. Do not alter other source files without reviewing diffs.
 
-## Gaps and blockers
+## Checks and evidence
 
-- Authenticated UI and operational workflow acceptance remains blocked by local services being down and the absence of approved QA account/org values in this session.
-- No component interaction tests or responsive 360/390/768/1024/1440/1920 sweep exist for Phase C.
-- Supplier/customer/warehouse option selectors remain native selects loading up to 100 records; the product selector is server-searchable and paginated.
-- The current PO/transfer/SO detail bodies were not fully rebuilt; only shared headers/status/breadcrumbs were added. Existing receive, dispatch, picking, fulfillment and barcode behaviors remain in the original forms/actions.
-- Availability was not checked against a live API. Transfer source switching refreshes selected product balances in source but has not been exercised under rapid warehouse changes.
+- Web typecheck: passed after selector, detail, and edit-route changes.
+- `npm run lint`: passed after correcting a React compiler dependency warning.
+- `npm run format:check`: passed after formatting.
+- `npm test`: passed: 62 API/shared, 2 web, 0 failures; 3 opt-in PostgreSQL suites skipped (not counted as passes).
+- `npm run qa:test`: passed: 18/18.
+- `npm run build`: passed; Nest build and Next production build completed, including 31 routes.
+- Full `npm run typecheck`: passed after explicitly typing the three schema-declared non-null Prisma user relations that the generated client inferred as `never` in auth/reporting. Lint, format, tests, QA tests, build and Prisma schema validation also passed.
+- Docker Desktop app was not found and daemon access failed. `pg_isready` reports no local PostgreSQL response at `/tmp:5432`; ports 3000 and 4000 refused connections. `psql` is installed, but no database was reachable.
+- Browser, responsive checks, migration status, authenticated API workflows, PostgreSQL integration suites, stock/ledger reconciliation and retry acceptance were not run. No React DOM interaction test setup was present; none was added.
+- Run `git diff --check` after final documentation edits. Final requested sequential checks are still outstanding if any further edits are made.
+
+## Blockers and remaining acceptance
+
+- Start or install Docker Desktop or provide a reachable local PostgreSQL/Redis/S3-compatible development stack. Then inspect migration status read-only before any migration action.
+- Start API and web services, restore an existing authorized development session, and verify readiness and routes in Chrome. Do not invent QA credentials or mutate non-disposable business data.
+- Run the requested responsive sweep (360, 390, 768, 1024, 1440, 1920 px), keyboard/accessibility checks, role and tenant-denial checks, rapid search/warehouse switching and out-of-order response scenarios.
+- Use an approved disposable QA organization for the brief's PO 100 × ₦5,000 partial/full receive, warehouse transfer 30 units partial/full receive, and SO 20 × ₦8,000 confirm/pick/partial/full-fulfill scenario. Reconcile balances, ledger, reservations, cost and idempotent replays. No expected outcomes are claimed as verified.
+- Add focused React interaction coverage only if an appropriate DOM/browser harness is approved/available; current web tests cover utilities, not component interactions.
+- The explicit relation type annotations in auth/reporting should be reviewed alongside future Prisma upgrades; no runtime behavior changed.
 
 ## Exact next steps
 
-1. Inspect `git status`, `git diff --check`, and changed-file diffs; preserve all uncommitted edits. Current code additions are in the inventory balance service/controller/DTO tests and web `components/documents`, PO, transfer and sales-order routes/styles.
-2. Start the documented development services only if the approved local Docker/database setup is available; verify readiness and confirm an approved disposable QA organization/session before any business-data mutation. Do not reset the database or invent credentials.
-3. Exercise read-only authenticated browser views first. Check the new routes at 360, 390, 768, 1024, 1440, and 1920px; verify keyboard product search, empty/error states, permission gates, no unintended page overflow, and source-warehouse availability refresh.
-4. With approved disposable QA data, verify draft creation, PO partial/full receiving, transfer submit/dispatch/partial/full receipt, and sales confirm/pick/partial/full fulfillment. Reconcile movement ledger and balances; replay eligible idempotent commands to ensure no duplicate movements.
-5. Add meaningful component interaction tests if the repository gains/has an appropriate DOM test setup; do not substitute source-string tests. Keep browser acceptance separate from test results.
-6. Complete the PO/transfer/SO detail and receiving/picking/fulfillment visual consistency work; update design acceptance docs with actual evidence. Keep backend count at 30/47 unless individual roadmap acceptance criteria are independently satisfied.
-7. Run `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run qa:test`, `npm run build`, and `git diff --check` sequentially after edits. Do not claim skipped PostgreSQL tests passed.
+1. Inspect `git status` and `git diff`, then restore only generated tracked metadata changes (`apps/web/next-env.d.ts`, `apps/web/tsconfig.tsbuildinfo`) from `HEAD` if present.
+2. Final checks completed sequentially: typecheck, lint, format, tests, QA tests, build, Prisma validation and diff check passed; the default tests had 3 opt-in PostgreSQL suites skipped. Rerun if source changes.
+3. Check whether local DB services can be safely started; current `pg_isready` says no response, Docker Desktop is unavailable. Do not reset data. Verify migrations read-only before applying anything.
+4. When services and approved QA credentials are available, run authenticated browser/responsive checks and the Phase C transaction scenario; record real receipts, movements, balances, reservations, retries and access denials.
+5. Keep roadmap at 30/47 and Phase C source implementation separate from browser/operational acceptance. Do not mark full Phase C accepted.
+6. After acceptance, recommend Phase D: Financial Modules and Business Reporting UI Standardization.
 
 ## Outstanding decisions
 
-No new business policy decision was introduced. Existing approved policies, tenant isolation, warehouse scope, stock reservation, ledger, costing and idempotency semantics were preserved.
+No new material product, accounting or security decision was introduced. Existing approvals and provisional policies remain unchanged.

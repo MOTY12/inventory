@@ -4,8 +4,11 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "../../../../features/auth/session-provider";
+import {
+  EntitySelector,
+  type SelectableEntity,
+} from "../../../../components/documents/entity-selector";
 
-type Option = { id: string; name: string };
 type Product = {
   id: string;
   name: string;
@@ -29,6 +32,8 @@ type Order = {
   orderDate: string;
   expectedFulfillmentAt: string | null;
   notes: string | null;
+  customer: SelectableEntity;
+  warehouse: SelectableEntity;
   lines: {
     productId: string;
     unitId: string;
@@ -43,11 +48,9 @@ export default function EditSalesOrderPage() {
   const router = useRouter();
   const { authenticatedRequest, organization } = useSession();
   const [order, setOrder] = useState<Order | null>(null);
-  const [customers, setCustomers] = useState<Option[]>([]);
-  const [warehouses, setWarehouses] = useState<Option[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [customerId, setCustomerId] = useState("");
-  const [warehouseId, setWarehouseId] = useState("");
+  const [customer, setCustomer] = useState<SelectableEntity | null>(null);
+  const [warehouse, setWarehouse] = useState<SelectableEntity | null>(null);
   const [currency, setCurrency] = useState("NGN");
   const [orderDate, setOrderDate] = useState("");
   const [expected, setExpected] = useState("");
@@ -58,24 +61,16 @@ export default function EditSalesOrderPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const [detail, c, w, p] = await Promise.all([
+        const [detail, p] = await Promise.all([
           authenticatedRequest<Order>(`${endpoint}/${salesOrderId}`),
-          authenticatedRequest<{ data: Option[] }>(
-            "/organizations/current/sales/customers?page=1&page_size=100&status=ACTIVE",
-          ),
-          authenticatedRequest<{ data: Option[] }>(
-            "/organizations/current/warehouses?page=1&page_size=100&status=ACTIVE",
-          ),
           authenticatedRequest<{ data: Product[] }>(
             "/organizations/current/catalog/products?page=1&page_size=100&status=ACTIVE",
           ),
         ]);
         setOrder(detail);
-        setCustomers(c.data);
-        setWarehouses(w.data);
         setProducts(p.data);
-        setCustomerId(detail.customerId);
-        setWarehouseId(detail.warehouseId);
+        setCustomer(detail.customer);
+        setWarehouse(detail.warehouse);
         setCurrency(detail.currency);
         setOrderDate(detail.orderDate.slice(0, 10));
         setExpected(detail.expectedFulfillmentAt?.slice(0, 10) ?? "");
@@ -103,14 +98,18 @@ export default function EditSalesOrderPage() {
   async function save(event: FormEvent) {
     event.preventDefault();
     if (!order) return;
+    if (!customer || !warehouse) {
+      setError("Select a customer and fulfillment warehouse before saving.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
       await authenticatedRequest(
         `${endpoint}/${salesOrderId}`,
         {
-          customerId,
-          warehouseId,
+          customerId: customer?.id,
+          warehouseId: warehouse?.id,
           currency,
           orderDate,
           expectedFulfillmentAt: expected || undefined,
@@ -159,32 +158,20 @@ export default function EditSalesOrderPage() {
       ) : (
         <form className="panel order-editor" onSubmit={save}>
           <div className="form-grid">
-            <label>
-              Customer
-              <select
-                value={customerId}
-                onChange={(event) => setCustomerId(event.target.value)}
-              >
-                {customers.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Warehouse
-              <select
-                value={warehouseId}
-                onChange={(event) => setWarehouseId(event.target.value)}
-              >
-                {warehouses.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <EntitySelector
+              endpoint="/organizations/current/sales/customers"
+              label="Customer"
+              value={customer}
+              onSelect={setCustomer}
+              required
+            />
+            <EntitySelector
+              endpoint="/organizations/current/warehouses"
+              label="Warehouse"
+              value={warehouse}
+              onSelect={setWarehouse}
+              required
+            />
             <label>
               Currency
               <input
@@ -368,7 +355,10 @@ export default function EditSalesOrderPage() {
             <span>
               Stock is checked and reserved when the order is confirmed.
             </span>
-            <button className="button button-primary" disabled={busy}>
+            <button
+              className="button button-primary"
+              disabled={busy || !customer || !warehouse}
+            >
               {busy ? "Saving…" : "Save draft"}
             </button>
           </div>

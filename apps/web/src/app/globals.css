@@ -1875,6 +1875,7 @@ p {
 }
 .document-section,
 .document-line-items,
+.document-action-panel,
 .document-aside > *,
 .document-summary {
   border: 1px solid var(--ui-border);
@@ -1884,6 +1885,36 @@ p {
 }
 .document-section {
   padding: 20px 22px;
+}
+.document-action-panel {
+  padding: 18px 20px;
+}
+.document-action-panel > .document-section-heading {
+  margin-bottom: 16px;
+}
+.document-information {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 20px;
+  margin: 0;
+}
+.document-information > div {
+  min-width: 0;
+}
+.document-information dt {
+  margin-bottom: 5px;
+  color: var(--ui-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.document-information dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: var(--ui-text);
+  font-size: 14px;
+  font-weight: 600;
 }
 .document-section-heading {
   display: flex;
@@ -1981,6 +2012,44 @@ p {
   display: grid;
   min-width: 0;
   gap: 6px;
+}
+.entity-selector {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+.entity-selector > label {
+  color: #33443a;
+  font-size: 12px;
+  font-weight: 650;
+}
+.document-activity {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0 0 0 18px;
+}
+.document-activity li {
+  padding: 0 0 16px 8px;
+  color: var(--ui-text);
+}
+.document-activity li::marker {
+  color: var(--ui-brand);
+}
+.document-activity li > strong,
+.document-activity li > time {
+  display: block;
+}
+.document-activity li > time {
+  margin-top: 3px;
+  color: var(--ui-text-muted);
+  font-size: 12px;
+}
+.document-activity li > p {
+  margin: 7px 0 0;
+  color: var(--ui-text-muted);
+  font-size: 13px;
 }
 .product-selector > label {
   color: #33443a;
@@ -2099,6 +2168,9 @@ p {
   }
   .document-actions > * {
     flex: 1;
+  }
+  .document-information {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 .ui-page .product-editor {

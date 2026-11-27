@@ -212,7 +212,9 @@ export class ReportExportsService implements OnModuleInit, OnModuleDestroy {
         if (savedScope.some((id) => !currentScope.includes(id))) return null;
         return {
           ...this.serialize(row),
-          requested_by: row.requesterMembership.user.email,
+          // The schema's required membership/user relation is inferred as `never` by Prisma's generated types here.
+          requested_by: (row.requesterMembership.user as { email: string })
+            .email,
         };
       }),
     );

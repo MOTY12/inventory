@@ -43,11 +43,22 @@ export function ProductSelector({
   const [error, setError] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const requestVersion = useRef(0);
+  const currentOrganization = useRef(organization?.id ?? "");
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebounced(query.trim()), 250);
     return () => window.clearTimeout(timeout);
   }, [query]);
+  useEffect(() => {
+    const nextOrganization = organization?.id ?? "";
+    if (currentOrganization.current === nextOrganization) return;
+    currentOrganization.current = nextOrganization;
+    requestVersion.current += 1;
+    setResults([]);
+    setTotal(0);
+    setOpen(false);
+    onSelect(null);
+  }, [onSelect, organization?.id]);
   useEffect(() => {
     const version = ++requestVersion.current;
     if (!organization || !open) return;

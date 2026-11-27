@@ -122,8 +122,19 @@ export class StockTransfersService {
             receiptLines: true,
           },
         },
-        dispatch: { include: { lines: true } },
-        receipts: { include: { lines: true }, orderBy: { receivedAt: "asc" } },
+        dispatch: {
+          include: {
+            lines: true,
+            dispatchedBy: { include: { user: { select: { email: true } } } },
+          },
+        },
+        receipts: {
+          include: {
+            lines: true,
+            receivedBy: { include: { user: { select: { email: true } } } },
+          },
+          orderBy: { receivedAt: "asc" },
+        },
         statusHistory: { orderBy: { occurredAt: "asc" } },
       },
     });
