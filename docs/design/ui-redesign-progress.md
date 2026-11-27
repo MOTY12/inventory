@@ -1,6 +1,6 @@
 # UI redesign progress
 
-**Updated:** 2026-11-26 (Africa/Lagos)
+**Updated:** 2026-11-27 (Africa/Lagos)
 **Status:** In progress. The customer design primitives have been applied to selected module lists; nine-module standardization and acceptance are not complete. Backend roadmap remains **30/47**.
 
 | Module          | Implemented in this pass                                                                                                                    | Still open                                                                                                                                                          |
@@ -44,6 +44,14 @@
 4. Implement shared document presentation, then move PO and transfer creation into dedicated routes and align detail pages; continue with sales orders after inspecting actual endpoints and eligibility rules.
 5. Investigate the previously observed reorder-rule generic request error using authenticated network/API evidence; do not suppress valid errors.
 6. Update the matrix and acceptance record from actual browser evidence. Keep all untested states pending and the backend task count at 30/47.
+
+## Phase D finance UI source implementation (2026-11-27)
+
+- **Invoices:** listing source is standardized with shared table and per-currency financial summaries; authenticated browser and complete invoice create/edit/detail/PDF acceptance remain open.
+- **Payments:** listing uses shared components and API-supported filters; detail route and reason-required reversal UI use existing endpoints. Browser, payment recording/reversal, and financial reconciliation are unverified.
+- **Tax rates:** listing, create/edit drawer and confirmed status changes use shared components and existing endpoints. No API paging/effective dates; browser verification pending.
+- **Customers, reports, exports and dashboard:** not yet standardized in this phase.
+- These are source-level UI changes only. Backend roadmap remains 30/47; no task is marked complete from this work.
 
 
 ## Phase C implementation update (2026-11-26)

@@ -1,6 +1,6 @@
 # UI redesign acceptance results
 
-**Updated:** 2026-11-26 (Africa/Lagos)
+**Updated:** 2026-11-27 (Africa/Lagos)
 **Scope:** Customer reference and selected list/drawer standardization pass. Nine-module definition of done is **not met**.
 
 ## Browser evidence
@@ -75,3 +75,9 @@ No screenshot files were saved; the browser tool displayed inline observations. 
 - Checks after code changes: full `npm run typecheck` passed after Prisma Client generation; `npm run lint` passed; `npm run format:check` passed; `npm test` passed 62 API/shared + 2 web (3 opt-in PostgreSQL suites skipped); `npm run qa:test` passed 18; `npm run build` passed and generated 31 routes.
 - Browser and operational: not run. Both local ports 3000 and 4000 refused connections. No authenticated session, DB-backed availability, form mutation, lifecycle action, responsive viewport, cross-tenant, warehouse role, or ledger acceptance was observed. No data changed.
 - Acceptance remains source-level only.
+# 2026-11-27 — Phase D source checks (not browser acceptance)
+
+- Invoice listing source uses the shared header/table/pagination/status components and existing API summary, with per-currency values. No browser/API session was used to verify data behavior or visual layout.
+- Payment listing and new payment detail/reversal source were checked against the existing controller contract. No receipt/reversal was created, and no authenticated detail or reversal behavior was exercised.
+- Tax-rate source uses shared listing/drawer/confirmation components. No tax record was created/changed; issued invoice snapshot preservation was not operationally tested.
+- Typecheck, lint, format check, default tests (62 API/shared + 2 web pass; 3 opt-in PostgreSQL suites skipped), QA tests (18/18), production build (31 routes), and diff check passed. Browser/responsive acceptance, live DB and role/tenant denial remain pending.

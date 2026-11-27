@@ -1,12 +1,21 @@
 # Current state
 
-**Updated:** 2026-11-26 (Africa/Lagos)
+**Updated:** 2026-11-27 (Africa/Lagos)
 
 ## Repository and roadmap
 
-- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; current HEAD `fc4cceb` (`update the sales order`). The worktree was clean at start of the Phase C continuation; this continuation's changes are uncommitted. No pre-existing changes were overwritten.
+- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; verified base HEAD `9f224ee` (`update the purchase`). The Phase C continuation is committed in that base. Phase D UI changes in this session are uncommitted; no unrelated edits were overwritten.
 - Roadmap remains **30/47**. SALES-004, REPORT-002 and QUALITY-001 remain IN_PROGRESS. No task became complete; fixture code and mocked verification do not meet operational acceptance.
 - No commit, push, deployment, migration application, database reset, deletion, or credential change occurred.
+
+## Phase D finance UI implementation (2026-11-27)
+
+- Redesigned `/invoices` with shared listing primitives, existing per-currency invoice summary, customer/status/currency/issue-date filters, distinct document/payment states, and role-gated create navigation. Filters remain limited to fields supported by the current API.
+- Redesigned `/payments` with shared table/pagination and a searchable customer selector; method, currency and date filters match API-supported query parameters. Added `/payments/[paymentId]` using the existing tenant/warehouse-scoped detail API, invoice allocations, reversal details, and a reason-required reversal panel using the existing idempotent POST endpoint.
+- Redesigned `/tax-rates` using the shared table/status/drawer components and confirmation for activation changes. Existing create/edit/toggle API behavior is retained. Existing invoice snapshots remain unchanged.
+- Added payment status badge labels and corrected invoice list callback dependencies. No backend, schema, migration, accounting rule or financial calculation changed.
+- Checks: full typecheck, lint, format check, default tests (62 API/shared + 2 web pass; 0 fail; 3 opt-in PostgreSQL suites skipped), QA harness tests (18/18), production build (31 Next routes), and `git diff --check` passed after source changes. The initial default sandbox test attempt had a local listener `EPERM`; full `npm test` passed on rerun with permission for its temporary localhost listener.
+- Browser and database acceptance were not performed. No record was mutated. Payment search by reference/invoice/status and summaries are unsupported by the current list API; tax API has no paging/effective-date fields. Customer financial UI, full invoice create/edit/detail/PDF redesign, reports/exports and dashboard remain to be addressed. Backend roadmap stays 30/47.
 
 ## UI redesign slice (2026-11-25)
 

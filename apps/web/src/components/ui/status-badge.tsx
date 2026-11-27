@@ -2,6 +2,10 @@ const labels: Record<string, string> = {
   ACTIVE: "Active",
   ARCHIVED: "Archived",
   DRAFT: "Draft",
+  ISSUED: "Issued",
+  VOID: "Void",
+  REVERSED: "Reversed",
+  POSTED: "Posted",
   SUBMITTED: "Submitted",
   PARTIALLY_RECEIVED: "Partially received",
   RECEIVED: "Received",
@@ -15,7 +19,10 @@ export function StatusBadge({ status }: { status: string }) {
   const tone =
     status === "ACTIVE" || status === "RECEIVED" || status === "FULFILLED"
       ? "positive"
-      : status === "ARCHIVED" || status === "CANCELLED"
+      : status === "ARCHIVED" ||
+          status === "CANCELLED" ||
+          status === "VOID" ||
+          status === "REVERSED"
         ? "muted"
         : status.includes("PARTIALLY")
           ? "warning"

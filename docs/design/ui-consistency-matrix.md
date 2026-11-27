@@ -1,6 +1,6 @@
 # UI consistency matrix
 
-**Updated:** 2026-11-26 (Africa/Lagos)
+**Updated:** 2026-11-27 (Africa/Lagos)
 **Reference:** Customers directory; details in [customer-module-reference.md](customer-module-reference.md).
 
 | Module                | Shared page header | Shared table | Shared status | Drawer flow                         | Search/filter                              | Detail/document view                     | Browser / responsive acceptance                                                                   |
@@ -15,10 +15,15 @@
 | Sales orders          | Yes; document header on details | Yes | Yes | Shared draft layout; detail pick and fulfillment action panel; invoice link for finance-capable users | Existing list filters; searchable customer/warehouse and catalog selectors on create/edit | Shared information/summary/activity; line, reservation, pick and fulfillment details retained | Not checked; local services unavailable |
 | Branches              | Yes                | Yes          | Yes           | Yes; create/edit drawers            | Server name/status filter; page and page size | No dedicated detail route                | Source updated; Chrome redirected to sign-in; responsive and functional acceptance pending |
 | Warehouses            | Yes                | Yes          | Yes           | Yes; create/edit drawers            | Server name/code/status/branch filter and paging | No dedicated detail route             | Source updated; Chrome redirected to sign-in; responsive and functional acceptance pending |
+| Invoices              | Yes                | Yes          | Yes           | Not applicable on list               | Customer, status, currency, issue dates         | Existing detail/create routes unchanged          | Source updated; browser and financial workflow acceptance pending |
+| Payments              | Yes                | Yes          | Yes           | Reversal drawer on detail            | Customer, method, currency, dates (API-supported) | New payment detail and allocation view          | Source updated; browser, reversal and responsive acceptance pending |
+| Tax rates             | Yes                | Yes          | Yes           | Create/edit drawer; status confirmation | API has no search/pagination/effective dates    | Existing tax API behavior retained               | Source updated; browser and financial snapshot acceptance pending |
 
 This matrix records component adoption only. It does not imply full functional, accessibility, role/tenant, or visual acceptance. The Phase C continuation added only actual receipt actor/movement fields to an existing response; authorization and transaction behavior were retained. The new `TableToolbar` and `TablePagination` are used by `/locations`; no location workflow was submitted in the browser.
 
 Phase C selectors and detail action panels are source-implemented. Authenticated browser, responsive and transaction acceptance remain blocked; see [ui-acceptance-results.md](ui-acceptance-results.md) and [progress/next-session.md](../progress/next-session.md). Roadmap stays at 30/47.
+
+Phase D rows record source-level component adoption only. No browser, live financial workflow, tenant/role denial, or responsive acceptance was executed for invoices, payments, or tax rates in this phase.
 
 
 Phase C source adoption: shared document components are used by PO, transfer, and sales draft routes; PO, transfer, and SO detail pages use `DocumentHeader`. This is source-level implementation, not browser or operational acceptance.
