@@ -1,12 +1,19 @@
 # Current state
 
-**Updated:** 2026-11-27 (Africa/Lagos)
+**Updated:** 2026-11-28 (Africa/Lagos)
 
 ## Repository and roadmap
 
-- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; verified HEAD `13157b6` (`UPdate the payment redisign`). This session's focused SALES-004 source/test/documentation changes are uncommitted. No unrelated work was overwritten.
+- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; verified HEAD `e9a09b0` (`update invoice postgres`), now at `origin/develop`. Prior SALES-004 implementation/test changes are included in that commit; this session's only repository change is ignored local `.env` configuration. No tracked file was modified.
 - Roadmap remains **30/47**. SALES-004, REPORT-002 and QUALITY-001 remain IN_PROGRESS. No task became complete; fixture code and mocked verification do not meet operational acceptance.
-- No commit, push, deployment, migration application, database reset, deletion, or credential change occurred.
+- No new commit, push, deployment, migration application, database reset, deletion, or credential change occurred.
+
+## Local acceptance readiness (2026-11-28)
+
+- Docker Desktop 28.5.1 is running; Compose PostgreSQL, Redis and S3Mock report healthy. Prisma status: **22 migrations, schema up to date**.
+- Started Nest API with local database access; `/api/v1/health/ready` returned **HTTP 200**. Started Next dev server on **port 3001** because port 3000 was occupied. Chrome reached the protected invoice route and redirected to `/login`; no authenticated QA session is available.
+- A read-only query found exactly one organization named `Quality 001 QA Workspace` and one active OWNER membership. Its ID, exact name, `NODE_ENV=development`, and `QA_API_BASE_URL=http://localhost:4000/api/v1` are set in ignored `.env` (no identifiers or secrets were printed). QA seed then safely refused before login/mutation because `QA_EMAIL` and `QA_PASSWORD` are absent.
+- No invoice, payment, account, or other business record was created or changed. SALES-004 remains IN_PROGRESS; REPORT-002 depends on SALES-004; count remains **30/47**.
 
 ## SALES-004 acceptance continuation (2026-11-27)
 
@@ -44,7 +51,7 @@
 - No backend files, API contracts, schema, credentials, permissions, migrations or records changed. Roadmap remains **30/47**.
 - Final sequential checks after the latest source edits: typecheck, lint, format check, `npm test` (60 API/shared + 2 web passed, 0 failed, 3 opt-in PostgreSQL skipped), production build (29 routes) and `git diff --check` passed. A first parallel build/test attempt conflicted during Prisma Client generation and is excluded. Generated `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo` were restored from HEAD.
 
-## QA implementation in this session
+## QA harness implementation evidence (2026-11-25)
 
 - Fixed document-state recovery: purchase-order recovery scans bounded pages; exact quantity comparisons use scaled BigInt; manifest IDs are checked against expected fixture identity; ambiguous candidates fail closed. Verification requires exact result counts/labels, unique resource IDs, organization/warehouse/product relationships, expected statuses and exact quantities.
 - Picking and fulfillment are reconciled independently from reloaded order state. A regression simulates interruption after the pick has posted but before fulfillment; resume completes fulfillment without a duplicate pick.
@@ -56,7 +63,7 @@
 
 Changed source files: `scripts/qa/manifest.mjs`, `scripts/qa/workflow.mjs`, `scripts/qa/workflow.test.mjs`, `scripts/qa/scenarios/registry.mjs`, `scripts/qa/scenarios/document-states.mjs`, new `scripts/qa/scenarios/invoice-states.mjs`, new `scripts/qa/scenarios/multi-currency.mjs`, new `scripts/qa/scenarios/financial-exports.mjs`, and new `scripts/qa/scenarios/authorization.mjs`. QA guide, acceptance record, architecture reporting note, master plan, task ledger and progress files are also updated.
 
-## Environment and verification
+## QA harness development evidence (historical; updated 2026-11-25)
 
 - Docker Compose reports PostgreSQL, Redis and S3Mock healthy. The API dev server is currently running and `/api/v1/health/ready` returned **HTTP 200** with a development database fingerprint. Existing Next at port **3000** returned HTTP 200 for `/login`; a second dev-server attempt exited because the existing process owns the Next development lock on port 3000. The existing server was left untouched.
 - `DATABASE_URL` is set. `NODE_ENV`, `QA_ENVIRONMENT`, `QA_API_BASE_URL`, `QA_ORGANIZATION_ID`, `QA_ORGANIZATION_NAME`, `QA_EMAIL`, and `QA_PASSWORD`, and `QA_AUTH_*` actor/fixture values remain missing; presence-only check printed no secret values. No authenticated QA scenario was seeded.
@@ -65,13 +72,13 @@ Changed source files: `scripts/qa/manifest.mjs`, `scripts/qa/workflow.mjs`, `scr
 - Final `npm run lint`, `npm run typecheck`, `npm run format:check`, `npm run build`, `npm run db:validate --workspace=@inventory/api`, and `git diff --check` passed. An unprivileged default `npm test` first failed because its HTTP contract test could not bind localhost (`EPERM`); the local-permission rerun passed. Production build generated 29 routes. Generated `apps/web/tsconfig.tsbuildinfo` and `apps/web/next-env.d.ts` changes were restored to their clean-at-start contents.
 - Read-only `npx prisma migrate status --config prisma.config.ts` returned 22 migrations found and schema up to date. No migration was needed or applied.
 
-## Blockers and acceptance gaps
+## Acceptance gaps recorded 2026-11-25 (historical; see 2026-11-28 status above)
 
 - QA account and organization configuration is missing; do not invent users or modify credentials. API and web processes are running, but cross-tenant, warehouse-role and finance-role checks cannot be run without configured identities and foreign-tenant fixture data.
 - Authorization scenario code is implemented but has not been executed; membership/grant revocation, export download revocation and actual multi-user identity coverage remain unverified. Cross-currency payment-allocation denial is untested; payment currency is inherited from the invoice and the API does not accept a payment currency field.
 - New invoice, multi-currency and financial-export fixtures have no real authenticated API/PostgreSQL execution. CSV rows are only verified by mocked API-level tests. Browser invoice/PDF and export file capture, report filters, performance EXPLAIN, and SALES-004/REPORT-002 acceptance remain open.
 
-## Exact next steps
+## Prior next steps (superseded 2026-11-28)
 
 1. Inspect `git status` and all diffs; preserve the uncommitted work. Do not commit or push.
 2. Do not run QA mutations until approved QA OWNER/org values are available in ignored `.env`; do not print values or change credentials.

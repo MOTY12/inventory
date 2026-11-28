@@ -1,52 +1,45 @@
-# Next session — resume SALES-004 acceptance
+# Next session — complete SALES-004 browser acceptance
 
-Updated: 2026-11-27 (Africa/Lagos)
+Updated: 2026-11-28 (Africa/Lagos)
 
-## Repository checkpoint
+## Checkpoint
 
-- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD `13157b6` (`UPdate the payment redisign`). No commit or push was made.
-- Roadmap: **30/47 complete**. SALES-004 remains **IN_PROGRESS**. Do not count it complete until browser-based authenticated invoice/payment workflow acceptance and PDF file capture are recorded.
-- Preserve the uncommitted source and documentation edits from this session. The build-generated tracked files `apps/web/next-env.d.ts` and `apps/web/tsconfig.tsbuildinfo` were restored to their clean-at-start state.
+- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; HEAD `e9a09b0` (`update invoice postgres`), equal to `origin/develop` at review time. No tracked changes were made in this session; no commit, push, or deployment.
+- Roadmap count remains **30/47**. SALES-004 is **IN_PROGRESS**. REPORT-002 depends on SALES-004 in `docs/implementation/dependency-map.md`, so it must not be marked complete or advanced first.
+- The existing SALES-004 implementation and isolated PostgreSQL evidence (4/4), typecheck/lint/format/default suite, 18 QA harness tests and production build were already recorded. `npm run qa:test` was rerun now and passed **18/18**.
 
-## Completed this session
+## Environment and QA workspace
 
-- Improved invoice creation retry behavior with a stable logical idempotency key and guarded asynchronous organization/order/tax-rate loads against stale responses.
-- Guarded invoice detail, audit and tax-rate loads against stale organization responses.
-- Added web unit coverage for stable idempotency keys (2 tests).
-- Extended `apps/api/test/sales-invoices.postgres.integration.test.mjs` with a controlled real-PostgreSQL scenario covering partial/full payment, reversal/replacement, invoice/customer totals, tax rounding/snapshot stability, PDF contents, and inventory non-mutation.
-- Explicit opt-in SALES-004 PostgreSQL integration suite: **4 passed, 0 failed, 0 skipped** against an isolated randomized schema. Existing data was not used for mutation.
-- Full verification: `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test` (**62 API/shared + 4 web passed; 3 opt-in PostgreSQL suites skipped in default run**), `npm run qa:test` (**18/18**), and `npm run build` (31 Next routes) passed. `git diff --check` passed before progress documentation edits; rerun after this checkpoint is written.
-- Docker Compose: PostgreSQL, Redis, S3Mock healthy. `npx prisma migrate status --config prisma.config.ts`: **22 migrations found; schema up to date**. No migration applied.
-- Authenticated Chrome showed an existing sales order and issued paid invoice. `/invoices/new` had no eligible orders. These are persistent user/business records; none were changed or used for a browser workflow.
+- Docker Compose PostgreSQL, Redis and S3Mock are healthy. Prisma reports 22 migrations and schema up to date. Nest API was started with local DB access; readiness returned HTTP 200.
+- Next dev server was started at `http://localhost:3001` because port 3000 was occupied. Chrome opened a protected route and reached `/login`; there is no authenticated session in the available Chrome tab.
+- Read-only database check found exactly one `Quality 001 QA Workspace` and one active OWNER membership. Verified workspace ID/name and `NODE_ENV=development` plus `QA_API_BASE_URL=http://localhost:4000/api/v1` were added to the ignored local `.env`. No user identifiers or credentials were printed.
+- `QA_SCENARIO=document-states npm run qa:seed` was attempted after this configuration and stopped safely with: `Set QA_EMAIL and QA_PASSWORD outside source control`. No API login or fixture mutation occurred.
 
-## Files changed
+## Exact owner action required
 
-- `apps/api/test/sales-invoices.postgres.integration.test.mjs`
-- `apps/web/src/app/invoices/new/page.tsx`
-- `apps/web/src/app/invoices/[invoiceId]/page.tsx`
-- `apps/web/src/features/sales/idempotency.ts` (new)
-- `apps/web/test/idempotency.test.mjs` (new)
-- `docs/implementation/master-plan.md`
-- `docs/implementation/task-breakdown.md`
-- `docs/progress/current-state.md`
-- `docs/progress/next-session.md`
-- `docs/progress/pending-tasks.md`
-- `docs/progress/blockers.md`
-- `docs/progress/session-log.md`
-- `docs/design/ui-acceptance-results.md`
+In the repository’s ignored `.env`, set credentials for the existing active OWNER account in that QA workspace:
 
-## Blocker and remaining acceptance
+```dotenv
+QA_EMAIL=<owner-provided QA account email>
+QA_PASSWORD=<owner-provided QA account password>
+```
 
-The QA fixture tool refused to run before mutation because `NODE_ENV` is unset. Also absent: `QA_ORGANIZATION_ID`, `QA_ORGANIZATION_NAME` (must be `Quality 001 QA Workspace`), `QA_EMAIL`, `QA_PASSWORD`, and optional authorization actor values `QA_AUTH_OWNER_EMAIL/PASSWORD` plus restricted/foreign identities. `QA_ENVIRONMENT=development` and `DATABASE_URL` are present; `QA_API_BASE_URL` defaults to `http://localhost:4000/api/v1`. Do not create or change accounts, invent credentials, seed without the required safety settings, or mutate existing business data.
+Do not send the password in chat or commit `.env`. If that OWNER credential is not available, provide explicit authorization to create a dedicated QA account through the supported local registration/invitation flow. Do not reset any existing password.
 
-## Exact next steps
+## Resume steps
 
-1. Inspect `git status --short` and the relevant diffs; preserve all existing edits. Confirm HEAD remains `13157b6` and roadmap count 30/47.
-2. Obtain owner-provided disposable QA workspace and owner login values through the project’s existing local configuration process. Set `NODE_ENV=development`, exact workspace name/ID, `QA_EMAIL`, and `QA_PASSWORD` in ignored `.env`; do not print secrets. Configure `QA_AUTH_*` only if running authorization scenarios.
-3. Run `QA_SCENARIO=document-states npm run qa:seed` only after safety validation succeeds. Confirm the seed reports disposable QA resources before proceeding.
-4. In authenticated Chrome, create/verify an eligible order in that QA workspace, issue an invoice, inspect its detail and audit history, record partial and multiple payments, verify balance/status, download and inspect the PDF, exercise retries and reversal where the scenario permits, and verify tenant/warehouse role denials.
-5. Verify invoice/payment operations do not alter stock ledger movements or warehouse balances. Save exact browser/API evidence and any QA run/resource IDs, without exposing passwords.
-6. Run `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run qa:test`, `npm run build`, `git diff --check`; explicitly run relevant `RUN_POSTGRES_INTEGRATION=1` suites and report skipped suites separately.
-7. Update task status only against SALES-004 acceptance criteria. Recalculate count from unique task entries. If SALES-004 is accepted, advance to the next dependency-ready roadmap task (likely SALES-005); do not start REPORT-002 or another feature before this acceptance pass.
+1. Check `git status --short`, `git rev-parse --short HEAD`, and confirm `e9a09b0`; preserve any later user work.
+2. After owner credentials are in ignored `.env`, verify only variable presence (never print values), then run `QA_SCENARIO=document-states npm run qa:seed`. Record the returned QA run ID.
+3. Use `QA_RUN_ID=<run-id> npm run qa:verify` and inspect/resume the manifest before any retry. Do not create duplicate fixture runs blindly.
+4. Sign in to the local app at the currently running port (3001 unless Next reports otherwise), using the approved QA OWNER account. Verify invoice creation/issue, sequential number, immutable issued fields, captured actual PDF, partial/full payment, reversal/replacement, customer financial history and final reconciliation.
+5. Verify invoice/payment operations leave stock movement, reservations and warehouse balances unchanged. Execute the documented authorization checks only when restricted/foreign QA actor values are configured.
+6. Reuse already recorded passing tests. After any source fixes, rerun relevant tests and `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run qa:test`, `npm run build`, `git diff --check`; explicitly run affected opt-in PostgreSQL suites and report skipped counts separately.
+7. Complete SALES-004 only if all mandatory acceptance is evidenced, including authenticated browser workflow and PDF file inspection. Recalculate the count from individual task entries. Then and only then advance to REPORT-002.
 
-No commit, push, production deployment, database reset, or persistent-record mutation occurred in this session.
+## Remaining blockers
+
+- Missing `QA_EMAIL` and `QA_PASSWORD`; no authenticated Chrome session.
+- Browser invoice/payment lifecycle, real PDF file capture/inspection, and browser-level financial/inventory reconciliation remain unverified.
+- No separate P0 implementation task is dependency-ready ahead of SALES-004 in the approved graph: REPORT-002 depends on SALES-004, and QUALITY-001 depends on REPORT-002. Preserve this order rather than bypassing dependencies.
+
+No persistent business data was changed in this session.

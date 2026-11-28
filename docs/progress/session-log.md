@@ -552,3 +552,11 @@
 - Docker Compose services PostgreSQL, Redis and S3Mock are healthy; Prisma status reports 22 migrations and schema up to date. No migration was applied.
 - Verification passed: typecheck, lint, format check, `npm test` (62 API/shared + 4 web; 3 opt-in PostgreSQL suites skipped by default), `npm run qa:test` (18/18), production build (31 routes). SALES-004 opt-in suite was explicitly run. `git diff --check` was run before doc updates and must be repeated after checkpoint changes.
 - Authenticated Chrome confirmed existing invoice/order data but `/invoices/new` had no eligible order. QA seeding safely refused because `NODE_ENV` and QA configuration were absent. No persistent records changed; browser invoice/payment lifecycle and browser PDF download remain unverified. SALES-004 stays IN_PROGRESS; total remains 30/47. No commit, push or deployment.
+
+# 2026-11-28 — SALES-004 environment and QA access check
+
+- Resumed from `develop` HEAD `e9a09b0`, already equal to `origin/develop`; tracked worktree was clean. The previous session's code and acceptance evidence are in this commit.
+- Docker Desktop 28.5.1 and PostgreSQL/Redis/S3Mock are healthy. Prisma confirms 22 migrations and schema up to date. Started the API with local DB access; readiness returned HTTP 200. Started Next on port 3001 because port 3000 was occupied. Chrome navigated to a protected invoice route and reached `/login`; no sign-in was submitted.
+- A read-only query found one `Quality 001 QA Workspace` and one active OWNER membership. Populated the verified workspace ID/name, `NODE_ENV=development`, and `QA_API_BASE_URL` in ignored `.env`; no account or records were created/changed and no values/secrets were printed.
+- Attempted `QA_SCENARIO=document-states npm run qa:seed`; it stopped safely before login or mutation: `Set QA_EMAIL and QA_PASSWORD outside source control`. QA harness `npm run qa:test` passed 18/18.
+- SALES-004 remains IN_PROGRESS; browser invoice/payment/PDF acceptance is still blocked on owner-provided existing QA OWNER credentials or explicit authorization to create a dedicated account. REPORT-002 depends on SALES-004 in the approved graph, so it was not advanced. Roadmap remains 30/47. No tracked changes, commit, push, or deployment.

@@ -1,13 +1,13 @@
 # Blockers and constraints
 
-**Updated 2026-11-27 (Africa/Lagos).** Historical blockers below are superseded by the latest evidence where noted.
+**Updated 2026-11-28 (Africa/Lagos).** Historical blockers below are superseded by the latest evidence where noted.
 
 ## SALES-004 acceptance update (2026-11-27)
 
 - Local services are available: PostgreSQL, Redis and S3Mock healthy; Prisma reports schema up to date at 22 migrations. The SALES-004 isolated PostgreSQL suite passed 4/4 and web idempotency tests passed 2/2.
-- Browser UAT still needs safe disposable QA data. `QA_SCENARIO=document-states npm run qa:seed` refused before mutation because `NODE_ENV` was unset. QA organization ID/name and QA email/password are also missing. Authenticated Chrome showed existing customer/order/invoice records and no eligible order on `/invoices/new`; these persistent records were not changed.
-- Required next action: configure owner-provided disposable QA org/login in ignored `.env`, with `NODE_ENV=development` and exact org name `Quality 001 QA Workspace`, then run the existing QA scenario and complete browser invoice/payment/PDF flow. Do not create credentials or use existing non-disposable records.
-- SALES-004 remains IN_PROGRESS; roadmap remains 30/47. Code tests, build or source-level evidence do not substitute for the missing browser acceptance.
+- A read-only query verified exactly one `Quality 001 QA Workspace` and one active OWNER membership. Its ID/name, `NODE_ENV=development`, and `QA_API_BASE_URL` have been placed in ignored `.env`. The QA seed was rerun and refused before login/mutation because `QA_EMAIL` and `QA_PASSWORD` are missing. Chrome reached `/login` at port 3001; no authenticated QA session is available.
+- Required next action: owner sets the existing QA OWNER account's `QA_EMAIL` and `QA_PASSWORD` in ignored `.env`, or explicitly authorizes creation of a dedicated account through the supported local flow if those credentials do not exist. Do not create credentials, reset passwords, or use existing non-disposable business records.
+- SALES-004 remains IN_PROGRESS; roadmap remains 30/47. Code tests, build or source-level evidence do not substitute for the missing browser acceptance. REPORT-002 remains dependency-gated on SALES-004.
 
 ## Active verification gaps
 
@@ -20,10 +20,10 @@
 - **QUALITY-001 execution:** Harness code covers PO/SO recovery, nine invoice states, NGN/USD reporting, eight financial CSV exports and read-only authorization probes. No authenticated scenario ran. Membership/grant revocation, export-download access denial, cross-currency payment allocation, and the named business lifecycle remain NOT RUN and dependency-gated.
 - **Report performance:** All export types, queue/storage, private service download, retries and expiry passed isolated integration, but a representative large-tenant performance benchmark was not run.
 - **Dependency audit:** Current `npm audit --omit=dev --audit-level=high` could not reach `registry.npmjs.org` (`ENOTFOUND`). Earlier installation reported seven lockfile advisories (4 moderate, 3 high) without full advisory detail. No clean audit is claimed.
-- **Local QA configuration:** `DATABASE_URL` and `QA_ENVIRONMENT=development` are set. `QA_API_BASE_URL` is optional and defaults to `http://localhost:4000/api/v1`. Missing: `NODE_ENV`, `QA_ORGANIZATION_ID`, `QA_ORGANIZATION_NAME`, `QA_EMAIL`, `QA_PASSWORD`, and optional `QA_AUTH_*` authorization actors. Do not record secret values. QA seeding refused before mutation because `NODE_ENV` is unset.
-- **Authenticated UI acceptance:** Authenticated Chrome loaded existing local sales/invoice data, but `/invoices/new` had no eligible order. The existing records were not used for tests or mutated. A disposable authenticated invoice/payment browser workflow and actual browser PDF download remain unverified.
+- **Local QA configuration:** `DATABASE_URL`, `QA_ENVIRONMENT=development`, `NODE_ENV=development`, `QA_API_BASE_URL`, `QA_ORGANIZATION_ID`, and `QA_ORGANIZATION_NAME` are set in ignored `.env`; workspace identity was verified read-only. Missing: `QA_EMAIL`, `QA_PASSWORD`, and optional `QA_AUTH_*` actors. QA seed stops before login/mutation because the owner credentials are absent.
+- **Authenticated UI acceptance:** Chrome currently reaches `/login` at port 3001; no authenticated QA session or approved credentials are available. Browser invoice/payment workflow, PDF file capture, and browser reconciliation remain unverified.
 - **QUALITY-003:** PostgreSQL, queue interruption/restart, pending-row dispatch, and generated-object backup/missing/restore rehearsals pass locally; measured timings are recorded in `docs/operations/backup-restore.md`. Production independent-account replication/encryption has not been configured or drilled. RPO/RTO and retention/residency/key policies require owner approval before closure.
-- **SALES-004 verification:** Authenticated HTTP/controller acceptance and the isolated PostgreSQL integration suite are verified; interactive browser lifecycle acceptance and browser PDF capture remain unrun. PostgreSQL is reachable; Docker services are healthy and Prisma schema is current.
+- **SALES-004 verification:** Authenticated HTTP/controller acceptance and the isolated PostgreSQL integration suite are verified; interactive browser lifecycle acceptance and browser PDF capture remain unrun. PostgreSQL is reachable; Docker services are healthy and Prisma schema is current. REPORT-002 explicitly depends on SALES-004 in the dependency map.
 
 ## 2026-11-24 REPORT-002 checkpoint correction
 

@@ -87,3 +87,9 @@ No screenshot files were saved; the browser tool displayed inline observations. 
 - Authenticated Chrome opened `/sales-orders`, `/invoices`, an existing invoice detail, and `/invoices/new`. Existing business data loaded from the API; the existing invoice showed paid status, an 8,000 NGN total, payment and audit history. Invoice creation showed **No eligible sales orders** because the only visible confirmed order was already invoiced.
 - No persistent record was created or changed. No payment/reversal was submitted, and no PDF from existing business records was downloaded. Browser invoice/payment lifecycle, retry, PDF file capture, responsive behavior and denial cases remain unverified.
 - QA seed was attempted only after checking config and safely refused before mutation because `NODE_ENV` was absent (QA org and account values are also missing). SALES-004 remains IN_PROGRESS; roadmap count stays 30/47.
+
+# 2026-11-28 — Authenticated SALES-004 UAT prerequisite check
+
+- Docker-backed development services are healthy and API readiness returned HTTP 200. Next was opened at port 3001; Chrome navigated to a protected invoice route and was redirected to the sign-in page. No credentials were entered and no invoice/payment was created.
+- Verified the documented QA workspace exists and has one active OWNER membership. Added only the verified workspace identity and local development/API settings to ignored `.env`. QA seed then stopped safely because `QA_EMAIL` and `QA_PASSWORD` are absent.
+- This is not invoice/payment workflow acceptance. No PDF file was downloaded or inspected; SALES-004 remains IN_PROGRESS and the roadmap remains 30/47.
