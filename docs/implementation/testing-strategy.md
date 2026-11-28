@@ -1,6 +1,6 @@
 # Testing strategy
 
-Test design only; no tests were added or run during this planning phase. Use deterministic fixtures and a real PostgreSQL transaction environment for integrity claims.
+The first version of this document was written during planning, before application tests existed. Implementation and verification have since been recorded per milestone in `docs/progress/session-log.md`. Use deterministic fixtures and a real PostgreSQL transaction environment for integrity claims.
 
 ## Layers
 - Unit: quantity formulas, state machines, UoM conversions, money rounding, permission policy.
@@ -21,6 +21,7 @@ Test design only; no tests were added or run during this planning phase. Use det
 8. Tenant A cannot read/mutate Tenant B by UUID, report, import, export or background job.
 9. Failed background job retries boundedly and operator can inspect/replay safely.
 10. DB transaction rollback leaves document, balance, movement, audit and outbox consistent.
+11. Concurrent sales confirmations cannot reserve the same available quantity; cancellation releases once and partial/full fulfillment consumes only its matching reservation. Distinct picking-stage bounds and sales-fulfillment-specific rollback remain pending until that workflow is implemented/tested.
 
 ## Test data and determinism
 Seed synthetic organizations, branches, products, units, suppliers/customers and transactions. No real customer data. Freeze clock and FX rates in tests. Use unique idempotency keys per fixture. Parallel tests use isolated tenant IDs/database schemas. Verify report totals against independent ledger sums.

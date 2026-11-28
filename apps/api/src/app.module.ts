@@ -1,4 +1,44 @@
-import { Module } from "@nestjs/common";
+import { Controller, Get, Module } from "@nestjs/common";
+import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { serviceStatusSchema } from "@inventory/shared";
+import { HealthController } from "./health/health.controller";
+import { PrismaModule } from "./database/prisma.module";
+import { AuthModule } from "./identity/auth.module";
+import { OrganizationModule } from "./organizations/organization.module";
+import { LocationsModule } from "./locations/locations.module";
+import { CatalogModule } from "./catalog/catalog.module";
+import { InventoryModule } from "./inventory/inventory.module";
+import { ProcurementModule } from "./procurement/procurement.module";
+import { SalesModule } from "./sales/sales.module";
+import { ImportsModule } from "./imports/imports.module";
+import { ReportingModule } from "./reporting/reporting.module";
 
-@Module({})
+@ApiTags("system")
+@Controller()
+class AppController {
+  @Get("status")
+  @ApiOperation({ summary: "Check that the API process is responding" })
+  getStatus() {
+    return serviceStatusSchema.parse({
+      service: "inventory-api",
+      status: "ok",
+    });
+  }
+}
+
+@Module({
+  imports: [
+    PrismaModule,
+    AuthModule,
+    OrganizationModule,
+    LocationsModule,
+    CatalogModule,
+    InventoryModule,
+    ProcurementModule,
+    SalesModule,
+    ImportsModule,
+    ReportingModule,
+  ],
+  controllers: [AppController, HealthController],
+})
 export class AppModule {}

@@ -26,7 +26,7 @@ TypeScript modular monolith; Next.js web UI; NestJS REST API; PostgreSQL + Prism
 - New decisions that materially affect scope, accounting, legal compliance, or deployment must be documented and approved before implementation.
 
 ## Commands
-Workspace uses npm workspaces (Node.js >=24.22.1). Confirmed commands: `npm install`, `npm run build`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run dev:web`, `npm run dev:api`. Database/container commands will be recorded after Compose is implemented. Do not claim tests pass unless actually run; no application test script exists yet.
+Workspace uses npm workspaces (Node.js >=24.22.1). Confirmed commands: `npm install`, `npm run build`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`, `npm run validate:env`, `npm run dev:web`, `npm run dev:api`, `docker compose config --quiet`, `docker compose up -d`, `docker compose ps`, `docker compose down`. The web production build explicitly uses Next's Webpack compiler because Turbopack process binding is denied in this environment; both are production build paths. Do not claim container health unless verified.
 
 ## Testing policy
 Follow `docs/implementation/testing-strategy.md`. Run task-relevant checks when the user requests verification or when an approved implementation task requires them. Do not claim tests pass unless they were run and results recorded. Distinguish documentation consistency checks from application tests. Do not create application tests before application code and the relevant task are authorized.

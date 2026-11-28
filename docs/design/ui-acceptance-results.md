@@ -1,0 +1,108 @@
+# UI redesign acceptance results
+
+**Updated:** 2026-11-27 (Africa/Lagos)
+**Scope:** Customer reference and selected list/drawer standardization pass. Nine-module definition of done is **not met**.
+
+## 2026-11-28 — business reporting browser automation
+
+- Added one discoverable Playwright test for `/reports/business`; it exercises summary/detail/aging views, supported date/branch/warehouse/currency/status/search/sort filters, and captures/reconciles the eight NGN/USD CSV fixture downloads. It shares QA manifest validation and OWNER sign-in helpers with the finance test.
+- `npm run qa:e2e:reports -- --list` discovers one test. The test was **not executed**; local API, database, Redis, S3Mock and web services were unavailable in QA preflight. No browser rendering or CSV file download is claimed.
+- QA reconciliation tests pass 29/29. Full test/build/typecheck/lint/format results and the current service blocker are recorded in `docs/progress/current-state.md`.
+
+## Browser evidence
+
+| Page / behavior                                                | Result             | Evidence / limitation                                                                                                                                                                                                                                                  |
+| -------------------------------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Customer reference                                             | Partial            | Chrome showed the Customer Add drawer already open in an existing user tab with labeled fields and grouped sections. This session did not change that tab or submit the form. Earlier list review noted a transient Unauthorized alert; root cause remains unresolved. |
+| Products list                                                  | Rendering observed | Chrome displayed one existing product with SKU, category, unit, price, active status and actions.                                                                                                                                                                      |
+| Product create drawer                                          | Rendering observed | Drawer displayed the existing API-backed category and unit choices and supported product fields. No creation or validation submission was attempted. Screenshot showed the standard two-column desktop layout.                                                         |
+| Reorder rules list                                             | Rendering observed | Chrome showed the shared header, filters, shared table headers and 0-record empty state. The corrected toolbar spacing was rechecked. No rule created.                                                                                                                 |
+| Stock Counts source                                           | Code implemented    | `/inventory` now defaults to a paginated count table, with separate balance/movement tabs, a draft drawer, count details, and explicit posting confirmation. No authenticated rendering or workflow mutation was performed. |
+| Branches / Warehouses source                                   | Code implemented    | `/locations` now separates lists into tabs and uses shared table, search/filter toolbar, pagination, drawers, status badges and archive confirmation. Chrome redirected a fresh tab to `/login`, so authenticated rendering was not verified. |
+| Reorder rule drawer                                            | Rendering observed | Final browser view showed the two-column desktop form and Cancel/Create footer. No rule created. A generic request-failure banner was visible behind the drawer during hot reload; cause is unknown.                                                                   |
+| Low stock                                                      | Source-level only  | Uses shared header/table/status in source; populated browser state not reviewed.                                                                                                                                                                                       |
+| Purchase Orders list                                           | Source-level only  | Shared header, table and status badge adopted after the browser review. The draft editor remains inline; latest changes not browser-checked.                                                                                                                           |
+| Transfers, Sales Orders and Stock Counts                       | Not accepted       | These workflows were not comprehensively reviewed after changes.                                                                                                                                                                    |
+| Responsive breakpoints                                         | Not run            | No 360/390/768/1024/1440/1920 viewport sweep this pass. Prior 390px customer list measurement remains partial historical evidence only.                                                                                                                                |
+| Create/edit/archive/transaction actions                        | Not run            | No business records changed. No form mutation, archive, transfer lifecycle, count posting, PO workflow or sales workflow was exercised.                                                                                                                                |
+| Accessibility, RBAC, tenant isolation                          | Not run            | No keyboard/screen-reader audit, role-switch test or cross-tenant denial test was performed.                                                                                                                                                                           |
+
+## Automated checks
+
+| Check                    | Result                                                                                                                                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run typecheck`      | Passed after sequential Prisma Client generation.                                                                                                                                                 |
+| `npm run lint`           | Passed.                                                                                                                                                                                           |
+| `npm run format:check`   | Passed after formatting the changed source and documentation files.                                                                                                                               |
+| `npm test`               | Passed sequentially: 60 API/shared and 2 web tests, 0 failures; 3 opt-in PostgreSQL tests skipped. The earlier parallel run failed during concurrent Prisma Client generation and is not counted. |
+| `npm run build`          | Passed sequentially; Next.js compiled and generated all 29 routes. The earlier parallel build failure during overlapping Prisma generation is not counted.                                        |
+| `git diff --check`       | Passed after code changes.                                                                                                                                                                        |
+| Responsive browser check | Not run.                                                                                                                                                                                          |
+
+No screenshot files were saved; the browser tool displayed inline observations. No migrations, backend behavior, credentials, permissions, or business data were changed. PostgreSQL integration tests, UI-specific regression tests, full workflow tests and the requested responsive sweep remain open.
+
+## Location-slice checks (2026-11-26)
+
+- `npm run typecheck`, `npm run lint`, and `npm run format:check`: passed after both UI slices.
+- `npm test`: 60 API/shared passed, 0 failed; 3 opt-in PostgreSQL suites skipped; 2 web tests passed, 0 failed. No UI component test covers the new toolbar, pagination, or locations page.
+- `npm run build`: passed; 29 routes generated.
+- `git diff --check`: passed after documentation edits.
+- Browser: `/locations` redirected to `/login` in a new Chrome tab. No authenticated location or inventory UI, responsive dimensions, drawer, RBAC behavior, or mutation workflow was verified. No data was changed.
+- Location API source inspection confirms server-side tenant and warehouse-grant scoping and supports branch/warehouse status, search, paging, and branch filters. The UI loads up to the API maximum of 100 branch choices for selectors. Branch search matches names only. The list endpoint does not return branch warehouse counts, so no count is fabricated.
+
+- Stock Count source uses the existing single-product draft API, exact decimal string variance arithmetic, and the existing explicit `/post` endpoint behind a confirmation dialog. No multi-product count is implied. The list API returns rows and total; count, balance, and movement page sizes are sent to the server. Workflow and inventory reconciliation are not browser-verified.
+
+## Phase C transaction details and selectors (2026-11-26)
+
+### Source implementation evidence
+
+- **Purchase orders:** shared information/summary/line table/activity components; actual receipt records loaded with line/product, actor and stock-movement presence; partial/full receiving, receive-all, barcode scanning, validation and confirmation retained.
+- **Transfers:** shared information/table/action/activity components; quantity totals use exact decimal helpers. Submit, dispatch and partial receive are shown according to transfer state and role. Dispatch uses a stable per-transfer key; receipt retry keeps the same key for the same submitted payload.
+- **Sales orders:** shared information/summary/activity; line and reservation detail retained. Existing pick and fulfillment APIs remain, with explicit confirmation and consequence explanations. Existing barcode scan behavior remains. Eligible invoice creation is linked for finance-capable roles and the target order is preselected.
+- **Selectors:** debounced server query and pagination for active suppliers, customers and grant-visible warehouses; keyboard navigation, clear, loading/empty/error states. Used by PO/SO creation, SO edit, and transfer creation. No 100-record cap remains for those selector workflows.
+- **Async checks in source:** request generation and organization guards on selector/detail requests; source warehouse changes keep balance request generation and refresh guards. These are code-level properties only; no race was exercised in a browser.
+
+### Automated checks in this continuation
+
+- Web typecheck passed; lint passed; format check passed.
+- Default test command passed **62 API/shared + 2 web**, 0 failures; **3 opt-in PostgreSQL suites skipped**.
+- QA test command passed **18/18**.
+- Production build passed; Nest build and Next TypeScript validation completed, with **31 routes**.
+- Full standalone `npm run typecheck` passed after the three schema-declared required user relations inferred as `never` were explicitly typed in auth/reporting. Production build passed independently as well.
+- Docker app not found, local PostgreSQL reported no response and ports 3000/4000 refused connections. No browser, migration status, live API/DB workflow, responsive sweep, role/tenant check or inventory reconciliation was performed. No records changed. No component interaction harness was added.
+
+**Disposition:** Phase C source implementation is substantially complete; full Phase C acceptance is **NOT ACCEPTED** pending live browser, responsive, operational, retry and reconciliation evidence. Backend roadmap remains **30/47**.
+
+
+## Phase C source and verification (2026-11-26)
+
+- Source implemented: shared document presentation components; PO/transfer creation moved to dedicated routes; sales draft uses shared layout and line-item pattern; three detail routes use shared document headers. Product catalog search is debounced and paginated. Existing scanner and transaction actions remain.
+- Focused API regression: product-filtered balance read remains scoped by active organization and warehouse; unfiltered listing remains unfiltered. Included in `npm test`.
+- Checks after code changes: full `npm run typecheck` passed after Prisma Client generation; `npm run lint` passed; `npm run format:check` passed; `npm test` passed 62 API/shared + 2 web (3 opt-in PostgreSQL suites skipped); `npm run qa:test` passed 18; `npm run build` passed and generated 31 routes.
+- Browser and operational: not run. Both local ports 3000 and 4000 refused connections. No authenticated session, DB-backed availability, form mutation, lifecycle action, responsive viewport, cross-tenant, warehouse role, or ledger acceptance was observed. No data changed.
+- Acceptance remains source-level only.
+# 2026-11-27 — Phase D source checks (not browser acceptance)
+
+- Invoice listing source uses the shared header/table/pagination/status components and existing API summary, with per-currency values. No browser/API session was used to verify data behavior or visual layout.
+- Payment listing and new payment detail/reversal source were checked against the existing controller contract. No receipt/reversal was created, and no authenticated detail or reversal behavior was exercised.
+- Tax-rate source uses shared listing/drawer/confirmation components. No tax record was created/changed; issued invoice snapshot preservation was not operationally tested.
+- Typecheck, lint, format check, default tests (62 API/shared + 2 web pass; 3 opt-in PostgreSQL suites skipped), QA tests (18/18), production build (31 routes), and diff check passed. Browser/responsive acceptance, live DB and role/tenant denial remain pending.
+
+# 2026-11-27 — SALES-004 browser attempt
+
+- Authenticated Chrome opened `/sales-orders`, `/invoices`, an existing invoice detail, and `/invoices/new`. Existing business data loaded from the API; the existing invoice showed paid status, an 8,000 NGN total, payment and audit history. Invoice creation showed **No eligible sales orders** because the only visible confirmed order was already invoiced.
+- No persistent record was created or changed. No payment/reversal was submitted, and no PDF from existing business records was downloaded. Browser invoice/payment lifecycle, retry, PDF file capture, responsive behavior and denial cases remain unverified.
+- QA seed was attempted only after checking config and safely refused before mutation because `NODE_ENV` was absent (QA org and account values are also missing). SALES-004 remains IN_PROGRESS; roadmap count stays 30/47.
+
+# 2026-11-28 — Authenticated SALES-004 UAT prerequisite check
+
+- Docker-backed development services are healthy and API readiness returned HTTP 200. Next was opened at port 3001; Chrome navigated to a protected invoice route and was redirected to the sign-in page. No credentials were entered and no invoice/payment was created.
+- Verified the documented QA workspace exists and has one active OWNER membership. Added only the verified workspace identity and local development/API settings to ignored `.env`. QA seed then stopped safely because `QA_EMAIL` and `QA_PASSWORD` are absent.
+- This is not invoice/payment workflow acceptance. No PDF file was downloaded or inspected; SALES-004 remains IN_PROGRESS and the roadmap remains 30/47.
+
+# 2026-11-28 — QA preflight and browser test setup
+
+- Added read-only `npm run qa:preflight` and configured Playwright to target the local Stockroom web URL from `.env`. The preflight verified API readiness, database fingerprint/target, Redis auth/PING, S3Mock bucket, `/login`, and migration status. These service checks passed.
+- Configured QA login authenticated but did not have active OWNER membership in the exact QA workspace. The preflight logged out and stopped before any business fixture mutation. The owner selected the existing QA OWNER credential path; the local `.env` must be updated to that account.
+- Added one opt-in finance browser scenario to create/resume a manifest-linked invoice, issue/download/inspect its PDF, record/reverse/replace payments, reconcile customer financial UI and exact PostgreSQL totals, and compare inventory state. Playwright lists the test, but the browser workflow was not executed. No PDF or invoice/payment was created.
+- QA harness tests passed 27/27; full tests passed 62 API/shared + 4 web with 3 opt-in PostgreSQL suites skipped; the SALES-004 isolated PostgreSQL suite passed 4/4; typecheck/lint/format passed; production build generated 31 routes. Browser acceptance remains NOT RUN; SALES-004 and roadmap count remain unchanged at 30/47.

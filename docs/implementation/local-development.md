@@ -6,20 +6,25 @@ The local Compose stack provides PostgreSQL, Redis and an S3 API test server. It
 
 ```sh
 cp .env.example .env
+npm run validate:env
 docker compose up -d
 docker compose ps
 docker compose down
 ```
 
+`npm run validate:env` checks `.env` (or `.env.example` when `.env` is absent) using the shared Zod schema. Compose health checks cover database readiness, authenticated Redis ping, and the S3Mock health endpoint.
+
 Named volumes preserve local database, Redis and S3Mock files across container recreation. To permanently reset local state, remove the named volumes with `docker compose down -v`; this deletes local development data.
 
 ## Endpoints
 
-- PostgreSQL: `localhost:5432`, database `inventory_dev`, user `inventory`.
+- PostgreSQL: `localhost:${POSTGRES_PORT}`, default `5432`, database `inventory_dev`, user `inventory`. If another local PostgreSQL owns the default port, choose a free `POSTGRES_PORT` and update the port in `DATABASE_URL` to match. Existing local databases are not reset by Compose.
 - Redis: `localhost:6379`, password from local `.env`.
 - S3Mock: `http://localhost:9090`, region `us-east-1`, bucket `inventory-local`.
 
 All published ports bind to loopback. Choose different host ports in `.env` if there is a conflict.
+
+For account verification in local development, start the API with `NODE_ENV=development npm run dev:api`. This enables the loopback-only in-memory development mailbox; it is unavailable outside development mode. Start the web app with `npm run dev:web`.
 
 ## Limitations
 

@@ -1,7 +1,12 @@
 node_modules/
+apps/api/src/generated/prisma/
 .next/
 dist/
 coverage/
+.qa-runs/
+.qa-artifacts/
+test-results/
+playwright-report/
 .env
 .env.*
 !.env.example

@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
+import "../styles/tokens.css";
 import "./globals.css";
+import { SessionProvider } from "../features/auth/session-provider";
+import { ApplicationFrame } from "../components/workspace-shell";
 
 export const metadata: Metadata = {
-  title: "Inventory workspace",
-  description: "Inventory management workspace",
+  title: "Stockroom | Inventory workspace",
+  description: "A clear starting point for your stock operations.",
 };
 
 export default function RootLayout({
@@ -13,7 +16,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <SessionProvider>
+          <ApplicationFrame>{children}</ApplicationFrame>
+        </SessionProvider>
+      </body>
     </html>
   );
 }

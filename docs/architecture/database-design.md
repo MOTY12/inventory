@@ -33,7 +33,7 @@ PostgreSQL; UUID primary keys; `organization_id` required on tenant-owned rows; 
 For each critical write: reserve idempotency key, lock inventory balance rows in sorted warehouse/product order, check current state/policy, insert movement/reservation/document transitions and update balance projection in one transaction, append audit/outbox. Retry deadlocks/serialization failures with bounded attempts and same idempotency key. Do not rely solely on client-side checks.
 
 ## Valuation
-MVP recommendation: moving weighted average at warehouse/product level with cost snapshot on inbound/outbound movements. This is a proposed accounting choice requiring owner/accountant approval. Keep receipts, costs and reversals sufficient to add FIFO later. Landed costs and currency conversion are excluded until policy defined.
+Owner-directed provisional implementation default: moving weighted average at warehouse/product level with cost snapshot on inbound/outbound movements (DEC-007). This is not validated accounting policy. Keep receipts, costs and reversals sufficient to add FIFO later. Landed costs and currency conversion are excluded pending owner/accountant review.
 
 ## Retention/privacy
 Determine whether invoices and audit data must be retained for legal/accounting purposes. Deletion requests should anonymize user identity where permissible while preserving legally required transaction records. Avoid unrestricted JSON fields for core data.
