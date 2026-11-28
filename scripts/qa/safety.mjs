@@ -12,7 +12,7 @@ function isLoopback(hostname) {
   );
 }
 
-export function assertSafeTarget(env) {
+export function assertSafeTarget(env, { requireCredentials = true } = {}) {
   if (
     !["development", "test"].includes(env.NODE_ENV) ||
     !["development", "test"].includes(env.QA_ENVIRONMENT)
@@ -60,7 +60,7 @@ export function assertSafeTarget(env) {
       "QA generator refuses a non-local or non-development/test DATABASE_URL",
     );
   }
-  if (!env.QA_EMAIL || !env.QA_PASSWORD)
+  if (requireCredentials && (!env.QA_EMAIL || !env.QA_PASSWORD))
     throw new Error("Set QA_EMAIL and QA_PASSWORD outside source control");
   return {
     apiBaseUrl: api.toString().replace(/\/$/, ""),

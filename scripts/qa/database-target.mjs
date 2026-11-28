@@ -19,7 +19,7 @@ export function databaseIdentityFingerprint(row) {
 export async function verifyQaDatabaseTarget(
   env,
   apiBaseUrl,
-  { fetchImpl = fetch, Client = PgClient } = {},
+  { fetchImpl = fetch, Client = PgClient, requireOwner = true } = {},
 ) {
   const url = new URL(env.DATABASE_URL);
   const expectedDatabase = decodeURIComponent(url.pathname.slice(1));
@@ -55,25 +55,49 @@ export async function verifyQaDatabaseTarget(
         "Connected PostgreSQL identity does not match the configured QA target",
       );
     }
-    const owner = await client.query(
-      `SELECT o.id, o.name, m.role, m.status, u.status AS "userStatus"
-         FROM organizations o
-         JOIN memberships m ON m.organization_id = o.id
-         JOIN users u ON u.id = m.user_id
-        WHERE o.id = $1
-          AND o.name = $2
-          AND u.email_normalized = lower($3)
-          AND m.status = 'ACTIVE'`,
-      [env.QA_ORGANIZATION_ID, env.QA_ORGANIZATION_NAME, env.QA_EMAIL],
-    );
-    if (
-      owner.rowCount !== 1 ||
-      owner.rows[0].role !== "OWNER" ||
-      owner.rows[0].userStatus !== "ACTIVE"
-    ) {
-      throw new Error(
-        "Configured QA account must be an active OWNER of the exact QA organization in the configured database",
+    if (requireOwner) {
+      if (!env.QA_EMAIL)
+        throw new Error("Configured QA OWNER email is required");
+      const owner = await client.query(
+        `SELECT o.id, o.name, m.role, m.status, u.status AS "userStatus"
+           FROM organizations o
+           JOIN memberships m ON m.organization_id = o.id
+           JOIN users u ON u.id = m.user_id
+          WHERE o.id = $1
+            AND o.name = $2
+            AND u.email_normalized = lower($3)
+            AND m.status = 'ACTIVE'`,
+        [env.QA_ORGANIZATION_ID, env.QA_ORGANIZATION_NAME, env.QA_EMAIL],
       );
+      if (
+        owner.rowCount !== 1 ||
+        owner.rows[0].role !== "OWNER" ||
+        owner.rows[0].userStatus !== "ACTIVE"
+      ) {
+        throw new Error(
+          "Configured QA account must be an active OWNER of the exact QA organization in the configured database",
+        );
+      }
+    } else {
+      const workspace = await client.query(
+        `SELECT o.id,
+                o.name,
+                count(DISTINCT m.user_id) FILTER (
+                  WHERE m.role = 'OWNER'
+                    AND m.status = 'ACTIVE'
+                    AND u.status = 'ACTIVE'
+                )::int AS "activeOwners"
+           FROM organizations o
+           LEFT JOIN memberships m ON m.organization_id = o.id
+           LEFT JOIN users u ON u.id = m.user_id
+          WHERE o.id = $1 AND o.name = $2
+          GROUP BY o.id`,
+        [env.QA_ORGANIZATION_ID, env.QA_ORGANIZATION_NAME],
+      );
+      if (workspace.rowCount !== 1 || workspace.rows[0].activeOwners < 1)
+        throw new Error(
+          "The configured QA workspace identity or active OWNER membership is not valid",
+        );
     }
   } catch (error) {
     if (

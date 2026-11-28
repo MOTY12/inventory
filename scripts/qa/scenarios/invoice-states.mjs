@@ -91,6 +91,73 @@ async function ensureInvoiceOrder(api, manifest, save, context, label) {
   return order;
 }
 
+async function ensureBrowserAcceptanceOrder(api, manifest, save, context) {
+  const { customer, source, products } = context;
+  const label = "invoice-browser-acceptance";
+  const note = `QA ${manifest.runId} ${label}`;
+  const record = resource(manifest.resources.salesOrders, label);
+  let order = record
+    ? await api.get(`${ROOT}/sales/orders/${record.id}`)
+    : undefined;
+  const matches = (candidate) =>
+    candidate.customerId === customer.id &&
+    candidate.warehouseId === source.id &&
+    candidate.currency === "NGN" &&
+    candidate.notes === note &&
+    candidate.lines?.length === 1 &&
+    candidate.lines[0].productId === products[5].id &&
+    money(candidate.lines[0].unitPrice) === 8000n * 10000n &&
+    money(candidate.lines[0].orderedQuantity) === 10n * 10000n;
+  if (order && !matches(order))
+    throw new Error("Recorded browser acceptance order does not match this run");
+  if (!order) {
+    const operation = `${label}-order-create`;
+    manifest.stage = operation;
+    await save();
+    order = await api.post(
+      `${ROOT}/sales/orders`,
+      {
+        customerId: customer.id,
+        warehouseId: source.id,
+        currency: "NGN",
+        notes: note,
+        lines: [
+          { productId: products[5].id, quantity: "10", unitPrice: "8000" },
+        ],
+      },
+      idempotencyKey(manifest, operation),
+    );
+  }
+  if (!manifest.resources.salesOrders.some((item) => item.id === order.id)) {
+    manifest.resources.salesOrders.push({ id: order.id, label, number: order.number });
+    await save();
+  }
+  if (order.status === "DRAFT") {
+    await post(
+      api,
+      manifest,
+      save,
+      `${ROOT}/sales/orders/${order.id}/confirm`,
+      undefined,
+      `${label}-order-confirm`,
+    );
+    order = await api.get(`${ROOT}/sales/orders/${order.id}`);
+  }
+  if (!matches(order) || !["CONFIRMED", "PARTIALLY_FULFILLED", "FULFILLED"].includes(order.status))
+    throw new Error("Browser acceptance order is not a confirmed 10 x NGN 8,000 QA order");
+  manifest.scenarioResult.browserAcceptanceOrder = {
+    id: order.id,
+    number: order.number,
+    customerId: customer.id,
+    productId: products[5].id,
+    quantity: "10",
+    unitPrice: "8000",
+    invoiceTotal: "80000",
+  };
+  await save();
+  return order;
+}
+
 async function ensureInvoice(api, manifest, save, order, line, spec) {
   let record = resource(manifest.resources.invoices, spec.label);
   let invoice = record
@@ -287,6 +354,7 @@ export async function seedInvoiceStates(api, manifest, save, context) {
     });
   }
   manifest.scenarioResult.invoiceStates = result;
+  await ensureBrowserAcceptanceOrder(api, manifest, save, context);
   await save();
   return result;
 }

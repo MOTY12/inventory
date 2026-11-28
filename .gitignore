@@ -4,6 +4,9 @@ apps/api/src/generated/prisma/
 dist/
 coverage/
 .qa-runs/
+.qa-artifacts/
+test-results/
+playwright-report/
 .env
 .env.*
 !.env.example
