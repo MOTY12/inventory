@@ -2,11 +2,19 @@
 
 **Updated 2026-11-28 (Africa/Lagos).** Historical blockers below are superseded by the latest evidence where noted.
 
+## Current QA identity blocker (2026-11-28)
+
+- Docker Desktop 28.5.1 is running. PostgreSQL, Redis and S3Mock are healthy. Existing API readiness and Stockroom `/login` return HTTP 200; Prisma reports 22/22 migrations applied.
+- `npm run qa:preflight` passed target safety, API readiness, PostgreSQL/API fingerprint and exact workspace identity, Redis, S3Mock, frontend and migration checks. It failed the OWNER membership/authentication checks: the configured login authenticates but is not an active OWNER of the exact approved QA workspace. Preflight logged out. No business fixtures were seeded or changed.
+- The owner selected use of the existing workspace OWNER credentials. Update `QA_EMAIL` and `QA_PASSWORD` in ignored `.env` to credentials for an active OWNER of the configured workspace. Do not reset/change existing credentials or create a new account. Never print secrets.
+- `npm run qa:test` passes 27/27; Playwright lists one finance acceptance test. Its real browser workflow and PDF capture have not run because there is no eligible OWNER session and no seeded run ID.
+- SALES-004 remains IN_PROGRESS; roadmap remains 30/47. REPORT-002 remains blocked by SALES-004 and PROCUREMENT-003. Exact resume steps are in `docs/progress/next-session.md`.
+
 ## SALES-004 acceptance update (2026-11-27)
 
 - Local services are available: PostgreSQL, Redis and S3Mock healthy; Prisma reports schema up to date at 22 migrations. The SALES-004 isolated PostgreSQL suite passed 4/4 and web idempotency tests passed 2/2.
 - A read-only query verified exactly one `Quality 001 QA Workspace` and one active OWNER membership. Its ID/name, `NODE_ENV=development`, and `QA_API_BASE_URL` have been placed in ignored `.env`. The QA seed was rerun and refused before login/mutation because `QA_EMAIL` and `QA_PASSWORD` are missing. Chrome reached `/login` at port 3001; no authenticated QA session is available.
-- Required next action: owner sets the existing QA OWNER account's `QA_EMAIL` and `QA_PASSWORD` in ignored `.env`, or explicitly authorizes creation of a dedicated account through the supported local flow if those credentials do not exist. Do not create credentials, reset passwords, or use existing non-disposable business records.
+- At that checkpoint, the owner needed to provide the existing QA OWNER account's credentials. Current update (2026-11-28): credentials are set but the configured user is not that OWNER; the owner selected setting the existing OWNER values in ignored `.env`. Do not create credentials, reset passwords, or use existing non-disposable business records.
 - SALES-004 remains IN_PROGRESS; roadmap remains 30/47. Code tests, build or source-level evidence do not substitute for the missing browser acceptance. REPORT-002 remains dependency-gated on SALES-004.
 
 ## Active verification gaps

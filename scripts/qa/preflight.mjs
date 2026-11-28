@@ -1,13 +1,14 @@
 import { spawnSync } from "node:child_process";
 import net from "node:net";
 import { ApiClient } from "./api-client.mjs";
-import { verifyQaDatabaseTarget } from "./database-target.mjs";
 import {
-  assertAuthorizedOrganization,
-  assertSafeTarget,
-} from "./safety.mjs";
+  verifyQaDatabaseTarget,
+  verifyQaOwnerMembership,
+} from "./database-target.mjs";
+import { assertAuthorizedOrganization, assertSafeTarget } from "./safety.mjs";
 
-const timeoutMs = (env) => Math.max(1000, Number(env.QA_HTTP_TIMEOUT_MS || 8000));
+const timeoutMs = (env) =>
+  Math.max(1000, Number(env.QA_HTTP_TIMEOUT_MS || 8000));
 
 function localHttpUrl(value, name, defaultValue) {
   const url = new URL(value || defaultValue);
@@ -39,7 +40,10 @@ export async function probeRedis(env, { connect = net.createConnection } = {}) {
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error("REDIS_PORT is invalid");
   const socket = connect({ host, port });
-  const timeout = setTimeout(() => socket.destroy(new Error("timeout")), timeoutMs(env));
+  const timeout = setTimeout(
+    () => socket.destroy(new Error("timeout")),
+    timeoutMs(env),
+  );
   try {
     await new Promise((resolve, reject) => {
       socket.once("connect", resolve);
@@ -49,7 +53,8 @@ export async function probeRedis(env, { connect = net.createConnection } = {}) {
       let output = "";
       socket.on("data", (chunk) => {
         output += chunk.toString("utf8");
-        if (output.includes("-")) reject(new Error("Redis authentication or ping failed"));
+        if (output.includes("-"))
+          reject(new Error("Redis authentication or ping failed"));
         if (output.includes("+OK\r\n") && output.includes("+PONG\r\n"))
           resolve();
       });
@@ -72,7 +77,8 @@ async function checkApi(env, apiBaseUrl, fetchImpl) {
       signal: AbortSignal.timeout(timeoutMs(env)),
       redirect: "error",
     });
-    if (!response.ok) throw new Error(`API ${path} returned HTTP ${response.status}`);
+    if (!response.ok)
+      throw new Error(`API ${path} returned HTTP ${response.status}`);
     if (path.endsWith("/ready")) {
       const body = await response.json().catch(() => null);
       if (
@@ -123,7 +129,9 @@ async function checkAuthentication(env, apiBaseUrl) {
     assertAuthorizedOrganization(memberships, env.QA_ORGANIZATION_ID);
   } finally {
     if (loggedIn && api.cookie.includes("refresh_token=")) {
-      await api.raw("POST", "/auth/logout", { retryAuth: false }).catch(() => {});
+      await api
+        .raw("POST", "/auth/logout", { retryAuth: false })
+        .catch(() => {});
     }
   }
 }
@@ -166,10 +174,9 @@ export async function runQaPreflight(env = process.env, injected = {}) {
   const checks = [];
   const add = (name, status, details) =>
     checks.push({ name, status, ...(details ? { details } : {}) });
-  const missingConfiguration = [
-    "QA_EMAIL",
-    "QA_PASSWORD",
-  ].filter((name) => !present(name, env));
+  const missingConfiguration = ["QA_EMAIL", "QA_PASSWORD"].filter(
+    (name) => !present(name, env),
+  );
   let safe;
   try {
     safe = assertSafeTarget(env, { requireCredentials: false });
@@ -188,10 +195,14 @@ export async function runQaPreflight(env = process.env, injected = {}) {
           (injected.verifyDatabase || verifyQaDatabaseTarget)(
             env,
             safe.apiBaseUrl,
-            { fetchImpl, requireOwner: Boolean(env.QA_EMAIL) },
+            { fetchImpl, requireOwner: false },
           ),
       ],
-      ["redis-authenticated-ping", () => (injected.checkRedis || probeRedis)(env)],
+      ["qa-owner-membership", () => verifyQaOwnerMembership(env)],
+      [
+        "redis-authenticated-ping",
+        () => (injected.checkRedis || probeRedis)(env),
+      ],
       [
         "object-storage-bucket",
         () => (injected.checkStorage || checkStorage)(env),
@@ -207,12 +218,22 @@ export async function runQaPreflight(env = process.env, injected = {}) {
             throw new Error(`Frontend /login returned HTTP ${response.status}`);
           const html = await response.text();
           if (!html.includes("Stockroom"))
-            throw new Error("Frontend response is not the Stockroom login page");
+            throw new Error(
+              "Frontend response is not the Stockroom login page",
+            );
         },
       ],
       ["migration-status", injected.checkMigrations || migrationCheck],
     ];
     for (const [name, run] of tasks) {
+      if (name === "qa-owner-membership" && !present("QA_EMAIL", env)) {
+        add(
+          name,
+          "blocked",
+          "Set QA_EMAIL for an active OWNER of the verified QA workspace",
+        );
+        continue;
+      }
       try {
         await (injected[name] || run)();
         add(name, "ready");
@@ -247,12 +268,17 @@ export async function runQaPreflight(env = process.env, injected = {}) {
     for (const name of [
       "api-readiness",
       "database-and-qa-workspace",
+      "qa-owner-membership",
       "redis-authenticated-ping",
       "object-storage-bucket",
       "frontend-login-page",
       "migration-status",
     ])
-      add(name, "blocked", "Skipped because the configured QA target is unsafe or incomplete");
+      add(
+        name,
+        "blocked",
+        "Skipped because the configured QA target is unsafe or incomplete",
+      );
     add(
       "qa-owner-authentication",
       "blocked",
@@ -264,16 +290,27 @@ export async function runQaPreflight(env = process.env, injected = {}) {
     : checks.some((item) => item.status === "blocked")
       ? "BLOCKED"
       : "READY";
+  const remediation = missingConfiguration.map(
+    (name) =>
+      `Set ${name} in the ignored local .env file; never print or commit credentials.`,
+  );
+  if (
+    checks.some(
+      (item) =>
+        ["qa-owner-membership", "qa-owner-authentication"].includes(
+          item.name,
+        ) && ["failed", "blocked"].includes(item.status),
+    )
+  ) {
+    remediation.push(
+      "Set QA_EMAIL and QA_PASSWORD in ignored .env for an existing active OWNER of the exact approved QA workspace; do not reset or change the account password.",
+    );
+  }
   return {
     status,
     missingConfiguration,
     checks,
-    remediation:
-      status === "READY"
-        ? []
-        : missingConfiguration.map(
-            (name) => `Set ${name} in the ignored local .env file; never print or commit credentials.`,
-          ),
+    remediation: status === "READY" ? [] : remediation,
   };
 }
 

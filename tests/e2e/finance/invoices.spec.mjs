@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import path from "node:path";
 import pg from "pg";
 import { expect, test } from "@playwright/test";
 import {
@@ -9,30 +8,36 @@ import {
   manifestPath,
   saveManifest,
 } from "../../../scripts/qa/manifest.mjs";
-import { assertSafeTarget } from "../../../scripts/qa/safety.mjs";
+import {
+  assertSafeTarget,
+  assertSafeWebTarget,
+} from "../../../scripts/qa/safety.mjs";
 
 const { Client } = pg;
 const env = process.env;
-const apiRoot = (env.QA_API_BASE_URL || "http://localhost:4000/api/v1").replace(
-  /\/$/,
-  "",
-);
 const organizationId = env.QA_ORGANIZATION_ID;
 const runId = env.QA_RUN_ID;
 const money = (value) => {
   const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(String(value));
   assert.ok(match, "Expected a decimal database value");
   const fraction = match[3] || "";
-  assert.ok(!/[1-9]/.test(fraction.slice(4)), "Expected at most four decimal places");
-  const scaled = BigInt(match[2]) * 10000n + BigInt(fraction.slice(0, 4).padEnd(4, "0") || "0");
+  assert.ok(
+    !/[1-9]/.test(fraction.slice(4)),
+    "Expected at most four decimal places",
+  );
+  const scaled =
+    BigInt(match[2]) * 10000n +
+    BigInt(fraction.slice(0, 4).padEnd(4, "0") || "0");
   return match[1] === "-" ? -scaled : scaled;
 };
 
 function requireManifestConfig() {
   assertSafeTarget(env);
+  assertSafeWebTarget(env.QA_WEB_BASE_URL || "http://localhost:3000");
   if (!env.QA_EMAIL || !env.QA_PASSWORD)
     throw new Error("Set QA_EMAIL and QA_PASSWORD in the ignored local .env");
-  if (!runId) throw new Error("Set QA_RUN_ID to an approved document-states run");
+  if (!runId)
+    throw new Error("Set QA_RUN_ID to an approved document-states run");
 }
 
 async function dbClient() {
@@ -52,7 +57,9 @@ async function findInvoice(client, orderId, notes) {
     [organizationId, orderId, notes],
   );
   if (result.rowCount > 1)
-    throw new Error("More than one invoice matches this QA run; refusing to continue");
+    throw new Error(
+      "More than one invoice matches this QA run; refusing to continue",
+    );
   return result.rows[0] ?? null;
 }
 
@@ -69,7 +76,9 @@ async function findPayment(client, reference) {
     [organizationId, reference],
   );
   if (result.rowCount > 1)
-    throw new Error("A QA payment reference is ambiguous; refusing to continue");
+    throw new Error(
+      "A QA payment reference is ambiguous; refusing to continue",
+    );
   return result.rows[0] ?? null;
 }
 
@@ -91,7 +100,9 @@ async function recordPayment(page, client, invoiceId, run, label, amount) {
   await dialog.getByLabel("Reference").fill(reference);
   await dialog.getByRole("button", { name: "Record payment" }).click();
   await expect(page.getByText("Payment recorded.")).toBeVisible();
-  await expect.poll(async () => (await findPayment(client, reference))?.id).toBeTruthy();
+  await expect
+    .poll(async () => (await findPayment(client, reference))?.id)
+    .toBeTruthy();
   return findPayment(client, reference);
 }
 
@@ -103,7 +114,10 @@ async function loadRun() {
   assert.equal(manifest.scenarioName, "document-states");
   assert.equal(manifest.organizationId, organizationId);
   const order = manifest.scenarioResult?.browserAcceptanceOrder;
-  assert.ok(order?.id, "Run manifest must contain the browser acceptance order");
+  assert.ok(
+    order?.id,
+    "Run manifest must contain the browser acceptance order",
+  );
   assert.equal(order.quantity, "10");
   assert.equal(order.unitPrice, "8000");
   assert.equal(order.invoiceTotal, "80000");
@@ -116,9 +130,13 @@ async function persistInvoice(runPath, invoice) {
     const manifest = await loadManifest(runPath);
     manifest.resources.invoices ??= [];
     const label = "browser-acceptance-invoice";
-    const existing = manifest.resources.invoices.find((item) => item.label === label);
+    const existing = manifest.resources.invoices.find(
+      (item) => item.label === label,
+    );
     if (existing && existing.id !== invoice.id)
-      throw new Error("Manifest invoice differs from the invoice linked to this order");
+      throw new Error(
+        "Manifest invoice differs from the invoice linked to this order",
+      );
     if (!existing)
       manifest.resources.invoices.push({
         id: invoice.id,
@@ -162,7 +180,11 @@ test("invoice, payment reversal and PDF reconcile in the QA workspace", async ({
       WHERE so.organization_id = $1 AND so.id = $2`,
     [organizationId, order.id],
   );
-  assert.equal(orderInfo.rowCount, 1, "Manifest order must belong to the QA organization");
+  assert.equal(
+    orderInfo.rowCount,
+    1,
+    "Manifest order must belong to the QA organization",
+  );
   const { customerId, productId, warehouseId, customerName, productName } =
     orderInfo.rows[0];
   const beforeInventory = await client.query(
@@ -183,12 +205,16 @@ test("invoice, payment reversal and PDF reconcile in the QA workspace", async ({
     await expect(page).not.toHaveURL(/\/login(?:\?|$)/);
     const businessSelector = page.getByLabel("Switch business");
     await expect(businessSelector).toHaveValue(organizationId);
-    await page.goto(`/invoices/new?salesOrderId=${encodeURIComponent(order.id)}`);
+    await page.goto(
+      `/invoices/new?salesOrderId=${encodeURIComponent(order.id)}`,
+    );
 
     let invoice = await findInvoice(client, order.id, invoiceNotes);
     if (!invoice) {
       await page.getByLabel("Notes").fill(invoiceNotes);
-      await expect(page.getByText("80000", { exact: false }).first()).toBeVisible();
+      await expect(
+        page.getByText("80000", { exact: false }).first(),
+      ).toBeVisible();
       await page.getByRole("button", { name: "Save draft invoice" }).click();
       await expect(page).toHaveURL(/\/invoices\/[0-9a-f-]+$/i);
       const invoiceId = page.url().split("/").at(-1);
@@ -202,14 +228,18 @@ test("invoice, payment reversal and PDF reconcile in the QA workspace", async ({
     }
     await persistInvoice(runPath, { ...invoice, sales_order_id: order.id });
     await expect(page.getByText("NGN", { exact: false }).first()).toBeVisible();
-    await expect(page.getByRole("heading", { level: 1 })).not.toHaveText("Draft invoice");
+    await expect(page.getByRole("heading", { level: 1 })).not.toHaveText(
+      "Draft invoice",
+    );
 
     if (invoice.status === "DRAFT") {
       page.once("dialog", (dialog) => dialog.accept());
       await page.getByRole("button", { name: "Issue invoice" }).click();
       await expect(page.getByText("Invoice issued.")).toBeVisible();
     }
-    await expect(page.getByRole("button", { name: "Issue invoice" })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Issue invoice" }),
+    ).toHaveCount(0);
     invoice = await findInvoice(client, order.id, invoiceNotes);
     assert.equal(invoice.status, "ISSUED");
     assert.equal(invoice.currency, "NGN");
@@ -236,27 +266,58 @@ test("invoice, payment reversal and PDF reconcile in the QA workspace", async ({
     ])
       assert.ok(text.includes(expected), `PDF should contain ${expected}`);
 
-    const p1 = await recordPayment(page, client, invoice.id, runId, "first", "30000");
+    const p1 = await recordPayment(
+      page,
+      client,
+      invoice.id,
+      runId,
+      "first",
+      "30000",
+    );
     assert.equal(money(p1.amount), 30000n * 10000n);
-    await expect(page.getByText("50000.0000 NGN", { exact: false })).toBeVisible();
-    const p2 = await recordPayment(page, client, invoice.id, runId, "second", "50000");
+    await expect(
+      page.getByText("50000.0000 NGN", { exact: false }),
+    ).toBeVisible();
+    const p2 = await recordPayment(
+      page,
+      client,
+      invoice.id,
+      runId,
+      "second",
+      "50000",
+    );
     assert.equal(money(p2.amount), 50000n * 10000n);
     await expect(page.getByText("PAID", { exact: true }).first()).toBeVisible();
 
     let second = await findPayment(client, `${runId}-browser-second`);
     if (!second.reversalReason) {
-      page.once("dialog", (dialog) => dialog.accept("QA browser acceptance reversal"));
-      const paymentRow = page.getByRole("row").filter({ hasText: `${runId}-browser-second` });
+      page.once("dialog", (dialog) =>
+        dialog.accept("QA browser acceptance reversal"),
+      );
+      const paymentRow = page
+        .getByRole("row")
+        .filter({ hasText: `${runId}-browser-second` });
       await paymentRow.getByRole("button", { name: "Reverse" }).click();
       await expect(page.getByText("Payment reversal recorded.")).toBeVisible();
     }
-    await expect(page.getByText("50000.0000 NGN", { exact: false })).toBeVisible();
+    await expect(
+      page.getByText("50000.0000 NGN", { exact: false }),
+    ).toBeVisible();
     second = await findPayment(client, `${runId}-browser-second`);
     assert.equal(second.reversalReason, "QA browser acceptance reversal");
-    const replacement = await recordPayment(page, client, invoice.id, runId, "replacement", "50000");
+    const replacement = await recordPayment(
+      page,
+      client,
+      invoice.id,
+      runId,
+      "replacement",
+      "50000",
+    );
     assert.equal(money(replacement.amount), 50000n * 10000n);
     await expect(page.getByText("PAID", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Reversed: QA browser acceptance reversal")).toBeVisible();
+    await expect(
+      page.getByText("Reversed: QA browser acceptance reversal"),
+    ).toBeVisible();
 
     const totals = await client.query(
       `SELECT i.total_amount AS "totalAmount",
@@ -282,9 +343,15 @@ test("invoice, payment reversal and PDF reconcile in the QA workspace", async ({
     );
 
     await page.goto(`/customers/${customerId}`);
-    await expect(page.getByRole("heading", { name: "Financial history" })).toBeVisible();
-    await expect(page.getByText(invoice.invoiceNumber, { exact: false })).toBeVisible();
-    const customerInvoice = page.getByRole("link", { name: invoice.invoiceNumber });
+    await expect(
+      page.getByRole("heading", { name: "Financial history" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(invoice.invoiceNumber, { exact: false }),
+    ).toBeVisible();
+    const customerInvoice = page.getByRole("link", {
+      name: invoice.invoiceNumber,
+    });
     await expect(customerInvoice).toBeVisible();
     await expect(customerInvoice.locator("..")).toContainText(
       "PAID · 80000.0000 NGN",

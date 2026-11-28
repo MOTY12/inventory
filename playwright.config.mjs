@@ -1,4 +1,9 @@
 import { defineConfig } from "@playwright/test";
+import { assertSafeWebTarget } from "./scripts/qa/safety.mjs";
+
+const baseURL = assertSafeWebTarget(
+  process.env.QA_WEB_BASE_URL || "http://localhost:3000",
+);
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -11,7 +16,7 @@ export default defineConfig({
   timeout: 120_000,
   expect: { timeout: 15_000 },
   use: {
-    baseURL: process.env.QA_WEB_BASE_URL || "http://localhost:3000",
+    baseURL,
     browserName: "chromium",
     channel: process.env.QA_CHROME_CHANNEL || "chrome",
     headless: true,

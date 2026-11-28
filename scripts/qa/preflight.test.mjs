@@ -11,18 +11,20 @@ const base = () => ({
   QA_ORGANIZATION_NAME: "Quality 001 QA Workspace",
   QA_EMAIL: "qa-owner@example.test",
   QA_PASSWORD: "test-only-not-a-real-secret",
-  DATABASE_URL: "postgresql://local:test@localhost:5433/inventory_dev?schema=public",
+  DATABASE_URL:
+    "postgresql://local:test@localhost:5433/inventory_dev?schema=public",
   REDIS_PASSWORD: "test-only-not-a-real-secret",
 });
 
 const passingChecks = {
   "api-readiness": async () => {},
   "database-and-qa-workspace": async () => {},
+  "qa-owner-membership": async () => {},
   "redis-authenticated-ping": async () => {},
   "object-storage-bucket": async () => {},
   "frontend-login-page": async () => {},
   "migration-status": async () => {},
-  "qa-owner-authentication": async () => {},
+  checkAuthentication: async () => {},
 };
 
 test("preflight reports missing login configuration without attempting auth", async () => {
@@ -32,7 +34,7 @@ test("preflight reports missing login configuration without attempting auth", as
   let authenticated = false;
   const report = await runQaPreflight(env, {
     ...passingChecks,
-    "qa-owner-authentication": async () => {
+    checkAuthentication: async () => {
       authenticated = true;
     },
   });
@@ -56,7 +58,10 @@ test("preflight rejects a mismatched QA organization before contacting services"
   const report = await runQaPreflight(
     { ...base(), QA_ORGANIZATION_NAME: "Another workspace" },
     Object.fromEntries(
-      Object.entries(passingChecks).map(([key]) => [key, async () => (contacted = true)]),
+      Object.entries(passingChecks).map(([key]) => [
+        key,
+        async () => (contacted = true),
+      ]),
     ),
   );
   assert.equal(report.status, "FAILED");
@@ -67,16 +72,66 @@ test("preflight reports database identity failure without exposing connection va
   const report = await runQaPreflight(base(), {
     ...passingChecks,
     "database-and-qa-workspace": async () => {
-      throw new Error("Running API database identity does not match the approved local QA database");
+      throw new Error(
+        "Running API database identity does not match the approved local QA database",
+      );
     },
   });
   assert.equal(report.status, "FAILED");
   assert.match(
-    report.checks.find((item) => item.name === "database-and-qa-workspace").details,
+    report.checks.find((item) => item.name === "database-and-qa-workspace")
+      .details,
     /database identity does not match/,
   );
   assert.equal(JSON.stringify(report).includes("local:test"), false);
-  assert.equal(JSON.stringify(report).includes("test-only-not-a-real-secret"), false);
+  assert.equal(
+    JSON.stringify(report).includes("test-only-not-a-real-secret"),
+    false,
+  );
+});
+
+test("preflight reports workspace database readiness separately from owner eligibility", async () => {
+  const report = await runQaPreflight(base(), {
+    ...passingChecks,
+    "qa-owner-membership": async () => {
+      throw new Error(
+        "Configured QA account must be an active OWNER of the exact QA organization in the configured database",
+      );
+    },
+  });
+  assert.equal(
+    report.checks.find((item) => item.name === "database-and-qa-workspace")
+      .status,
+    "ready",
+  );
+  assert.equal(
+    report.checks.find((item) => item.name === "qa-owner-membership").status,
+    "failed",
+  );
+  assert.ok(
+    report.remediation.some((item) =>
+      item.includes("existing active OWNER of the exact approved QA workspace"),
+    ),
+  );
+});
+
+test("preflight redacts credential and database URL material in probe errors", async () => {
+  const env = base();
+  const report = await runQaPreflight(env, {
+    ...passingChecks,
+    "object-storage-bucket": async () => {
+      throw new Error(
+        `request failed for ${env.DATABASE_URL} using ${env.S3_SECRET_ACCESS_KEY || env.REDIS_PASSWORD}`,
+      );
+    },
+  });
+  const serialized = JSON.stringify(report);
+  assert.equal(serialized.includes(env.DATABASE_URL), false);
+  assert.equal(serialized.includes(env.REDIS_PASSWORD), false);
+  assert.match(
+    report.checks.find((item) => item.name === "object-storage-bucket").details,
+    /redacted/,
+  );
 });
 
 test("preflight reports API, migration and authentication failures", async () => {
@@ -88,8 +143,10 @@ test("preflight reports API, migration and authentication failures", async () =>
     "migration-status": async () => {
       throw new Error("Prisma reports pending or unknown migrations");
     },
-    "qa-owner-authentication": async () => {
-      throw new Error("API POST /auth/login failed with HTTP 401: INVALID_CREDENTIALS");
+    checkAuthentication: async () => {
+      throw new Error(
+        "API POST /auth/login failed with HTTP 401: INVALID_CREDENTIALS",
+      );
     },
   });
   assert.equal(report.status, "FAILED");
@@ -104,6 +161,12 @@ test("preflight reports API, migration and authentication failures", async () =>
 test("preflight returns READY only after every dependency and QA login pass", async () => {
   const report = await runQaPreflight(base(), passingChecks);
   assert.equal(report.status, "READY");
-  assert.equal(report.checks.every((item) => item.status === "ready"), true);
-  assert.equal(JSON.stringify(report).includes("test-only-not-a-real-secret"), false);
+  assert.equal(
+    report.checks.every((item) => item.status === "ready"),
+    true,
+  );
+  assert.equal(
+    JSON.stringify(report).includes("test-only-not-a-real-secret"),
+    false,
+  );
 });

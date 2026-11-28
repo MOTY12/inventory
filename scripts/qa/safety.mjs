@@ -12,6 +12,27 @@ function isLoopback(hostname) {
   );
 }
 
+export function assertSafeWebTarget(value = "http://localhost:3000") {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("QA_WEB_BASE_URL must be a local HTTP URL");
+  }
+  if (
+    url.protocol !== "http:" ||
+    !isLoopback(url.hostname) ||
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error("QA_WEB_BASE_URL must be a local HTTP URL");
+  }
+  return url.toString().replace(/\/$/, "");
+}
+
 export function assertSafeTarget(env, { requireCredentials = true } = {}) {
   if (
     !["development", "test"].includes(env.NODE_ENV) ||

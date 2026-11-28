@@ -133,3 +133,46 @@ export async function verifyQaDatabaseTarget(
     );
   return true;
 }
+
+export async function verifyQaOwnerMembership(env, { Client = PgClient } = {}) {
+  if (!env.QA_EMAIL) throw new Error("Configured QA OWNER email is required");
+  const url = new URL(env.DATABASE_URL);
+  const schema =
+    env.DATABASE_SCHEMA || url.searchParams.get("schema") || "public";
+  if (!/^[A-Za-z_][A-Za-z0-9_$]{0,62}$/.test(schema))
+    throw new Error("QA database schema identifier is invalid");
+  const client = new Client({
+    connectionString: env.DATABASE_URL,
+    connectionTimeoutMillis: Number(env.QA_HTTP_TIMEOUT_MS || 15000),
+  });
+  try {
+    await client.connect();
+    await client.query("SELECT set_config('search_path', $1, false)", [schema]);
+    const owner = await client.query(
+      `SELECT m.role, u.status AS "userStatus"
+         FROM organizations o
+         JOIN memberships m ON m.organization_id = o.id
+         JOIN users u ON u.id = m.user_id
+        WHERE o.id = $1
+          AND o.name = $2
+          AND u.email_normalized = lower($3)
+          AND m.status = 'ACTIVE'`,
+      [env.QA_ORGANIZATION_ID, env.QA_ORGANIZATION_NAME, env.QA_EMAIL],
+    );
+    if (
+      owner.rowCount !== 1 ||
+      owner.rows[0].role !== "OWNER" ||
+      owner.rows[0].userStatus !== "ACTIVE"
+    ) {
+      throw new Error(
+        "Configured QA account must be an active OWNER of the exact QA organization in the configured database",
+      );
+    }
+  } catch (error) {
+    if (error.message.includes("active OWNER")) throw error;
+    throw new Error("Unable to verify the configured QA OWNER membership");
+  } finally {
+    await client.end().catch(() => {});
+  }
+  return true;
+}

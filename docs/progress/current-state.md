@@ -2,18 +2,21 @@
 
 **Updated:** 2026-11-28 (Africa/Lagos)
 
-## Repository and roadmap
+## Current checkpoint — QA automation and SALES-004 access
 
-- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; verified HEAD `e9a09b0` (`update invoice postgres`), now at `origin/develop`. Prior SALES-004 implementation/test changes are included in that commit; this session's only repository change is ignored local `.env` configuration. No tracked file was modified.
-- Roadmap remains **30/47**. SALES-004, REPORT-002 and QUALITY-001 remain IN_PROGRESS. No task became complete; fixture code and mocked verification do not meet operational acceptance.
-- No new commit, push, deployment, migration application, database reset, deletion, or credential change occurred.
+- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; starting HEAD `568938b`. Uncommitted code and documentation changes are present; no commit, push, or deployment.
+- Roadmap remains **30/47**. SALES-004, REPORT-002 and QUALITY-001 remain IN_PROGRESS. SALES-004 is not complete without authenticated browser, PDF, payment/reversal, reconciliation and inventory non-mutation evidence. REPORT-002 is dependency-gated by SALES-004 and PROCUREMENT-003.
+- Docker Desktop 28.5.1 is running; PostgreSQL, Redis and S3Mock containers are healthy. The existing API returned readiness HTTP 200. The existing Stockroom web app returned `/login` HTTP 200 on port 3001; another app occupies port 3000. Prisma status is 22 migrations, schema up to date.
+- Implemented the existing `qa:preflight` entry and extended the existing Playwright finance test with loopback-only web-target validation; existing artifact ignore rules were reused. Added QA docs. `npm run qa:test` passed 27/27; `npm run qa:e2e -- --list` discovered one finance test. Discovery is not browser acceptance.
+- `npm run qa:preflight` returned FAILED: target, API readiness, PostgreSQL/API database fingerprint and exact workspace identity, Redis, S3Mock, web and migration checks passed. The configured login succeeded but that user is not an active OWNER in the exact approved QA workspace; separate database OWNER-membership and authenticated workspace authorization checks failed. Preflight returned corrective action to set the existing OWNER credentials and logged the session out. No business fixture was seeded and no invoice/payment was created.
+- QA credentials and organization values exist in ignored `.env`; values were not printed. The configured user is ineligible for this workspace. The owner selected the existing active OWNER credential path; update `QA_EMAIL`/`QA_PASSWORD` locally for that user. Do not reset or modify any existing credential. `QA_WEB_BASE_URL` is set to the local Stockroom port 3001. No `QA_RUN_ID` exists.
+- Checks: `npm run typecheck`, lint, format check passed; `npm test` passed 62 API/shared tests and 4 web tests with 3 opt-in PostgreSQL suites skipped; SALES-004 opt-in PostgreSQL suite passed 4/4; QA harness tests passed 27/27; production build passed with 31 routes; `git diff --check` passed after progress edits. Playwright discovery only; browser test NOT RUN. npm's dependency audit output reported 13 total advisories (10 moderate, 3 high); it does not identify them as caused by Playwright.
 
-## Local acceptance readiness (2026-11-28)
+## No task count change
 
-- Docker Desktop 28.5.1 is running; Compose PostgreSQL, Redis and S3Mock report healthy. Prisma status: **22 migrations, schema up to date**.
-- Started Nest API with local database access; `/api/v1/health/ready` returned **HTTP 200**. Started Next dev server on **port 3001** because port 3000 was occupied. Chrome reached the protected invoice route and redirected to `/login`; no authenticated QA session is available.
-- A read-only query found exactly one organization named `Quality 001 QA Workspace` and one active OWNER membership. Its ID, exact name, `NODE_ENV=development`, and `QA_API_BASE_URL=http://localhost:4000/api/v1` are set in ignored `.env` (no identifiers or secrets were printed). QA seed then safely refused before login/mutation because `QA_EMAIL` and `QA_PASSWORD` are absent.
-- No invoice, payment, account, or other business record was created or changed. SALES-004 remains IN_PROGRESS; REPORT-002 depends on SALES-004; count remains **30/47**.
+No acceptance task became complete. Continue with SALES-004 only after QA workspace OWNER access is resolved. Then verify the manifest-backed invoice/payment/PDF lifecycle and inventory invariance before advancing to REPORT-002. Exact commands and recovery rules are in `docs/progress/next-session.md`.
+
+Historical notes below this checkpoint are retained for audit context and may contain superseded environment details; this checkpoint and the latest session-log entry are authoritative.
 
 ## SALES-004 acceptance continuation (2026-11-27)
 

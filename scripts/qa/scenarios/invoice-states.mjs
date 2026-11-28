@@ -109,7 +109,9 @@ async function ensureBrowserAcceptanceOrder(api, manifest, save, context) {
     money(candidate.lines[0].unitPrice) === 8000n * 10000n &&
     money(candidate.lines[0].orderedQuantity) === 10n * 10000n;
   if (order && !matches(order))
-    throw new Error("Recorded browser acceptance order does not match this run");
+    throw new Error(
+      "Recorded browser acceptance order does not match this run",
+    );
   if (!order) {
     const operation = `${label}-order-create`;
     manifest.stage = operation;
@@ -129,7 +131,11 @@ async function ensureBrowserAcceptanceOrder(api, manifest, save, context) {
     );
   }
   if (!manifest.resources.salesOrders.some((item) => item.id === order.id)) {
-    manifest.resources.salesOrders.push({ id: order.id, label, number: order.number });
+    manifest.resources.salesOrders.push({
+      id: order.id,
+      label,
+      number: order.number,
+    });
     await save();
   }
   if (order.status === "DRAFT") {
@@ -143,8 +149,13 @@ async function ensureBrowserAcceptanceOrder(api, manifest, save, context) {
     );
     order = await api.get(`${ROOT}/sales/orders/${order.id}`);
   }
-  if (!matches(order) || !["CONFIRMED", "PARTIALLY_FULFILLED", "FULFILLED"].includes(order.status))
-    throw new Error("Browser acceptance order is not a confirmed 10 x NGN 8,000 QA order");
+  if (
+    !matches(order) ||
+    !["CONFIRMED", "PARTIALLY_FULFILLED", "FULFILLED"].includes(order.status)
+  )
+    throw new Error(
+      "Browser acceptance order is not a confirmed 10 x NGN 8,000 QA order",
+    );
   manifest.scenarioResult.browserAcceptanceOrder = {
     id: order.id,
     number: order.number,

@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   assertAuthorizedOrganization,
   assertOrganizationIdentity,
+  assertSafeWebTarget,
   assertSafeTarget,
   QA_ORGANIZATION_NAME,
 } from "./safety.mjs";
@@ -99,6 +100,22 @@ test("QA safety gate rejects production, missing or mismatched org, and remote t
     () => assertSafeTarget({ ...base(), QA_PASSWORD: "" }),
     /QA_EMAIL/,
   );
+});
+
+test("browser QA target accepts only unauthenticated loopback HTTP URLs", () => {
+  assert.equal(
+    assertSafeWebTarget("http://localhost:3001"),
+    "http://localhost:3001",
+  );
+  for (const value of [
+    "https://example.com",
+    "http://example.com",
+    "http://user:password@localhost:3001",
+    "http://localhost:3001/login",
+    "not a URL",
+  ]) {
+    assert.throws(() => assertSafeWebTarget(value), /local HTTP URL/);
+  }
 });
 
 test("scenario registry selects only implemented workflows", () => {

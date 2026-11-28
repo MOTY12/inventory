@@ -93,3 +93,10 @@ No screenshot files were saved; the browser tool displayed inline observations. 
 - Docker-backed development services are healthy and API readiness returned HTTP 200. Next was opened at port 3001; Chrome navigated to a protected invoice route and was redirected to the sign-in page. No credentials were entered and no invoice/payment was created.
 - Verified the documented QA workspace exists and has one active OWNER membership. Added only the verified workspace identity and local development/API settings to ignored `.env`. QA seed then stopped safely because `QA_EMAIL` and `QA_PASSWORD` are absent.
 - This is not invoice/payment workflow acceptance. No PDF file was downloaded or inspected; SALES-004 remains IN_PROGRESS and the roadmap remains 30/47.
+
+# 2026-11-28 — QA preflight and browser test setup
+
+- Added read-only `npm run qa:preflight` and configured Playwright to target the local Stockroom web URL from `.env`. The preflight verified API readiness, database fingerprint/target, Redis auth/PING, S3Mock bucket, `/login`, and migration status. These service checks passed.
+- Configured QA login authenticated but did not have active OWNER membership in the exact QA workspace. The preflight logged out and stopped before any business fixture mutation. The owner selected the existing QA OWNER credential path; the local `.env` must be updated to that account.
+- Added one opt-in finance browser scenario to create/resume a manifest-linked invoice, issue/download/inspect its PDF, record/reverse/replace payments, reconcile customer financial UI and exact PostgreSQL totals, and compare inventory state. Playwright lists the test, but the browser workflow was not executed. No PDF or invoice/payment was created.
+- QA harness tests passed 27/27; full tests passed 62 API/shared + 4 web with 3 opt-in PostgreSQL suites skipped; the SALES-004 isolated PostgreSQL suite passed 4/4; typecheck/lint/format passed; production build generated 31 routes. Browser acceptance remains NOT RUN; SALES-004 and roadmap count remain unchanged at 30/47.
