@@ -724,7 +724,7 @@ function BusinessReportsContent() {
               {exports.length ? (
                 <ul>
                   {exports.map((job) => (
-                    <li key={job.id}>
+                    <li key={job.id} data-report-export-id={job.id}>
                       <strong>{job.report_type.replaceAll("_", " ")}</strong>{" "}
                       <span role="status">{job.status.toLowerCase()}</span>
                       {job.row_count !== null ? (

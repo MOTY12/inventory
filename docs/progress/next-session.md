@@ -1,51 +1,57 @@
-# Next session — unblock SALES-004 acceptance
+# Next session — execute financial and reporting browser acceptance
 
 Updated: 2026-11-28 (Africa/Lagos)
 
 ## Checkpoint
 
-- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; start HEAD `568938b`. The worktree has uncommitted QA automation and documentation changes. Preserve them; do not commit, push, or deploy.
-- Roadmap remains **30/47**. SALES-004 is **IN_PROGRESS**. REPORT-002 depends on SALES-004 and PROCUREMENT-003; do not mark it complete or advance past the dependency graph.
-- Docker Desktop 28.5.1 is running. PostgreSQL, Redis and S3Mock Compose containers report healthy. Existing API readiness is HTTP 200. Existing Next app responds HTTP 200 on port 3001; port 3000 belongs to another local app. Prisma status reports 22 migrations and schema up to date.
-- Added `npm run qa:preflight`, Playwright commands/config, and a finance invoice browser test. The browser test is discoverable (`npm run qa:e2e -- --list`) but has not been executed. No invoice/payment QA fixture was seeded and no business record was changed.
+- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; starting HEAD `9990df9`. Worktree was clean at start and now contains uncommitted QA/test/documentation changes. Preserve them; do not commit, push, or deploy.
+- Roadmap remains **30/47**. SALES-004 and REPORT-002 remain IN_PROGRESS; REPORT-002 is gated by PROCUREMENT-003 and SALES-004. QUALITY-001 remains IN_PROGRESS. No completed-task count change is justified.
+- No fixtures or business records were created or changed, no migrations were applied, and no opt-in PostgreSQL suite was run this session.
+- The owner previously chose to use the existing OWNER credentials in ignored `.env`; do not reset passwords, create/change membership, or disclose values.
 
-## QA preflight evidence
+## Latest environment evidence
 
-`npm run qa:preflight` returned **FAILED**. Passed: safe local target, API live/readiness, PostgreSQL/API database fingerprint and exact QA workspace identity, Redis authenticated PING, S3Mock bucket, frontend `/login`, and Prisma migration status. The configured login authenticates, but the account is not an active OWNER of the exact `Quality 001 QA Workspace`; the separate DB OWNER-membership check and authenticated workspace authorization check failed. Preflight returned the corrective action to set the existing active OWNER credentials and logged out the session. Credential values were not printed.
+`npm run qa:preflight` returned FAILED. Safe local target passed. API readiness and frontend `/login` returned `fetch failed`; PostgreSQL target/OWNER membership could not connect; Redis and S3Mock probes failed on loopback connection/EPERM; Prisma migration status could not be verified. Authenticated OWNER eligibility therefore remains UNKNOWN in this run. A prior preflight found the current configured login authenticated but was not an active OWNER of the exact `Quality 001 QA Workspace`.
 
-`QA_EMAIL`, `QA_PASSWORD`, `QA_ORGANIZATION_ID`, `QA_ORGANIZATION_NAME`, and `QA_WEB_BASE_URL` are set in ignored `.env`; only presence was checked. Do not print them. The configured login is not eligible; replace it locally with the existing active OWNER credentials for this workspace. The owner selected this path. Do not reset or modify the OWNER's password. No `QA_RUN_ID` is currently configured.
+Do not seed until local services are available and every mandatory preflight check returns READY. Then update `QA_EMAIL` and `QA_PASSWORD` only in ignored `.env` to the existing active OWNER of the configured workspace. Do not reset the account password. Keep `QA_WEB_BASE_URL=http://localhost:3001` only if that is still the Stockroom frontend port. Never print `.env` values.
 
-## Files changed in this session
+## Implemented this session
 
-- Root `package.json` (lint/format coverage for the E2E test).
-- `scripts/qa/preflight.mjs`, `scripts/qa/preflight.test.mjs`, `scripts/qa/safety.mjs`, `scripts/qa/workflow.test.mjs`, `scripts/qa/scenarios/invoice-states.mjs`, `playwright.config.mjs`.
-- Extended existing `tests/e2e/finance/invoices.spec.mjs`. Existing Playwright artifact ignore rules were reused.
-- Added `docs/testing/local-qa-preflight.md`, `docs/testing/finance-browser-acceptance.md`, `docs/testing/report-acceptance.md`; updated `docs/design/ui-acceptance-results.md`, `docs/implementation/master-plan.md`, `docs/implementation/task-breakdown.md`, `docs/progress/blockers.md`, `docs/progress/current-state.md`, `docs/progress/next-session.md`, `docs/progress/pending-tasks.md`, and `docs/progress/session-log.md`.
-- `.env` is ignored local configuration; its `QA_WEB_BASE_URL` now targets port 3001.
+- Added `tests/e2e/support/qa-browser.mjs` with safe run-manifest validation and shared UI OWNER sign-in; refactored the finance E2E to reuse it.
+- Added `tests/e2e/reports/business-reports.spec.mjs`. It consumes a completed `financial-exports` manifest, exercises summary/detail/aging views with date, branch, warehouse, currency, status, search and sort filters, and captures all eight NGN/USD CSVs through the actual report UI. It reconciles each file to the tenant-scoped API with exact decimal arithmetic.
+- Added `npm run qa:e2e:reports`; added `data-report-export-id` to export history items for exact fixture matching; exported and reused the existing CSV reconciliation helper.
+- Added two QA regression tests for exact CSV/API currency and amount reconciliation and mismatch rejection.
+- Updated the finance/report acceptance and progress documentation. No application domain behavior, schema, migration, credentials, authorization or existing records were changed.
 
-## Checks run
+## Verification results
 
-- `npm run qa:test`: **27 passed, 0 failed, 0 skipped**.
-- `npm run qa:e2e -- --list`: found 1 finance invoice test; this is discovery only, not browser acceptance.
-- `npm run typecheck`, `npm run lint`, and `npm run format:check`: passed. `npm test`: 62 API/shared passed, 0 failed, 3 opt-in PostgreSQL suites skipped; web tests 4/4 passed. The SALES-004 isolated PostgreSQL suite was explicitly run: 4 passed, 0 failed, 0 skipped. `npm run build` passed and generated 31 routes.
-- `npm run qa:preflight`: failed for the active OWNER identity mismatch described above; all infrastructure checks passed.
-- `npm run qa:test`: 27 passed, 0 failed, 0 skipped. Playwright discovery found one test; no browser test was executed. `git diff --check` passed after final progress updates.
-- The repository already pins `@playwright/test@1.65.1`; it was reused. npm's install/audit output reported 13 dependency advisories (10 moderate, 3 high) across the audited tree. This does not identify which package introduced them; review separately before release.
+- `npm run qa:preflight`: FAILED as detailed above; no seeding attempted.
+- `npm run qa:test`: 29 passed, 0 failed, 0 skipped.
+- `npm test`: 62 API/shared passed, 4 web passed, 0 failed; 3 opt-in PostgreSQL suites skipped by the default command. No PostgreSQL suite was explicitly run because local database access was unavailable.
+- `npm run typecheck`, `npm run lint`, `npm run format:check`, and `npm run build`: passed; build generated 31 Next routes.
+- `npm run qa:e2e:finance -- --list`: one test discovered.
+- `npm run qa:e2e:reports -- --list`: one test discovered.
+- `git diff --check`: passed after the final source and progress-document edits.
+- Neither browser suite was executed. No browser PDF/CSV file capture or live UI reconciliation is evidence from this session.
+- `npm audit --json`: failed before receiving registry data because `registry.npmjs.org` resolved as `ENOTFOUND`. Current advisory IDs, package versions, dependency paths and production/dev classification remain unknown; no dependencies were changed.
 
-## Exact resume steps
+## Exact next steps
 
-1. Check `git status --short` and `git diff`; preserve all existing changes.
-2. The owner selected the existing OWNER path. Update `QA_EMAIL` and `QA_PASSWORD` in ignored `.env` to the existing active OWNER of this exact QA workspace. Never print the password or modify the user's password. Ensure `QA_WEB_BASE_URL=http://localhost:3001` while that is the Stockroom web port.
-3. Run `npm run qa:preflight`. Do not seed unless every check returns READY.
-4. Run `QA_SCENARIO=document-states npm run qa:seed`; record its printed run ID. Inspect/resume that manifest and run `QA_RUN_ID=<run-id> npm run qa:verify` before any rerun.
-5. Run `QA_RUN_ID=<run-id> npm run qa:e2e:finance`. It exercises invoice draft/issue/PDF, 30k + 50k payments, reversal/replacement, customer history, exact database reconciliation and inventory non-mutation. Artifacts remain under ignored `.qa-artifacts/`.
-6. If browser acceptance fails, investigate the specific defect; preserve the run manifest and use stable QA notes/payment references to recover without duplicates. Do not run against non-QA business records.
-7. Run `npm run qa:test`, `npm test`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build`, Prisma validation if relevant, and `git diff --check`. Explicitly run affected opt-in PostgreSQL suites; list skips separately.
-8. Close SALES-004 only after all mandatory acceptance, actual PDF inspection, financial reconciliation, inventory non-mutation and security checks have evidence. Then inspect REPORT-002 remaining criteria; its existing tests/features do not by themselves satisfy browser/report acceptance. Recalculate task count from task entries.
+1. Inspect `git status --short` and `git diff`; preserve the uncommitted work described above.
+2. Start/verify local PostgreSQL, Redis, S3Mock, API and Stockroom web using the repository's documented setup. Do not reset databases or remove volumes.
+3. In ignored `.env`, configure existing active OWNER credentials for the exact approved QA workspace. Do not paste or print credentials.
+4. Run `npm run qa:preflight`; proceed only if every required check is READY.
+5. Seed/resume SALES-004: `QA_SCENARIO=document-states npm run qa:seed`; record the actual run ID; run `QA_SCENARIO=document-states QA_RUN_ID=<run-id> npm run qa:verify`; then `QA_SCENARIO=document-states QA_RUN_ID=<run-id> npm run qa:e2e:finance`. Inspect trace, PDF file/content, exact payment/reversal reconciliation and inventory non-mutation. Do not duplicate an existing manifest run.
+6. After SALES-004 criteria pass, run `QA_SCENARIO=financial-exports npm run qa:seed`; record the run ID; run `QA_SCENARIO=financial-exports QA_RUN_ID=<run-id> npm run qa:verify`; then `QA_SCENARIO=financial-exports QA_RUN_ID=<run-id> npm run qa:e2e:reports`. Inspect all eight downloaded CSVs and report traces. Resume existing runs instead of reseeding them.
+7. Complete remaining REPORT-002 scope: pagination beyond one page, authorized/denied role and tenant/warehouse/branch cases including revocation, and representative `EXPLAIN ANALYZE` evidence. Use approved QA actors and disposable datasets only.
+8. Retry `npm audit --json` when registry access is available. Record affected packages/advisory IDs/classification, evaluate compatible non-breaking fixes, and run regressions before changing dependencies. Do not use `npm audit fix --force`.
+9. Run `npm run qa:test`, `npm test`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build`, relevant opt-in PostgreSQL suites, and `git diff --check`. Report skipped suites separately.
+10. Mark tasks complete and recalculate from unique ledger entries only after each dependency and acceptance criterion has actual evidence. No commit, push or deployment without authorization.
 
-## Remaining blockers and next milestone
+## Blockers and status
 
-- Authenticated browser workflow is blocked by the currently configured user not being an active OWNER of the approved QA workspace. Browser test cannot safely execute without correct identity and a seeded run.
-- Actual invoice PDF download/inspection, payments and reversal in the browser, customer UI reconciliation, and browser/database inventory non-mutation remain unverified.
-- REPORT-002 remains dependency-gated by SALES-004 and PROCUREMENT-003. No task count increase is justified; **30/47** remains current.
-- Exact next milestone: complete SALES-004 authenticated browser acceptance after the QA OWNER access issue is resolved; advance to REPORT-002 only when SALES-004's ledger criteria pass.
+- Current local services were unreachable; the OWNER identity and migration status could not be reverified. Prior evidence says the configured account did not have active OWNER membership. Use the already selected existing OWNER credential path after services return.
+- SALES-004 browser invoice/payment/PDF acceptance has not run; task remains IN_PROGRESS.
+- REPORT-002 browser report/CSV acceptance is implemented for execution but undiscovered evidence is not execution evidence; task remains IN_PROGRESS and dependency-gated.
+- npm advisory audit remains blocked by registry DNS; no current packages/advisories are known from this session.
+- Current completed count: **30/47**. No task newly completed.

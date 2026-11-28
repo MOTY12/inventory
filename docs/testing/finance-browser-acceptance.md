@@ -16,4 +16,4 @@ Run-specific artifacts and manifest records remain in ignored `.qa-artifacts/` a
 
 ## Current result (2026-11-28)
 
-Playwright 1.65.1 is installed and discovers one finance test. The browser workflow has **not** run: preflight fails because the configured login is not an active OWNER of the approved QA workspace. No QA run ID exists for this workflow. Do not mark SALES-004 complete until this test and all other acceptance criteria have actual evidence.
+Playwright discovers one finance test, which shares `loadQaBrowserRun` and `signInQaOwner` with the report suite. The finance workflow has **not** run. The latest preflight could not reach the API/database or local services, so it could not test OWNER eligibility; a prior preflight found the configured user was not an active OWNER of the approved workspace. No QA run ID exists for this workflow. Do not mark SALES-004 complete until this test and all other acceptance criteria have actual evidence.

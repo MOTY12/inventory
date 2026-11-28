@@ -1,14 +1,14 @@
 # Blockers and constraints
 
-**Updated 2026-11-28 (Africa/Lagos).** Historical blockers below are superseded by the latest evidence where noted.
+**Updated 2026-11-28 (Africa/Lagos).** The current local QA services are unavailable; older environment evidence remains historical.
 
-## Current QA identity blocker (2026-11-28)
+## Current QA environment and identity blocker (2026-11-28)
 
-- Docker Desktop 28.5.1 is running. PostgreSQL, Redis and S3Mock are healthy. Existing API readiness and Stockroom `/login` return HTTP 200; Prisma reports 22/22 migrations applied.
-- `npm run qa:preflight` passed target safety, API readiness, PostgreSQL/API fingerprint and exact workspace identity, Redis, S3Mock, frontend and migration checks. It failed the OWNER membership/authentication checks: the configured login authenticates but is not an active OWNER of the exact approved QA workspace. Preflight logged out. No business fixtures were seeded or changed.
-- The owner selected use of the existing workspace OWNER credentials. Update `QA_EMAIL` and `QA_PASSWORD` in ignored `.env` to credentials for an active OWNER of the configured workspace. Do not reset/change existing credentials or create a new account. Never print secrets.
-- `npm run qa:test` passes 27/27; Playwright lists one finance acceptance test. Its real browser workflow and PDF capture have not run because there is no eligible OWNER session and no seeded run ID.
-- SALES-004 remains IN_PROGRESS; roadmap remains 30/47. REPORT-002 remains blocked by SALES-004 and PROCUREMENT-003. Exact resume steps are in `docs/progress/next-session.md`.
+- Latest `npm run qa:preflight`: safe target passed; API and frontend returned `fetch failed`; PostgreSQL database identity/OWNER checks could not connect; Redis/S3Mock loopback probes failed; Prisma migration status could not be verified. Current OWNER eligibility is UNKNOWN in this run.
+- A prior preflight found the configured account authenticates but is not an active OWNER of the exact approved QA workspace. The owner selected using the existing workspace OWNER credentials. Once services are available, update `QA_EMAIL`/`QA_PASSWORD` in ignored `.env` for that existing OWNER. Do not reset credentials, change membership, create an account, or print secrets.
+- New report browser acceptance automation and exact CSV/API regression tests are implemented; `qa:test` passes 29/29. One finance and one report Playwright test are discoverable, neither has been executed. No fixtures or business records were created/changed.
+- `npm audit --json` failed because `registry.npmjs.org` resolved as `ENOTFOUND`; current advisory details are unknown and no dependency changes were made.
+- SALES-004 and REPORT-002 remain IN_PROGRESS; roadmap remains 30/47. REPORT-002 is dependency-gated by SALES-004 and PROCUREMENT-003. Exact resume steps are in `docs/progress/next-session.md`.
 
 ## SALES-004 acceptance update (2026-11-27)
 

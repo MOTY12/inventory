@@ -3,6 +3,12 @@
 **Updated:** 2026-11-27 (Africa/Lagos)
 **Scope:** Customer reference and selected list/drawer standardization pass. Nine-module definition of done is **not met**.
 
+## 2026-11-28 — business reporting browser automation
+
+- Added one discoverable Playwright test for `/reports/business`; it exercises summary/detail/aging views, supported date/branch/warehouse/currency/status/search/sort filters, and captures/reconciles the eight NGN/USD CSV fixture downloads. It shares QA manifest validation and OWNER sign-in helpers with the finance test.
+- `npm run qa:e2e:reports -- --list` discovers one test. The test was **not executed**; local API, database, Redis, S3Mock and web services were unavailable in QA preflight. No browser rendering or CSV file download is claimed.
+- QA reconciliation tests pass 29/29. Full test/build/typecheck/lint/format results and the current service blocker are recorded in `docs/progress/current-state.md`.
+
 ## Browser evidence
 
 | Page / behavior                                                | Result             | Evidence / limitation                                                                                                                                                                                                                                                  |

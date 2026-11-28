@@ -2,21 +2,19 @@
 
 **Updated:** 2026-11-28 (Africa/Lagos)
 
-## Current checkpoint — QA automation and SALES-004 access
+## Current checkpoint — report browser acceptance implementation
 
-- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; starting HEAD `568938b`. Uncommitted code and documentation changes are present; no commit, push, or deployment.
-- Roadmap remains **30/47**. SALES-004, REPORT-002 and QUALITY-001 remain IN_PROGRESS. SALES-004 is not complete without authenticated browser, PDF, payment/reversal, reconciliation and inventory non-mutation evidence. REPORT-002 is dependency-gated by SALES-004 and PROCUREMENT-003.
-- Docker Desktop 28.5.1 is running; PostgreSQL, Redis and S3Mock containers are healthy. The existing API returned readiness HTTP 200. The existing Stockroom web app returned `/login` HTTP 200 on port 3001; another app occupies port 3000. Prisma status is 22 migrations, schema up to date.
-- Implemented the existing `qa:preflight` entry and extended the existing Playwright finance test with loopback-only web-target validation; existing artifact ignore rules were reused. Added QA docs. `npm run qa:test` passed 27/27; `npm run qa:e2e -- --list` discovered one finance test. Discovery is not browser acceptance.
-- `npm run qa:preflight` returned FAILED: target, API readiness, PostgreSQL/API database fingerprint and exact workspace identity, Redis, S3Mock, web and migration checks passed. The configured login succeeded but that user is not an active OWNER in the exact approved QA workspace; separate database OWNER-membership and authenticated workspace authorization checks failed. Preflight returned corrective action to set the existing OWNER credentials and logged the session out. No business fixture was seeded and no invoice/payment was created.
-- QA credentials and organization values exist in ignored `.env`; values were not printed. The configured user is ineligible for this workspace. The owner selected the existing active OWNER credential path; update `QA_EMAIL`/`QA_PASSWORD` locally for that user. Do not reset or modify any existing credential. `QA_WEB_BASE_URL` is set to the local Stockroom port 3001. No `QA_RUN_ID` exists.
-- Checks: `npm run typecheck`, lint, format check passed; `npm test` passed 62 API/shared tests and 4 web tests with 3 opt-in PostgreSQL suites skipped; SALES-004 opt-in PostgreSQL suite passed 4/4; QA harness tests passed 27/27; production build passed with 31 routes; `git diff --check` passed after progress edits. Playwright discovery only; browser test NOT RUN. npm's dependency audit output reported 13 total advisories (10 moderate, 3 high); it does not identify them as caused by Playwright.
+- Repository: `/Users/newuser/Documents/GitHub/inventory`; branch `develop`; starting HEAD `9990df9`. Worktree began clean. New QA suite and checkpoint changes are now uncommitted; no commit, push, or deployment.
+- Roadmap remains **30/47**. SALES-004, REPORT-002 and QUALITY-001 remain IN_PROGRESS. SALES-004 still needs authenticated browser/PDF/payment/reversal/reconciliation/inventory non-mutation evidence. REPORT-002 remains dependency-gated by SALES-004 and PROCUREMENT-003.
+- This session added shared safe QA manifest/sign-in helpers, a manifest-scoped reporting Playwright test, `qa:e2e:reports`, an export-ID locator attribute, and focused exact-decimal CSV/API reconciliation regression tests. The browser suite covers report summary/detail/aging pages, supported date/branch/warehouse/currency/status/search/sort filters, and UI download/reconciliation for all eight financial-export fixtures across NGN and USD.
+- `npm run qa:test`: 29 passed, 0 failed, 0 skipped. Default `npm test`: 62 API/shared passed, 4 web passed, 0 failed; 3 opt-in PostgreSQL suites skipped. Typecheck, lint, format check and production build passed (31 routes); `git diff --check` passed. Finance and report Playwright discovery each found one test; neither was executed.
+- `npm run qa:preflight` failed: API readiness and frontend checks returned `fetch failed`; PostgreSQL identity/membership, Redis and S3Mock loopback probes returned connection errors/EPERM; migration status could not be verified. Current OWNER eligibility could not be tested. A prior preflight found the configured login was not an active OWNER of the approved QA workspace; owner-selected remediation remains use of that existing OWNER account's credentials. No fixtures or business records were created/changed.
+- `npm audit --json` failed because DNS lookup for `registry.npmjs.org` returned `ENOTFOUND`. This session could not identify current advisory IDs or affected packages; no dependency changes were made. Review remains under QUALITY-002.
+- **No task count change:** 30/47. Existing SALES-004 explicit PostgreSQL result 4/4 belongs to the prior checkpoint; no PostgreSQL integration suite was run this session. No actual browser, PDF or CSV file was captured. No migration was run.
 
-## No task count change
+Next: restore local services, configure the existing active QA OWNER in ignored `.env`, rerun preflight, complete SALES-004 browser acceptance, then execute the new report suite from a verified `financial-exports` run. Full exact commands and known gaps are in `docs/progress/next-session.md`.
 
-No acceptance task became complete. Continue with SALES-004 only after QA workspace OWNER access is resolved. Then verify the manifest-backed invoice/payment/PDF lifecycle and inventory invariance before advancing to REPORT-002. Exact commands and recovery rules are in `docs/progress/next-session.md`.
-
-Historical notes below this checkpoint are retained for audit context and may contain superseded environment details; this checkpoint and the latest session-log entry are authoritative.
+Historical notes below this checkpoint are retained for audit context; this checkpoint and the latest session-log entry are authoritative.
 
 ## SALES-004 acceptance continuation (2026-11-27)
 

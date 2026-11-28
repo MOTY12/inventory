@@ -24,6 +24,7 @@
     "qa:preflight": "node --env-file-if-exists=.env scripts/qa/preflight.mjs",
     "qa:e2e": "node --env-file-if-exists=.env node_modules/@playwright/test/cli.js test",
     "qa:e2e:finance": "node --env-file-if-exists=.env node_modules/@playwright/test/cli.js test tests/e2e/finance",
+    "qa:e2e:reports": "node --env-file-if-exists=.env node_modules/@playwright/test/cli.js test tests/e2e/reports",
     "qa:test": "node --test scripts/qa/*.test.mjs",
     "test": "npm run build --workspace=@inventory/shared && npm run build --workspace=@inventory/api && node --test packages/shared/test/*.test.mjs apps/api/test/*.test.mjs && node --experimental-strip-types --test apps/web/test/*.test.mjs",
     "typecheck": "npm run build --workspace=@inventory/shared && npm run typecheck --workspaces --if-present"

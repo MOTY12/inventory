@@ -41,7 +41,7 @@ import { verifyDocumentStates } from "./scenarios/document-states.mjs";
 import { seedDocumentStates } from "./scenarios/document-states.mjs";
 import { verifyInvoiceStates } from "./scenarios/invoice-states.mjs";
 import { verifyMultiCurrency } from "./scenarios/multi-currency.mjs";
-import { parseCsv } from "./scenarios/financial-exports.mjs";
+import { parseCsv, reconcileCsv } from "./scenarios/financial-exports.mjs";
 import { verifyAuthorizationScenarioResult } from "./scenarios/authorization.mjs";
 
 const base = () => ({
@@ -191,6 +191,71 @@ test("financial export CSV parser handles quoted commas, quotes, CRLF, and malfo
   );
   assert.throws(() => parseCsv('A,B\n"unterminated,1'), /unterminated/);
   assert.throws(() => parseCsv("A,B\n1"), /row widths/);
+});
+
+test("report CSV acceptance reconciles exact currency and API values", async () => {
+  const productId = "p-qa";
+  const fixture = {
+    currency: "NGN",
+    productId,
+    warehouseId: "w-qa",
+    invoiceValue: "160000",
+  };
+  const record = { reportType: "SALES_PRODUCTS", currency: "NGN" };
+  let requestedUrl;
+  const api = {
+    async get(url) {
+      requestedUrl = url;
+      return {
+        data: [
+          {
+            product_id: productId,
+            currency: "NGN",
+            invoice_value: "160000.0000",
+          },
+        ],
+      };
+    },
+  };
+  const csv =
+    "Product ID,Product,Currency,Invoice value\np-qa,QA Product,NGN,160000.0000\n";
+  const result = await reconcileCsv(api, record, fixture, "2026-11-28", csv);
+  assert.equal(result.rows.length, 1);
+  const query = new URL(`http://local${requestedUrl}`).searchParams;
+  assert.equal(query.get("currency"), "NGN");
+  assert.equal(query.get("warehouse_id"), "w-qa");
+  assert.equal(query.get("from"), "2026-11-28");
+});
+
+test("report CSV acceptance rejects currency and exact amount mismatches", async () => {
+  const api = {
+    async get() {
+      return {
+        data: [
+          {
+            product_id: "p-qa",
+            currency: "USD",
+            invoice_value: "160000.0000",
+          },
+        ],
+      };
+    },
+  };
+  await assert.rejects(
+    reconcileCsv(
+      api,
+      { reportType: "SALES_PRODUCTS", currency: "NGN" },
+      {
+        currency: "NGN",
+        productId: "p-qa",
+        warehouseId: "w-qa",
+        invoiceValue: "160000",
+      },
+      "2026-11-28",
+      "Product ID,Product,Currency,Invoice value\np-qa,QA Product,NGN,160000\n",
+    ),
+    /failed exact API reconciliation/,
+  );
 });
 
 test("only the explicitly authorized organization owner is accepted", () => {

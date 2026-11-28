@@ -2,16 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import pg from "pg";
 import { expect, test } from "@playwright/test";
-import {
-  acquireRunLock,
-  loadManifest,
-  manifestPath,
-  saveManifest,
-} from "../../../scripts/qa/manifest.mjs";
-import {
-  assertSafeTarget,
-  assertSafeWebTarget,
-} from "../../../scripts/qa/safety.mjs";
+import { acquireRunLock, saveManifest } from "../../../scripts/qa/manifest.mjs";
+import { loadQaBrowserRun, signInQaOwner } from "../support/qa-browser.mjs";
 
 const { Client } = pg;
 const env = process.env;
@@ -30,15 +22,6 @@ const money = (value) => {
     BigInt(fraction.slice(0, 4).padEnd(4, "0") || "0");
   return match[1] === "-" ? -scaled : scaled;
 };
-
-function requireManifestConfig() {
-  assertSafeTarget(env);
-  assertSafeWebTarget(env.QA_WEB_BASE_URL || "http://localhost:3000");
-  if (!env.QA_EMAIL || !env.QA_PASSWORD)
-    throw new Error("Set QA_EMAIL and QA_PASSWORD in the ignored local .env");
-  if (!runId)
-    throw new Error("Set QA_RUN_ID to an approved document-states run");
-}
 
 async function dbClient() {
   const client = new Client({ connectionString: env.DATABASE_URL });
@@ -107,21 +90,16 @@ async function recordPayment(page, client, invoiceId, run, label, amount) {
 }
 
 async function loadRun() {
-  requireManifestConfig();
-  const runPath = manifestPath(runId);
-  const manifest = await loadManifest(runPath);
-  assert.equal(manifest.schemaVersion, 2);
-  assert.equal(manifest.scenarioName, "document-states");
-  assert.equal(manifest.organizationId, organizationId);
-  const order = manifest.scenarioResult?.browserAcceptanceOrder;
+  const { runPath, manifest } = await loadQaBrowserRun("document-states", env);
+  const acceptanceOrder = manifest.scenarioResult?.browserAcceptanceOrder;
   assert.ok(
-    order?.id,
+    acceptanceOrder?.id,
     "Run manifest must contain the browser acceptance order",
   );
-  assert.equal(order.quantity, "10");
-  assert.equal(order.unitPrice, "8000");
-  assert.equal(order.invoiceTotal, "80000");
-  return { runPath, manifest, order };
+  assert.equal(acceptanceOrder.quantity, "10");
+  assert.equal(acceptanceOrder.unitPrice, "8000");
+  assert.equal(acceptanceOrder.invoiceTotal, "80000");
+  return { runPath, manifest, order: acceptanceOrder };
 }
 
 async function persistInvoice(runPath, invoice) {
@@ -198,13 +176,7 @@ test("invoice, payment reversal and PDF reconcile in the QA workspace", async ({
   );
   const invoiceNotes = `QA ${runId} browser acceptance`;
   try {
-    await page.goto("/login");
-    await page.getByLabel("Email address").fill(env.QA_EMAIL);
-    await page.getByLabel("Password").fill(env.QA_PASSWORD);
-    await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page).not.toHaveURL(/\/login(?:\?|$)/);
-    const businessSelector = page.getByLabel("Switch business");
-    await expect(businessSelector).toHaveValue(organizationId);
+    await signInQaOwner(page, organizationId, env);
     await page.goto(
       `/invoices/new?salesOrderId=${encodeURIComponent(order.id)}`,
     );

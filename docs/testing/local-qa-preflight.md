@@ -23,6 +23,6 @@ Never paste credentials into source, manifests, shell output, or chat. Do not re
 
 `QA_WEB_BASE_URL` must point to the Stockroom web server. The current local setup uses port 3001 because another app occupies port 3000. The preflight checks migrations only; it does not apply migrations or reset data.
 
-## Current result (2026-11-28)
+## Latest result (2026-11-28)
 
-Docker Desktop 28.5.1 is running; PostgreSQL, Redis and S3Mock are healthy. API readiness, Redis, S3Mock, frontend `/login`, and migration status passed. Preflight failed the account membership checks: the configured account can authenticate but is not an active OWNER in the exact approved QA workspace. No fixture or financial document was created. See `docs/progress/next-session.md` for the exact resume sequence.
+`npm run qa:preflight` confirmed safe local target configuration, then failed API readiness, PostgreSQL/database identity, Redis, S3Mock, frontend `/login`, migration status, and authentication because local services were unavailable in the execution environment (`fetch failed` / loopback `EPERM`). The OWNER membership check could not complete, so this run does not establish whether the configured account is eligible. The previous preflight had verified the QA workspace but found the configured login was not an active OWNER of it. The owner selected the existing OWNER credential path; after services are available, set `QA_EMAIL` and `QA_PASSWORD` in ignored `.env` to that existing owner's credentials and rerun preflight. No fixture or financial document was created. See `docs/progress/next-session.md` for exact resume steps.

@@ -124,7 +124,7 @@ function textAt(headers, row, header) {
   return row[index];
 }
 
-async function reconcileCsv(api, record, fixture, day, text) {
+export async function reconcileCsv(api, record, fixture, day, text) {
   const parsed = parseCsv(text);
   if (parsed.rows.length !== 1)
     throw new Error(
